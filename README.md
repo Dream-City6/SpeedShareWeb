@@ -10,6 +10,21 @@
 </p>
 
 
+## Why I Built This Project
+
+I have several phones, tablets, and computers at home, but they all belong to different operating systems and device ecosystems.
+
+Whenever I needed to transfer files between them, I had to find a compatible app or rely on an intermediate service. This was often inconvenient, and many existing solutions could not fully take advantage of the speed available on my local network.
+
+That is why I built SpeedShareWeb.
+
+It does not depend on a specific brand or device ecosystem. As long as the devices are connected to the same local network and have access to a modern web browser, they can browse, upload, download, and manage files directly.
+
+I also worked on transfer performance so that the application can make better use of the available local network and router bandwidth.
+
+I originally built this project to solve a problem I had myself. If it can also save you some time when transferring files between devices, then it has achieved its purpose.
+
+
 
 ## Screenshots
 
@@ -89,16 +104,6 @@ The receiving device does not need to install an app. Open the local address sho
 4. Browse, upload, download or manage files.
 5. Stop the server when file sharing is complete.
 
-## Screenshots
-
-Screenshots will be added before the first public release.
-
-<!--
-Recommended layout:
-| Android home | Browser file list | Grid view |
-|---|---|---|
-| image | image | image |
--->
 
 ## Privacy
 
