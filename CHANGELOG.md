@@ -2,9 +2,33 @@
 
 All notable changes to SpeedShareWeb will be documented in this file.
 
-The format is based on Keep a Changelog. Version numbers will follow Semantic Versioning where practical.
+The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
 ## [Unreleased]
+
+## [1.1.0] - 2026-06-23
+
+### Added
+
+- Native in-app recycle-bin manager with multi-select, restore-to-original, permanent delete and empty-all actions
+- Optional system file-manager entry for the SpeedShareWeb recycle-bin directory
+- TokyoAlex.com production credit in Settings
+
+### Changed
+
+- Unified all user-facing product branding as SpeedShareWeb
+- Reworked phone portrait statistics into an adaptive 2 × 2 layout
+- Separated transfer values and units to prevent truncation
+- Made server status text shorter and independent from the Stop button
+- Redesigned Custom Start and compact Settings controls for narrow screens
+- Renamed the recycle-bin directory to `.SpeedShareWebTrash` with automatic migration from `.SpeedShareTrash`
+
+### Fixed
+
+- Android system Back now returns from Settings or Recycle Bin instead of closing the app
+- Long English, Chinese and Japanese status text no longer gets squeezed by action buttons
+
+## [0.1.0] - 2026-06-22
 
 ### Added
 
@@ -13,11 +37,7 @@ The format is based on Keep a Changelog. Version numbers will follow Semantic Ve
 - File browsing and transfer interface
 - List and grid display modes
 - Initial access-protection functionality
-
-### Changed
-
-- Preparing English, Simplified Chinese and Japanese interfaces
-- Preparing the project for its first GitHub release
+- English, Simplified Chinese and Japanese interfaces
 
 ### Security
 

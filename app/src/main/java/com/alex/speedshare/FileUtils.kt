@@ -3,8 +3,11 @@ package com.alex.speedshare
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.webkit.MimeTypeMap
+import android.os.Environment
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -18,8 +21,8 @@ import java.util.Collections
 import java.util.Date
 import java.util.Locale
 
-fun querySharedFile(context: Context, uri: Uri): SharedFile? {
-    var name = "shared-file.bin"
+fun querySharedFile(context: Context, uri: Uri, mimeTypeHint: String? = null): SharedFile? {
+    var queriedName: String? = null
     var size = -1L
     var modifiedAt = 0L
 
@@ -41,7 +44,7 @@ fun querySharedFile(context: Context, uri: Uri): SharedFile? {
                 val modifiedIndex = cursor.getColumnIndex("last_modified")
 
                 if (nameIndex >= 0 && !cursor.isNull(nameIndex)) {
-                    name = cursor.getString(nameIndex)
+                    queriedName = cursor.getString(nameIndex)
                 }
                 if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
                     size = cursor.getLong(sizeIndex)
@@ -54,7 +57,24 @@ fun querySharedFile(context: Context, uri: Uri): SharedFile? {
     } catch (_: Exception) {
     }
 
-    val mimeType = context.contentResolver.getType(uri) ?: guessMimeType(name)
+    val uriName = runCatching {
+        URLDecoder.decode(uri.lastPathSegment.orEmpty(), StandardCharsets.UTF_8.name())
+            .substringAfterLast('/')
+            .substringAfterLast(':')
+            .takeIf { it.isNotBlank() }
+    }.getOrNull()
+    val initialName = queriedName?.takeIf { it.isNotBlank() } ?: uriName.orEmpty()
+    val resolvedMimeType = context.contentResolver.getType(uri)?.trim().orEmpty()
+    val hintedMimeType = mimeTypeHint?.trim().orEmpty()
+    val guessedMimeType = guessMimeType(initialName)
+    val mimeType = resolvedMimeType.takeIf { it.isConcreteMimeType() }
+        ?: hintedMimeType.takeIf { it.isConcreteMimeType() }
+        ?: guessedMimeType.takeIf { it.isConcreteMimeType() }
+        ?: sniffMimeType(context, uri)
+        ?: resolvedMimeType.takeIf { it.isNotBlank() && it != "*/*" }
+        ?: hintedMimeType.takeIf { it.isNotBlank() && it != "*/*" }
+        ?: guessedMimeType
+    val name = normalizeSharedFileName(initialName, mimeType)
 
     return SharedFile(
         uri = uri,
@@ -63,6 +83,123 @@ fun querySharedFile(context: Context, uri: Uri): SharedFile? {
         mimeType = mimeType,
         modifiedAt = modifiedAt
     )
+}
+
+
+private fun String.isConcreteMimeType(): Boolean {
+    val normalized = lowercase(Locale.ROOT).substringBefore(';').trim()
+    return normalized.isNotBlank() &&
+        normalized != "*/*" &&
+        normalized != "application/octet-stream" &&
+        normalized != "binary/octet-stream" &&
+        !normalized.contains('*')
+}
+
+private fun sniffMimeType(context: Context, uri: Uri): String? {
+    val header = ByteArray(32)
+    val count = runCatching {
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            input.read(header)
+        } ?: -1
+    }.getOrDefault(-1)
+    if (count < 4) return null
+
+    fun byte(index: Int): Int = header[index].toInt() and 0xFF
+    fun ascii(start: Int, length: Int): String? {
+        if (count < start + length) return null
+        return String(header, start, length, StandardCharsets.US_ASCII)
+    }
+
+    return when {
+        byte(0) == 0xFF && byte(1) == 0xD8 && byte(2) == 0xFF -> "image/jpeg"
+        byte(0) == 0x89 && ascii(1, 3) == "PNG" -> "image/png"
+        ascii(0, 6) == "GIF87a" || ascii(0, 6) == "GIF89a" -> "image/gif"
+        ascii(0, 4) == "RIFF" && ascii(8, 4) == "WEBP" -> "image/webp"
+        ascii(0, 4) == "%PDF" -> "application/pdf"
+        ascii(4, 4) == "ftyp" -> {
+            when (ascii(8, 4)?.lowercase(Locale.ROOT)) {
+                "heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1" -> "image/heic"
+                "avif", "avis" -> "image/avif"
+                else -> "video/mp4"
+            }
+        }
+        else -> null
+    }
+}
+
+private fun normalizeSharedFileName(rawName: String, mimeType: String): String {
+    val cleaned = rawName
+        .replace('\r', '_')
+        .replace('\n', '_')
+        .replace('/', '_')
+        .replace('\\', '_')
+        .trim()
+    val extension = extensionForMimeType(mimeType)
+    if (cleaned.isBlank()) return if (extension != null) "shared-file.$extension" else "shared-file.bin"
+
+    val dot = cleaned.lastIndexOf('.')
+    val currentExtension = cleaned.substringAfterLast('.', "")
+    return when {
+        extension != null && (dot <= 0 || currentExtension.equals("bin", ignoreCase = true)) -> {
+            val base = if (dot > 0) cleaned.substring(0, dot) else cleaned
+            "$base.$extension"
+        }
+        else -> cleaned
+    }
+}
+
+private fun extensionForMimeType(mimeType: String): String? {
+    return when (mimeType.lowercase(Locale.ROOT).substringBefore(';')) {
+        "image/jpeg" -> "jpg"
+        "image/png" -> "png"
+        "image/webp" -> "webp"
+        "image/heic", "image/heif" -> "heic"
+        "image/gif" -> "gif"
+        "image/avif" -> "avif"
+        "video/mp4" -> "mp4"
+        "audio/mpeg" -> "mp3"
+        "application/pdf" -> "pdf"
+        else -> MimeTypeMap.getSingleton().getExtensionFromMimeType(mimeType.substringBefore(';'))
+    }
+}
+
+fun openSpeedShareTrashInFileManager(context: Context): Boolean {
+    val trashDirectory = File(Environment.getExternalStorageDirectory(), SPEEDSHAREWEB_TRASH_DIRECTORY)
+    runCatching {
+        trashDirectory.mkdirs()
+        File(trashDirectory, ".nomedia").apply { if (!exists()) createNewFile() }
+    }
+
+    val documentUri = DocumentsContract.buildDocumentUri(
+        "com.android.externalstorage.documents",
+        "primary:$SPEEDSHAREWEB_TRASH_DIRECTORY"
+    )
+    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(documentUri, DocumentsContract.Document.MIME_TYPE_DIR)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+    }
+    if (viewIntent.resolveActivity(context.packageManager) != null) {
+        val opened = runCatching {
+            context.startActivity(viewIntent)
+            true
+        }.getOrDefault(false)
+        if (opened) return true
+    }
+
+    val treeIntent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            putExtra(DocumentsContract.EXTRA_INITIAL_URI, documentUri)
+        }
+        addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        )
+    }
+    return runCatching {
+        context.startActivity(treeIntent)
+        true
+    }.getOrDefault(false)
 }
 
 fun openAllFilesAccessSettings(context: Context) {

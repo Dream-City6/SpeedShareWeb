@@ -29,7 +29,7 @@ class TransferTracker(
     private val totalDownloadedBytes = AtomicLong(0L)
     private val totalUploadedBytes = AtomicLong(0L)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
-        Thread(runnable, "SpeedShare-TransferStats").apply { isDaemon = true }
+        Thread(runnable, "SpeedShareWeb-TransferStats").apply { isDaemon = true }
     }
 
     @Volatile

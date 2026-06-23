@@ -11,7 +11,7 @@ class FileOperationManager(
     private val onContentChanged: () -> Unit
 ) {
     private val executor = Executors.newFixedThreadPool(2) { runnable ->
-        Thread(runnable, "SpeedShare-FileOperation").apply { isDaemon = true }
+        Thread(runnable, "SpeedShareWeb-FileOperation").apply { isDaemon = true }
     }
 
     fun submitCopy(

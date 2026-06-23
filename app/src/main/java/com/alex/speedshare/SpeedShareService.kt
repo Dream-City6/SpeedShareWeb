@@ -32,6 +32,8 @@ class SpeedShareService : Service() {
     private data class StartConfig(
         val mode: ShareMode,
         val uris: List<Uri>,
+        val fileNames: List<String>,
+        val mimeTypes: List<String>,
         val uploadEnabled: Boolean,
         val remoteManagementEnabled: Boolean,
         val deleteToTrashByDefault: Boolean,
@@ -45,7 +47,7 @@ class SpeedShareService : Service() {
     )
 
     private val commandExecutor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "SpeedShare-ServiceCommands").apply {
+        Thread(runnable, "SpeedShareWeb-ServiceCommands").apply {
             isDaemon = true
         }
     }
@@ -177,6 +179,8 @@ class SpeedShareService : Service() {
         return StartConfig(
             mode = mode,
             uris = uris,
+            fileNames = intent.getStringArrayListExtra(EXTRA_FILE_NAMES).orEmpty(),
+            mimeTypes = intent.getStringArrayListExtra(EXTRA_MIME_TYPES).orEmpty(),
             uploadEnabled = intent.getBooleanExtra(EXTRA_UPLOAD_ENABLED, false),
             remoteManagementEnabled = intent.getBooleanExtra(EXTRA_REMOTE_MANAGEMENT, false),
             deleteToTrashByDefault = intent.getBooleanExtra(EXTRA_DELETE_TO_TRASH_DEFAULT, true),
@@ -207,7 +211,22 @@ class SpeedShareService : Service() {
         if (generation != commandGeneration.get()) return
 
         val selectedFiles = if (config.mode == ShareMode.SELECTED_FILES) {
-            config.uris.mapNotNull { uri -> querySharedFile(applicationContext, uri) }
+            config.uris.mapIndexedNotNull { index, uri ->
+                querySharedFile(
+                    context = applicationContext,
+                    uri = uri,
+                    mimeTypeHint = config.mimeTypes.getOrNull(index)
+                )?.let { queried ->
+                    queried.copy(
+                        name = config.fileNames.getOrNull(index)
+                            ?.takeIf { it.isNotBlank() }
+                            ?: queried.name,
+                        mimeType = config.mimeTypes.getOrNull(index)
+                            ?.takeIf { it.isNotBlank() && it != "*/*" }
+                            ?: queried.mimeType
+                    )
+                }
+            }
         } else {
             emptyList()
         }
@@ -426,7 +445,7 @@ class SpeedShareService : Service() {
         val powerManager = getSystemService(PowerManager::class.java)
         transferWakeLock = powerManager.newWakeLock(
             PowerManager.PARTIAL_WAKE_LOCK,
-            "SpeedShare:ActiveTransfer"
+            "SpeedShareWeb:ActiveTransfer"
         ).apply {
             setReferenceCounted(false)
         }
@@ -666,14 +685,7 @@ class SpeedShareService : Service() {
             stopForeground(true)
         }
     }
-    @Suppress("DEPRECATION")
-    private fun getUriListExtra(intent: Intent, key: String): List<Uri> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableArrayListExtra(key, Uri::class.java).orEmpty()
-        } else {
-            intent.getParcelableArrayListExtra<Uri>(key).orEmpty()
-        }
-    }
+
     companion object {
         private const val CHANNEL_ID = "speedshare_server"
         private const val NOTIFICATION_ID = 9001
@@ -690,6 +702,8 @@ class SpeedShareService : Service() {
 
         private const val EXTRA_MODE = "mode"
         private const val EXTRA_URIS = "uris"
+        private const val EXTRA_FILE_NAMES = "file_names"
+        private const val EXTRA_MIME_TYPES = "mime_types"
         private const val EXTRA_UPLOAD_ENABLED = "upload_enabled"
         private const val EXTRA_REMOTE_MANAGEMENT = "remote_management"
         private const val EXTRA_DELETE_TO_TRASH_DEFAULT = "delete_to_trash_default"
@@ -721,6 +735,8 @@ class SpeedShareService : Service() {
                 action = ACTION_START_OR_REPLACE
                 putExtra(EXTRA_MODE, mode.name)
                 putParcelableArrayListExtra(EXTRA_URIS, uris)
+                putStringArrayListExtra(EXTRA_FILE_NAMES, ArrayList(files.map { it.name }))
+                putStringArrayListExtra(EXTRA_MIME_TYPES, ArrayList(files.map { it.mimeType }))
                 putExtra(EXTRA_UPLOAD_ENABLED, uploadEnabled)
                 putExtra(EXTRA_REMOTE_MANAGEMENT, remoteManagementEnabled)
                 putExtra(EXTRA_DELETE_TO_TRASH_DEFAULT, deleteToTrashByDefault)
@@ -765,4 +781,11 @@ class SpeedShareService : Service() {
     }
 }
 
-
+@Suppress("DEPRECATION")
+private fun getUriListExtra(intent: Intent, key: String): List<Uri> {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        intent.getParcelableArrayListExtra(key, Uri::class.java).orEmpty()
+    } else {
+        intent.getParcelableArrayListExtra<Uri>(key).orEmpty()
+    }
+}

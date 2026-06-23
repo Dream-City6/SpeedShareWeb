@@ -57,6 +57,7 @@ class SpeedShareServer(
         onContentChanged = { contentRevision.incrementAndGet() }
     )
     private val zipSelections = ConcurrentHashMap<String, ZipSelection>()
+    private val selectedZipSelections = ConcurrentHashMap<String, SelectedZipSelection>()
 
     // 每次服务器实例都会生成新的版本号。浏览器看到新的查询参数后，
     // 会重新请求缩略图和预览文件，而不是继续使用上一轮分享的缓存。
@@ -64,6 +65,13 @@ class SpeedShareServer(
 
     private data class ZipSelection(
         val paths: List<String>,
+        val compress: Boolean,
+        val fileName: String,
+        val createdAtMs: Long = System.currentTimeMillis()
+    )
+
+    private data class SelectedZipSelection(
+        val ids: List<Int>,
         val compress: Boolean,
         val fileName: String,
         val createdAtMs: Long = System.currentTimeMillis()
@@ -86,13 +94,13 @@ class SpeedShareServer(
         serverChannel = channel
         running = true
 
-        acceptThread = thread(name = "SpeedShare-Accept", isDaemon = true) {
+        acceptThread = thread(name = "SpeedShareWeb-Accept", isDaemon = true) {
             while (running) {
                 try {
                     val client = channel.accept()
                     clients.add(client)
                     transferTracker.setConnectionCount(clients.size)
-                    thread(name = "SpeedShare-Client", isDaemon = true) {
+                    thread(name = "SpeedShareWeb-Client", isDaemon = true) {
                         try {
                             handleClient(client)
                         } finally {
@@ -131,6 +139,7 @@ class SpeedShareServer(
         transferTracker.close()
         fileOperationManager.close()
         zipSelections.clear()
+        selectedZipSelections.clear()
 
         val threadToJoin = acceptThread
         acceptThread = null
@@ -390,6 +399,22 @@ class SpeedShareServer(
                         }
                     }
 
+                    request.method == "POST" && target.path == "/api/selected-zip/prepare" -> {
+                        if (mode != ShareMode.SELECTED_FILES) {
+                            sendTextResponse(socket, "403 Forbidden", "Selected-files mode required")
+                        } else {
+                            prepareSelectedZipSelection(socket, input, request, target)
+                        }
+                    }
+
+                    isGetOrHead && target.path == "/selected-zip" -> {
+                        if (mode != ShareMode.SELECTED_FILES) {
+                            sendTextResponse(socket, "403 Forbidden", "Selected-files mode required")
+                        } else {
+                            sendPreparedSelectedZip(socket, request.method, target.query["id"].orEmpty())
+                        }
+                    }
+
                     request.method == "POST" && target.path == "/upload" -> {
                         if (mode != ShareMode.WHOLE_STORAGE || !uploadEnabled) {
                             sendTextResponse(socket, "403 Forbidden", "Upload is disabled")
@@ -474,7 +499,7 @@ class SpeedShareServer(
                     null
                 },
                 displayPath = file.name,
-                relativePath = "",
+                relativePath = index.toString(),
                 previewKind = previewKind
             )
         }
@@ -780,7 +805,7 @@ class SpeedShareServer(
         val header = buildString {
             append("HTTP/1.1 200 OK\r\n")
             append("Content-Type: application/zip\r\n")
-            append("Content-Disposition: attachment; filename*=UTF-8''${urlEncode(selection.fileName)}\r\n")
+            append("Content-Disposition: ${contentDispositionValue("attachment", selection.fileName)}\r\n")
             append("Transfer-Encoding: chunked\r\n")
             append("Cache-Control: no-store\r\n")
             append("Connection: close\r\n")
@@ -806,6 +831,103 @@ class SpeedShareServer(
                 sources.forEach { source ->
                     val initialName = source.relativeTo(rootDirectory).invariantSeparatorsPath
                     addFileToZip(zip, source, uniqueZipName(initialName, usedNames))
+                }
+            }
+        } finally {
+            chunked.finish()
+            transferTracker.finish(transferId)
+        }
+    }
+
+    private fun prepareSelectedZipSelection(
+        socket: SocketChannel,
+        input: InputStream,
+        request: HttpRequest,
+        target: ParsedTarget
+    ) {
+        val ids = readPathListBody(input, request)
+            .mapNotNull(String::toIntOrNull)
+            .distinct()
+            .filter { it in selectedFiles.indices }
+        if (ids.isEmpty()) {
+            sendTextResponse(socket, "400 Bad Request", "No valid files")
+            return
+        }
+
+        selectedZipSelections.entries.removeIf {
+            System.currentTimeMillis() - it.value.createdAtMs > 15 * 60_000L
+        }
+        val id = UUID.randomUUID().toString().replace("-", "")
+        val requestedName = validateSimpleName(target.query["name"].orEmpty()) ?: "SpeedShareWeb.zip"
+        val fileName = if (requestedName.endsWith(".zip", true)) requestedName else "$requestedName.zip"
+        selectedZipSelections[id] = SelectedZipSelection(
+            ids = ids,
+            compress = target.query["mode"] == "compress",
+            fileName = fileName
+        )
+        sendJsonResponse(socket, request.method, "{\"url\":\"/selected-zip?id=$id\"}", "201 Created")
+    }
+
+    private fun sendPreparedSelectedZip(socket: SocketChannel, method: String, id: String) {
+        val selection = selectedZipSelections[id]
+        if (selection == null) {
+            sendTextResponse(socket, "404 Not Found", "ZIP request expired")
+            return
+        }
+        val sources = selection.ids.mapNotNull { selectedFiles.getOrNull(it) }
+        if (sources.isEmpty()) {
+            sendTextResponse(socket, "404 Not Found", "Files not found")
+            return
+        }
+
+        val header = buildString {
+            append("HTTP/1.1 200 OK\r\n")
+            append("Content-Type: application/zip\r\n")
+            append("Content-Disposition: ${contentDispositionValue("attachment", selection.fileName)}\r\n")
+            append("Transfer-Encoding: chunked\r\n")
+            append("Cache-Control: no-store\r\n")
+            append("Connection: close\r\n")
+            append("\r\n")
+        }
+        writeAll(socket, header.toByteArray(StandardCharsets.US_ASCII))
+        if (method == "HEAD") return
+
+        val totalSize = sources.sumOf { it.size.coerceAtLeast(0L) }
+        val transferId = transferTracker.begin(
+            direction = TransferDirection.DOWNLOAD,
+            fileName = selection.fileName,
+            clientAddress = clientAddress(socket),
+            totalBytes = totalSize
+        )
+        val chunked = ChunkedSocketOutputStream(socket) { count ->
+            transferTracker.addBytes(transferId, count)
+        }
+        try {
+            ZipOutputStream(chunked).use { zip ->
+                zip.setLevel(if (selection.compress) Deflater.DEFAULT_COMPRESSION else Deflater.NO_COMPRESSION)
+                val usedNames = linkedSetOf<String>()
+                sources.forEach { sharedFile ->
+                    val source = runCatching {
+                        context.contentResolver.openInputStream(sharedFile.uri)
+                    }.getOrNull() ?: return@forEach
+                    val entryName = uniqueZipName(sharedFile.name, usedNames)
+                    zip.putNextEntry(
+                        ZipEntry(entryName).apply {
+                            if (sharedFile.modifiedAt > 0L) time = sharedFile.modifiedAt
+                        }
+                    )
+                    try {
+                        source.use { inputStream ->
+                            val buffer = ByteArray(1024 * 1024)
+                            while (true) {
+                                val read = inputStream.read(buffer)
+                                if (read < 0) break
+                                zip.write(buffer, 0, read)
+                            }
+                        }
+                    } finally {
+                        zip.closeEntry()
+                    }
                 }
             }
         } finally {
@@ -1079,6 +1201,19 @@ class SpeedShareServer(
         }
     }
 
+    private fun contentDispositionValue(disposition: String, fileName: String): String {
+        val cleaned = fileName
+            .replace('\r', '_')
+            .replace('\n', '_')
+            .replace('"', '_')
+            .replace('\\', '_')
+            .ifBlank { "download.bin" }
+        val asciiFallback = cleaned.map { char ->
+            if (char.code in 0x20..0x7E) char else '_'
+        }.joinToString("")
+        return "$disposition; filename=\"$asciiFallback\"; filename*=UTF-8''${urlEncode(cleaned)}"
+    }
+
     private fun sendFileHeadersAndBody(
         socket: SocketChannel,
         method: String,
@@ -1104,9 +1239,7 @@ class SpeedShareServer(
             if (range != null) {
                 append("Content-Range: bytes $start-$end/$totalSize\r\n")
             }
-            append(
-                "Content-Disposition: $disposition; filename*=UTF-8''${urlEncode(fileName)}\r\n"
-            )
+            append("Content-Disposition: ${contentDispositionValue(disposition, fileName)}\r\n")
             append("Cache-Control: $cacheControl\r\n")
             append("X-Content-Type-Options: nosniff\r\n")
             append("Connection: close\r\n")

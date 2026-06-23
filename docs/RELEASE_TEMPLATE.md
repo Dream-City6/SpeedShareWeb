@@ -1,4 +1,4 @@
-# SpeedShareWeb v1.0.0
+# SpeedShareWeb v0.1.0
 
 This is the first public preview of SpeedShareWeb.
 
@@ -8,6 +8,7 @@ This is the first public preview of SpeedShareWeb.
 - Access files from a modern web browser
 - Browse, upload and download files over the local network
 - Use list or grid view
+- Optional access protection
 - No account and no cloud storage required
 
 ## Installation
@@ -20,7 +21,7 @@ This is the first public preview of SpeedShareWeb.
 
 ## Important security note
 
-The app uses plain HTTP and does not provide password or token authentication. Other devices on the same local network may be able to access the server. Use it only on a trusted private network, do not expose the port through router port forwarding, do not transfer sensitive files over public Wi-Fi, and stop the server after use.
+Use the app only on trusted local networks. Do not expose its server port to the public internet. Stop the server after use.
 
 ## Known limitations
 
@@ -35,5 +36,5 @@ Use GitHub Issues for reproducible bugs and feature suggestions. Report security
 
 ## Files
 
-- `speed-share-web-v1.0.0.apk`
-- Optional checksum file: `speed-share-web-v1.0.0.apk.sha256`
+- `SpeedShareWeb-v0.1.0.apk`
+- Optional checksum file: `SpeedShareWeb-v0.1.0.apk.sha256`

@@ -20,11 +20,9 @@ Do not include private files, passwords or personal information.
 
 ## Safe-use guidance
 
-- SpeedShareWeb uses plain HTTP and does not provide password or token authentication.
-- Other devices on the same local network may be able to access the server.
-- Use SpeedShareWeb only on trusted private local networks.
+- Use SpeedShareWeb only on trusted local networks.
 - Do not forward the server port to the public internet.
-- Do not transfer sensitive files over public Wi-Fi.
+- Enable access protection where available.
 - Stop the server when it is not in use.
 - Treat any browser connected to the server as a device that may receive access to exposed files.
 - Do not use the app to access files without authorization.

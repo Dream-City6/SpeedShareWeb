@@ -6,13 +6,18 @@ import java.io.FileOutputStream
 import java.util.Properties
 import java.util.UUID
 
+const val SPEEDSHAREWEB_TRASH_DIRECTORY = ".SpeedShareWebTrash"
+const val LEGACY_SPEEDSHARE_TRASH_DIRECTORY = ".SpeedShareTrash"
+
 class TrashManager(
     private val rootDirectory: File,
     private val translator: Translator
 ) {
-    val trashRoot: File = File(rootDirectory, ".SpeedShareTrash")
+    private val legacyTrashRoot: File = File(rootDirectory, LEGACY_SPEEDSHARE_TRASH_DIRECTORY)
+    val trashRoot: File = File(rootDirectory, SPEEDSHAREWEB_TRASH_DIRECTORY)
 
     init {
+        migrateLegacyTrash()
         trashRoot.mkdirs()
         runCatching {
             File(trashRoot, ".nomedia").apply {
@@ -23,10 +28,32 @@ class TrashManager(
 
     fun isTrashPath(file: File): Boolean {
         return runCatching {
-            val trash = trashRoot.canonicalFile.path
             val candidate = file.canonicalFile.path
-            candidate == trash || candidate.startsWith(trash + File.separator)
+            listOf(trashRoot, legacyTrashRoot).any { root ->
+                val trash = root.canonicalFile.path
+                candidate == trash || candidate.startsWith(trash + File.separator)
+            }
         }.getOrDefault(false)
+    }
+
+    private fun migrateLegacyTrash() {
+        if (!legacyTrashRoot.exists()) return
+        if (!trashRoot.exists() && legacyTrashRoot.renameTo(trashRoot)) return
+
+        trashRoot.mkdirs()
+        legacyTrashRoot.listFiles()?.forEach { child ->
+            if (child.name == ".nomedia") return@forEach
+            val requested = File(trashRoot, child.name)
+            val destination = if (requested.exists()) createUniquePath(requested) else requested
+            val moved = child.renameTo(destination)
+            if (!moved) {
+                runCatching {
+                    copyRecursivelyControlled(child, destination, translator = translator)
+                    child.deleteRecursively()
+                }
+            }
+        }
+        runCatching { legacyTrashRoot.deleteRecursively() }
     }
 
     fun moveToTrash(
@@ -64,7 +91,7 @@ class TrashManager(
             }
 
             FileOutputStream(File(entryDirectory, "meta.properties")).use { output ->
-                metadata.store(output, "SpeedShare Trash Entry")
+                metadata.store(output, "SpeedShareWeb Trash Entry")
             }
         } catch (error: Throwable) {
             if (!moved) runCatching { dataFile.deleteRecursively() }

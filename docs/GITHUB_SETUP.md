@@ -4,7 +4,7 @@
 
 Repository name:
 
-speed-share-web
+SpeedShareWeb
 
 Display name:
 

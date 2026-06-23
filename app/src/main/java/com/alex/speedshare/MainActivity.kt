@@ -12,6 +12,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.service.quicksettings.TileService
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,16 +44,20 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -63,6 +69,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +86,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.LinkedHashSet
 
 private data class IncomingShareRequest(
@@ -186,6 +196,7 @@ private fun SpeedShareApp(
         Localization.translator(context, settings.language)
     }
     var showSettings by remember { mutableStateOf(false) }
+    var showTrashManager by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(settings.defaultMode) }
     var selectedFiles by remember { mutableStateOf<List<SharedFile>>(emptyList()) }
     var uploadEnabled by remember {
@@ -198,6 +209,7 @@ private fun SpeedShareApp(
     var hasAllFilesAccess by remember { mutableStateOf(hasManageAllFilesAccess()) }
     var waitingForAllFilesAccess by remember { mutableStateOf(false) }
     var autoStartWholeAfterPermission by remember { mutableStateOf(false) }
+    var openTrashAfterPermission by remember { mutableStateOf(false) }
     var localStatusText by remember {
         mutableStateOf(tr.text("choose_or_whole"))
     }
@@ -255,6 +267,7 @@ private fun SpeedShareApp(
     }
 
     fun startWholeStorageNow(successPrefix: String = tr.text("shortcut_whole_started")) {
+        openTrashAfterPermission = false
         if (!hasManageAllFilesAccess()) {
             waitingForAllFilesAccess = true
             autoStartWholeAfterPermission = true
@@ -263,6 +276,8 @@ private fun SpeedShareApp(
             return
         }
 
+        waitingForAllFilesAccess = false
+        autoStartWholeAfterPermission = false
         hasAllFilesAccess = true
         mode = ShareMode.WHOLE_STORAGE
         uploadEnabled = settings.defaultUploadEnabled
@@ -305,7 +320,7 @@ private fun SpeedShareApp(
 
         val files = request.uris.mapNotNull { uri ->
             tryTakePersistableReadPermission(context, uri)
-            querySharedFile(context, uri)
+            querySharedFile(context, uri, request.mimeType)
         }
 
         if (files.isEmpty()) {
@@ -364,11 +379,17 @@ private fun SpeedShareApp(
 
                 if (waitingForAllFilesAccess && granted) {
                     waitingForAllFilesAccess = false
-                    mode = ShareMode.WHOLE_STORAGE
                     localStatusText = tr.text("permission_granted")
-                    if (autoStartWholeAfterPermission) {
-                        autoStartWholeAfterPermission = false
-                        startWholeStorageNow()
+                    when {
+                        openTrashAfterPermission -> {
+                            openTrashAfterPermission = false
+                            showTrashManager = true
+                        }
+                        autoStartWholeAfterPermission -> {
+                            autoStartWholeAfterPermission = false
+                            mode = ShareMode.WHOLE_STORAGE
+                            startWholeStorageNow()
+                        }
                     }
                 }
             }
@@ -378,37 +399,40 @@ private fun SpeedShareApp(
         onDispose { activity?.lifecycle?.removeObserver(observer) }
     }
 
+    BackHandler(enabled = showSettings || showTrashManager) {
+        when {
+            showTrashManager -> showTrashManager = false
+            showSettings -> showSettings = false
+        }
+    }
+
+    if (showTrashManager) {
+        TrashScreen(
+            tr = tr,
+            onBack = { showTrashManager = false },
+            onOpenSystemManager = {
+                if (!openSpeedShareTrashInFileManager(context)) {
+                    localStatusText = tr.text("trash_open_failed")
+                }
+            }
+        )
+        return
+    }
+
     if (showSettings) {
         SettingsScreen(
             initialSettings = settings,
             onBack = { showSettings = false },
-            onSaved = { saved ->
+            onSettingsChanged = { saved ->
                 AppSettings.save(context, saved)
                 settings = saved
-                mode = saved.defaultMode
-                keepAwakeDuringTransfer = saved.keepAwakeDuringTransfer
-                uploadEnabled = saved.defaultUploadEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
-                remoteManagementEnabled = saved.remoteManagementEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
-                val savedTranslator = Localization.translator(context, saved.language)
-                localStatusText = savedTranslator.text("settings_saved")
-                if (serverState.running || serverState.starting) {
-                    SpeedShareService.startOrReplace(
-                        context = context.applicationContext,
-                        mode = mode,
-                        files = selectedFiles,
-                        uploadEnabled = uploadEnabled,
-                        remoteManagementEnabled = remoteManagementEnabled,
-                        deleteToTrashByDefault = saved.deleteToTrashByDefault,
-                        keepAwakeDuringTransfer = saved.keepAwakeDuringTransfer,
-                        autoStopMinutes = saved.autoStopMinutes,
-                        preferredPort = saved.preferredPort,
-                        autoPortFallback = saved.autoPortFallback,
-                        copyAddressAfterStart = false,
-                        language = saved.language,
-                        successPrefix = savedTranslator.text("replaced_server")
-                    )
+                if (!serverState.running && !serverState.starting) {
+                    mode = saved.defaultMode
+                    keepAwakeDuringTransfer = saved.keepAwakeDuringTransfer
+                    uploadEnabled = saved.defaultUploadEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
+                    remoteManagementEnabled = saved.remoteManagementEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
                 }
-                showSettings = false
+                localStatusText = Localization.translator(context, saved.language).text("settings_saved")
             }
         )
         return
@@ -555,31 +579,107 @@ private fun SpeedShareApp(
                 CompactCard(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .clickable {
+                            if (!hasManageAllFilesAccess()) {
+                                waitingForAllFilesAccess = true
+                                autoStartWholeAfterPermission = false
+                                openTrashAfterPermission = true
+                                openAllFilesAccessSettings(context)
+                                localStatusText = tr.text("trash_permission_prompt")
+                            } else {
+                                waitingForAllFilesAccess = false
+                                openTrashAfterPermission = false
+                                showTrashManager = true
+                            }
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("🗑", style = MaterialTheme.typography.headlineSmall)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tr.text("open_trash"), fontWeight = FontWeight.Bold)
+                            Text(
+                                tr.text("open_trash_sub"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text("›", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                CompactCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
                         .animateContentSize()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showAdvanced = !showAdvanced },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { showAdvanced = !showAdvanced }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp)
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⚙", color = Color.White, fontWeight = FontWeight.Black)
+                        }
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(tr.text("custom_start"), fontWeight = FontWeight.Bold)
+                            Text(tr.text("custom_start"), fontWeight = FontWeight.Black)
                             Text(
-                                if (showAdvanced) tr.text("adjust_mode_permissions") else tr.text("mode_summary", if (mode == ShareMode.WHOLE_STORAGE) tr.text("whole_phone") else tr.text("selected_files"), selectedFiles.size),
+                                if (showAdvanced) tr.text("adjust_mode_permissions") else tr.text(
+                                    "mode_summary",
+                                    if (mode == ShareMode.WHOLE_STORAGE) tr.text("whole_phone") else tr.text("selected_files"),
+                                    selectedFiles.size
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Text(if (showAdvanced) "${tr.text("collapse")} ︿" else "${tr.text("expand")} ﹀", color = MaterialTheme.colorScheme.primary)
+                        Text(
+                            if (showAdvanced) "︿" else "﹀",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.padding(top = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        StatusChip(
+                            if (mode == ShareMode.WHOLE_STORAGE) tr.text("whole_phone") else tr.text("selected_files")
+                        )
+                        StatusChip(tr.text("selected_count_short", selectedFiles.size))
                     }
 
                     AnimatedVisibility(visible = showAdvanced) {
                         Column(
-                            modifier = Modifier.padding(top = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            modifier = Modifier.padding(top = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(9.dp)
                         ) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
+                            Text(
+                                tr.text("default_share_mode"),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -646,9 +746,13 @@ private fun SpeedShareApp(
                                     )
                                 },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(13.dp)
+                                shape = RoundedCornerShape(14.dp),
+                                contentPadding = PaddingValues(vertical = 12.dp)
                             ) {
-                                Text(if (isServerActive) tr.text("replace_restart") else tr.text("start_current"))
+                                Text(
+                                    if (isServerActive) tr.text("replace_restart") else tr.text("start_current"),
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
                         }
                     }
@@ -669,10 +773,353 @@ private fun SpeedShareApp(
 }
 
 @Composable
+private fun TrashScreen(
+    tr: Translator,
+    onBack: () -> Unit,
+    onOpenSystemManager: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val manager = remember(tr.language) {
+        TrashManager(Environment.getExternalStorageDirectory(), tr)
+    }
+    var entries by remember(manager) { mutableStateOf<List<TrashEntry>>(emptyList()) }
+    var selectedIds by remember(manager) { mutableStateOf<Set<String>>(emptySet()) }
+    var busy by remember { mutableStateOf(false) }
+    var statusText by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf<String?>(null) }
+
+    fun loadEntries() {
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { manager.listEntries() }
+            }
+            result.onSuccess { loaded ->
+                entries = loaded
+                selectedIds = selectedIds.intersect(loaded.map { it.id }.toSet())
+            }.onFailure { error ->
+                statusText = tr.text("trash_operation_failed", error.message ?: tr.text("unknown_error"))
+            }
+        }
+    }
+
+    fun restoreSelected() {
+        val ids = selectedIds.toList()
+        if (ids.isEmpty() || busy) return
+        scope.launch {
+            busy = true
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    ids.forEach { manager.restore(it, ConflictPolicy.AUTO_RENAME) }
+                    manager.listEntries()
+                }
+            }
+            busy = false
+            result.onSuccess { loaded ->
+                entries = loaded
+                selectedIds = emptySet()
+                statusText = tr.text("trash_restore_done", ids.size)
+            }.onFailure { error ->
+                statusText = tr.text("trash_operation_failed", error.message ?: tr.text("unknown_error"))
+                loadEntries()
+            }
+        }
+    }
+
+    fun deleteSelectedForever() {
+        val ids = selectedIds.toList()
+        if (ids.isEmpty() || busy) return
+        scope.launch {
+            busy = true
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    ids.forEach { id ->
+                        check(manager.permanentDelete(id)) { id }
+                    }
+                    manager.listEntries()
+                }
+            }
+            busy = false
+            result.onSuccess { loaded ->
+                entries = loaded
+                selectedIds = emptySet()
+                statusText = tr.text("trash_delete_done", ids.size)
+            }.onFailure { error ->
+                statusText = tr.text("trash_operation_failed", error.message ?: tr.text("unknown_error"))
+                loadEntries()
+            }
+        }
+    }
+
+    fun emptyTrash() {
+        if (busy) return
+        scope.launch {
+            busy = true
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    check(manager.emptyTrash())
+                    manager.listEntries()
+                }
+            }
+            busy = false
+            result.onSuccess { loaded ->
+                entries = loaded
+                selectedIds = emptySet()
+                statusText = tr.text("trash_empty_done")
+            }.onFailure { error ->
+                statusText = tr.text("trash_operation_failed", error.message ?: tr.text("unknown_error"))
+                loadEntries()
+            }
+        }
+    }
+
+    LaunchedEffect(manager) { loadEntries() }
+
+    if (confirmation != null) {
+        val deletingSelected = confirmation == "delete"
+        AlertDialog(
+            onDismissRequest = { if (!busy) confirmation = null },
+            title = {
+                Text(
+                    if (deletingSelected) tr.text("trash_confirm_delete_title")
+                    else tr.text("trash_confirm_empty_title")
+                )
+            },
+            text = {
+                Text(
+                    if (deletingSelected) tr.text("trash_confirm_delete_body")
+                    else tr.text("trash_confirm_empty_body")
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmation = null
+                        if (deletingSelected) deleteSelectedForever() else emptyTrash()
+                    }
+                ) { Text(tr.text("confirm")) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmation = null }) { Text(tr.text("cancel")) }
+            }
+        )
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.background,
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
+                            MaterialTheme.colorScheme.background
+                        )
+                    )
+                )
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                CompactCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) { Text("🗑", color = Color.White) }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tr.text("trash_manager_title"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                            Text(
+                                tr.text("trash_manager_subtitle"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        OutlinedButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
+                            Text(tr.text("back"))
+                        }
+                    }
+                }
+
+                CompactCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(tr.text("trash_item_count", entries.size), fontWeight = FontWeight.Bold)
+                            Text(
+                                tr.text("trash_selected_count", selectedIds.size),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(
+                            enabled = entries.isNotEmpty() && !busy,
+                            onClick = {
+                                selectedIds = if (selectedIds.size == entries.size) emptySet() else entries.map { it.id }.toSet()
+                            }
+                        ) {
+                            Text(if (selectedIds.size == entries.size && entries.isNotEmpty()) tr.text("clear_selection") else tr.text("select_all"))
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                        if (maxWidth < 390.dp) {
+                            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Button(
+                                    enabled = selectedIds.isNotEmpty() && !busy,
+                                    onClick = ::restoreSelected,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(13.dp)
+                                ) { Text(tr.text("restore_selected")) }
+                                OutlinedButton(
+                                    enabled = selectedIds.isNotEmpty() && !busy,
+                                    onClick = { confirmation = "delete" },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(13.dp)
+                                ) { Text(tr.text("delete_forever")) }
+                            }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    enabled = selectedIds.isNotEmpty() && !busy,
+                                    onClick = ::restoreSelected,
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(13.dp)
+                                ) { Text(tr.text("restore_selected")) }
+                                OutlinedButton(
+                                    enabled = selectedIds.isNotEmpty() && !busy,
+                                    onClick = { confirmation = "delete" },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(13.dp)
+                                ) { Text(tr.text("delete_forever")) }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(7.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            enabled = entries.isNotEmpty() && !busy,
+                            onClick = { confirmation = "empty" },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(13.dp)
+                        ) { Text(tr.text("empty_trash"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        OutlinedButton(
+                            enabled = !busy,
+                            onClick = onOpenSystemManager,
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(13.dp)
+                        ) { Text(tr.text("open_system_manager"), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
+                }
+
+                if (busy) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                    }
+                }
+
+                if (statusText.isNotBlank()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
+                        shape = RoundedCornerShape(13.dp)
+                    ) {
+                        Text(statusText, modifier = Modifier.padding(12.dp), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                if (entries.isEmpty() && !busy) {
+                    CompactCard(modifier = Modifier.fillMaxWidth()) {
+                        Text(tr.text("trash_empty"), fontWeight = FontWeight.Black)
+                        Text(
+                            tr.text("trash_empty_sub"),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    entries.forEach { entry ->
+                        val selected = entry.id in selectedIds
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !busy) {
+                                    selectedIds = if (selected) selectedIds - entry.id else selectedIds + entry.id
+                                },
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = if (selected) 3.dp else 1.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Checkbox(
+                                    checked = selected,
+                                    enabled = !busy,
+                                    onCheckedChange = {
+                                        selectedIds = if (it) selectedIds + entry.id else selectedIds - entry.id
+                                    }
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(entry.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(
+                                        tr.text("original_location", entry.originalRelativePath),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        "${if (entry.isDirectory) tr.text("folder") else tr.text("file")} · ${formatBytes(entry.size)} · ${formatDate(entry.deletedAtMs)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+@Composable
 private fun SettingsScreen(
     initialSettings: SpeedShareSettings,
     onBack: () -> Unit,
-    onSaved: (SpeedShareSettings) -> Unit
+    onSettingsChanged: (SpeedShareSettings) -> Unit
 ) {
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
@@ -682,6 +1129,12 @@ private fun SettingsScreen(
     }
     var portText by remember(initialSettings) { mutableStateOf(initialSettings.preferredPort.toString()) }
     var statusText by remember { mutableStateOf("") }
+
+    fun saveDraft(updated: SpeedShareSettings) {
+        draft = updated
+        onSettingsChanged(updated)
+        statusText = Localization.translator(context, updated.language).text("settings_saved")
+    }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
         Box(
@@ -703,36 +1156,64 @@ private fun SettingsScreen(
                     .padding(horizontal = 14.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Text(tr.text("settings"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-                        Text(tr.text("settings_subtitle"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                CompactCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(11.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) { Text("⚙", color = Color.White, fontWeight = FontWeight.Black) }
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tr.text("settings"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                            Text(
+                                tr.text("settings_subtitle"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        OutlinedButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 13.dp, vertical = 7.dp)) {
+                            Text(tr.text("back"))
+                        }
                     }
-                    OutlinedButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)) {
-                        Text(tr.text("back"))
-                    }
+                    Spacer(Modifier.height(9.dp))
+                    Text(
+                        tr.text("settings_auto_save_hint"),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(11.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.62f))
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
                 SettingsSection(tr.text("language")) {
                     Text(tr.text("language_sub"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
+                    AdaptiveSegmentGrid(
+                        options = listOf(
                             AppLanguage.SYSTEM to tr.text("language_system"),
                             AppLanguage.SIMPLIFIED_CHINESE to tr.text("language_chinese"),
                             AppLanguage.JAPANESE to tr.text("language_japanese"),
                             AppLanguage.ENGLISH to tr.text("language_english")
-                        ).forEach { (language, label) ->
-                            CompactSegment(
-                                text = label,
-                                selected = draft.language == language,
-                                modifier = Modifier.weight(1f)
-                            ) { draft = draft.copy(language = language) }
-                        }
-                    }
+                        ),
+                        selected = draft.language,
+                        onSelect = { saveDraft(draft.copy(language = it)) }
+                    )
                 }
 
                 SettingsSection(tr.text("default_behavior")) {
@@ -742,51 +1223,55 @@ private fun SettingsScreen(
                             text = tr.text("whole_phone"),
                             selected = draft.defaultMode == ShareMode.WHOLE_STORAGE,
                             modifier = Modifier.weight(1f)
-                        ) { draft = draft.copy(defaultMode = ShareMode.WHOLE_STORAGE) }
+                        ) { saveDraft(draft.copy(defaultMode = ShareMode.WHOLE_STORAGE)) }
                         CompactSegment(
                             text = tr.text("selected_files"),
                             selected = draft.defaultMode == ShareMode.SELECTED_FILES,
                             modifier = Modifier.weight(1f)
-                        ) { draft = draft.copy(defaultMode = ShareMode.SELECTED_FILES) }
+                        ) { saveDraft(draft.copy(defaultMode = ShareMode.SELECTED_FILES)) }
                     }
                     CompactSwitchRow(tr.text("allow_upload"), tr.text("allow_upload_sub"), draft.defaultUploadEnabled) {
-                        draft = draft.copy(defaultUploadEnabled = it)
+                        saveDraft(draft.copy(defaultUploadEnabled = it))
                     }
                     CompactSwitchRow(tr.text("remote_management"), tr.text("remote_management_sub"), draft.remoteManagementEnabled) {
-                        draft = draft.copy(remoteManagementEnabled = it)
+                        saveDraft(draft.copy(remoteManagementEnabled = it))
                     }
                     CompactSwitchRow(tr.text("delete_to_trash"), tr.text("delete_to_trash_sub"), draft.deleteToTrashByDefault) {
-                        draft = draft.copy(deleteToTrashByDefault = it)
+                        saveDraft(draft.copy(deleteToTrashByDefault = it))
                     }
                     CompactSwitchRow(tr.text("auto_start_share"), tr.text("auto_start_share_sub"), draft.autoStartIncomingShare) {
-                        draft = draft.copy(autoStartIncomingShare = it)
+                        saveDraft(draft.copy(autoStartIncomingShare = it))
                     }
                     CompactSwitchRow(tr.text("lockscreen_protection"), tr.text("lockscreen_protection_sub"), draft.keepAwakeDuringTransfer) {
-                        draft = draft.copy(keepAwakeDuringTransfer = it)
+                        saveDraft(draft.copy(keepAwakeDuringTransfer = it))
                     }
                 }
 
                 SettingsSection(tr.text("auto_stop")) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
+                    AdaptiveSegmentGrid(
+                        options = listOf(
                             0 to tr.text("never"),
                             10 to tr.text("minutes_10"),
                             30 to tr.text("minutes_30"),
                             60 to tr.text("hour_1")
-                        ).forEach { (minutes, label) ->
-                            CompactSegment(
-                                text = label,
-                                selected = draft.autoStopMinutes == minutes,
-                                modifier = Modifier.weight(1f)
-                            ) { draft = draft.copy(autoStopMinutes = minutes) }
-                        }
-                    }
+                        ),
+                        selected = draft.autoStopMinutes,
+                        onSelect = { saveDraft(draft.copy(autoStopMinutes = it)) }
+                    )
                 }
 
                 SettingsSection(tr.text("network_port")) {
                     OutlinedTextField(
                         value = portText,
-                        onValueChange = { portText = it.filter(Char::isDigit).take(5) },
+                        onValueChange = { value ->
+                            portText = value.filter(Char::isDigit).take(5)
+                            val port = portText.toIntOrNull()
+                            if (port != null && port in 1024..65535 && port != draft.preferredPort) {
+                                saveDraft(draft.copy(preferredPort = port))
+                            } else if (portText.length >= 4 && (port == null || port !in 1024..65535)) {
+                                statusText = tr.text("port_range_error")
+                            }
+                        },
                         label = { Text(tr.text("preferred_port")) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
@@ -794,10 +1279,10 @@ private fun SettingsScreen(
                         shape = RoundedCornerShape(13.dp)
                     )
                     CompactSwitchRow(tr.text("auto_find_port"), tr.text("auto_find_port_sub"), draft.autoPortFallback) {
-                        draft = draft.copy(autoPortFallback = it)
+                        saveDraft(draft.copy(autoPortFallback = it))
                     }
                     CompactSwitchRow(tr.text("copy_after_start"), tr.text("copy_after_start_sub"), draft.copyAddressAfterStart) {
-                        draft = draft.copy(copyAddressAfterStart = it)
+                        saveDraft(draft.copy(copyAddressAfterStart = it))
                     }
                 }
 
@@ -834,26 +1319,18 @@ private fun SettingsScreen(
                     }
                 }
 
-                Button(
-                    onClick = {
-                        val port = portText.toIntOrNull()
-                        if (port == null || port !in 1024..65535) {
-                            statusText = tr.text("port_range_error")
-                        } else {
-                            onSaved(draft.copy(preferredPort = port))
-                        }
-                    },
+                Text(
+                    tr.text("settings_credit"),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(vertical = 13.dp)
-                ) { Text(tr.text("save_settings"), fontWeight = FontWeight.Bold) }
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                )
 
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
     }
 }
-
 @Composable
 private fun SpeedShareTheme(content: @Composable () -> Unit) {
     val dark = isSystemInDarkTheme()
@@ -914,7 +1391,8 @@ private fun ServerStatusCard(
         )
     }
     val foreground = if (running) Color.White else MaterialTheme.colorScheme.onSurface
-    val secondaryText = if (running) Color.White.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val secondaryText = if (running) Color.White.copy(alpha = 0.80f) else MaterialTheme.colorScheme.onSurfaceVariant
+    val compactStatus = statusText.replace(Regex("(\\d)\\s+ms\\b", RegexOption.IGNORE_CASE)) { match -> "${match.groupValues[1]}\u00A0ms" }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -928,70 +1406,125 @@ private fun ServerStatusCard(
                 .padding(15.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Box(
                     modifier = Modifier
                         .size(9.dp)
                         .clip(CircleShape)
                         .background(if (running) Color(0xFF78F2BA) else if (starting) Color(0xFFFFD166) else Color(0xFF9CA3AF))
                 )
-                Spacer(Modifier.size(8.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        if (running) tr.text("running") else if (starting) tr.text("starting") else tr.text("stopped"),
-                        color = foreground,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        statusText,
-                        color = secondaryText,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
+                Text(
+                    if (running) tr.text("running") else if (starting) tr.text("starting") else tr.text("stopped"),
+                    modifier = Modifier.weight(1f),
+                    color = foreground,
+                    fontWeight = FontWeight.Bold
+                )
                 if (running) {
                     OutlinedButton(
                         onClick = onStop,
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 7.dp)
-                    ) { Text(tr.text("stop")) }
+                        contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
+                    ) { Text(tr.text("stop"), maxLines = 1) }
                 }
             }
+
+            Text(
+                compactStatus,
+                modifier = Modifier.fillMaxWidth(),
+                color = secondaryText,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
 
             if (address != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    SelectionContainer(modifier = Modifier.weight(1f)) {
-                        Text(
-                            address,
-                            color = foreground,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (running) {
-                        OutlinedButton(
-                            onClick = onCopy,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                        ) { Text(tr.text("copy")) }
-                        Spacer(Modifier.size(6.dp))
-                        OutlinedButton(
-                            onClick = onToggleQr,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
-                        ) { Text(tr.text("qr_code")) }
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    if (maxWidth < 430.dp && running) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            SelectionContainer {
+                                Text(
+                                    address,
+                                    color = foreground,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                OutlinedButton(
+                                    onClick = onCopy,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
+                                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
+                                ) { Text(tr.text("copy")) }
+                                OutlinedButton(
+                                    onClick = onToggleQr,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
+                                    contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
+                                ) { Text(tr.text("qr_code")) }
+                            }
+                        }
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            SelectionContainer(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    address,
+                                    color = foreground,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (running) {
+                                OutlinedButton(
+                                    onClick = onCopy,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                ) { Text(tr.text("copy")) }
+                                Spacer(Modifier.size(6.dp))
+                                OutlinedButton(
+                                    onClick = onToggleQr,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                                ) { Text(tr.text("qr_code")) }
+                            }
+                        }
                     }
                 }
             }
 
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                MetricPill(tr.text("connections"), connections.toString(), foreground, secondaryText, Modifier.weight(1f))
-                MetricPill(tr.text("send"), "${formatBytes(downloadSpeed)}/s", foreground, secondaryText, Modifier.weight(1f))
-                MetricPill(tr.text("receive"), "${formatBytes(uploadSpeed)}/s", foreground, secondaryText, Modifier.weight(1f))
-                MetricPill(tr.text("tasks"), taskCount.toString(), foreground, secondaryText, Modifier.weight(1f))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val connectionMetric = Triple(tr.text("connections"), connections.toString(), "")
+                val sendMetric = Triple(tr.text("send"), formatTransferRate(downloadSpeed).first, formatTransferRate(downloadSpeed).second)
+                val receiveMetric = Triple(tr.text("receive"), formatTransferRate(uploadSpeed).first, formatTransferRate(uploadSpeed).second)
+                val taskMetric = Triple(tr.text("tasks"), taskCount.toString(), "")
+                val metrics = listOf(connectionMetric, sendMetric, receiveMetric, taskMetric)
+
+                if (maxWidth < 520.dp) {
+                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        metrics.chunked(2).forEach { rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(7.dp)
+                            ) {
+                                rowItems.forEach { (label, value, unit) ->
+                                    MetricPill(label, value, unit, foreground, secondaryText, Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        metrics.forEach { (label, value, unit) ->
+                            MetricPill(label, value, unit, foreground, secondaryText, Modifier.weight(1f))
+                        }
+                    }
+                }
             }
 
             if (!activeTransferText.isNullOrBlank()) {
@@ -1011,6 +1544,7 @@ private fun ServerStatusCard(
 private fun MetricPill(
     label: String,
     value: String,
+    unit: String,
     foreground: Color,
     secondaryText: Color,
     modifier: Modifier = Modifier
@@ -1019,11 +1553,54 @@ private fun MetricPill(
         modifier = modifier
             .clip(RoundedCornerShape(12.dp))
             .background(foreground.copy(alpha = 0.09f))
-            .padding(horizontal = 8.dp, vertical = 7.dp)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
-        Text(label, color = secondaryText, style = MaterialTheme.typography.labelSmall)
-        Text(value, color = foreground, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            color = secondaryText,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Clip
+        )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                value,
+                color = foreground,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Black,
+                maxLines = 1,
+                overflow = TextOverflow.Clip
+            )
+            if (unit.isNotBlank()) {
+                Spacer(Modifier.size(4.dp))
+                Text(
+                    unit,
+                    color = secondaryText,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1
+                )
+            }
+        }
     }
+}
+
+private fun formatTransferRate(bytesPerSecond: Long): Pair<String, String> {
+    val safe = bytesPerSecond.coerceAtLeast(0L).toDouble()
+    val units = arrayOf("B/s", "KB/s", "MB/s", "GB/s")
+    var value = safe
+    var index = 0
+    while (value >= 1024.0 && index < units.lastIndex) {
+        value /= 1024.0
+        index++
+    }
+    val number = when {
+        index == 0 -> value.toLong().toString()
+        value >= 100 -> String.format(java.util.Locale.US, "%.0f", value)
+        value >= 10 -> String.format(java.util.Locale.US, "%.1f", value)
+        else -> String.format(java.util.Locale.US, "%.2f", value)
+    }
+    return number to units[index]
 }
 
 @Composable
@@ -1096,6 +1673,52 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
 }
 
 @Composable
+private fun StatusChip(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f))
+            .padding(horizontal = 9.dp, vertical = 5.dp),
+        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Bold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
+}
+
+@Composable
+private fun <T> AdaptiveSegmentGrid(
+    options: List<Pair<T, String>>,
+    selected: T,
+    onSelect: (T) -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columnCount = if (maxWidth < 430.dp) 2 else options.size.coerceAtLeast(1)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.chunked(columnCount).forEach { rowOptions ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    rowOptions.forEach { (value, label) ->
+                        CompactSegment(
+                            text = label,
+                            selected = selected == value,
+                            modifier = Modifier.weight(1f)
+                        ) { onSelect(value) }
+                    }
+                    repeat(columnCount - rowOptions.size) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun CompactSegment(
     text: String,
     selected: Boolean,
@@ -1138,7 +1761,7 @@ private fun CompactSwitchRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f))
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.45f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.45f), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
         Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
     }

@@ -27,11 +27,12 @@ Files remain in locations selected or authorized by the user. Temporary data may
 
 ## Network security
 
-The local server uses plain HTTP and does not provide password or token authentication. HTTP traffic is not end-to-end encrypted, and other devices on the same local network may be able to access the server or observe or modify traffic.
+The local server may use HTTP. HTTP traffic is not end-to-end encrypted and may be observable or modified by other parties on an untrusted network.
 
 Users should:
 
-- Use the app only on trusted private local networks
+- Use the app only on trusted networks
+- Enable access protection where available
 - Avoid exposing the server through router port forwarding
 - Stop the server after use
 - Avoid transferring sensitive files over public Wi-Fi

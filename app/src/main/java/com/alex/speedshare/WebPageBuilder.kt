@@ -64,12 +64,14 @@ object WebPageBuilder {
             "<div class=\"empty\">${escapeHtml(tr.text("web_empty"))}</div>"
         } else {
             items.joinToString(separator = "\n") {
-                buildItem(it, allowSelection = directoryMode, remoteManagementEnabled = remoteManagementEnabled, tr = tr)
+                buildItem(it, allowSelection = true, remoteManagementEnabled = remoteManagementEnabled, tr = tr)
             }
         }
 
         val managementPanel = if (directoryMode) {
             buildManagementPanel(currentRelativePath, remoteManagementEnabled, tr)
+        } else if (items.isNotEmpty()) {
+            buildSelectedDownloadPanel(tr)
         } else {
             ""
         }
@@ -615,7 +617,8 @@ object WebPageBuilder {
                   const name=prompt(t('web_zip_name'),defaultName);
                   if(name===null)return;
                   try{
-                    const result=await apiPost('/api/zip/prepare?mode='+(compress?'compress':'store')+'&name='+encodeURIComponent(name),paths);
+                    const endpoint=DIRECTORY_MODE?'/api/zip/prepare':'/api/selected-zip/prepare';
+                    const result=await apiPost(endpoint+'?mode='+(compress?'compress':'store')+'&name='+encodeURIComponent(name),paths);
                     if(!result.url)throw new Error(t('web_no_download_url'));
                     location.href=result.url;
                   }catch(error){alert(t('web_zip_failed',error.message));}
@@ -810,7 +813,7 @@ object WebPageBuilder {
             "${item.displayPath} · ${formatBytes(item.size)} · ${formatDate(item.modifiedAt)} · ${item.mimeType}"
         )
         val selector = if (allowSelection) {
-            "<label class=\"selectBox\" onclick=\"event.preventDefault();event.stopPropagation()\"><input type=\"checkbox\" class=\"itemCheck\" onchange=\"selectionChanged()\"><span>✓</span></label>"
+            "<label class=\"selectBox\" onclick=\"event.stopPropagation()\"><input type=\"checkbox\" class=\"itemCheck\" onclick=\"event.stopPropagation()\" onchange=\"selectionChanged()\"><span>✓</span></label>"
         } else {
             ""
         }
@@ -885,11 +888,34 @@ object WebPageBuilder {
                 <div class="sub">${escapeHtml(formatBytes(item.size))} · ${escapeHtml(formatDate(item.modifiedAt))}</div>
                 <div class="actions">
                   $previewAction
-                  <a class="download" href="${escapeHtml(item.downloadUrl.orEmpty())}" download onclick="event.stopPropagation()">${escapeHtml(tr.text("web_download"))}</a>
+                  <a class="download" href="${escapeHtml(item.downloadUrl.orEmpty())}" download="$escapedName" onclick="event.stopPropagation()">${escapeHtml(tr.text("web_download"))}</a>
                   $manageAction
                 </div>
               </div>
             </article>
+        """.trimIndent()
+    }
+
+    private fun buildSelectedDownloadPanel(tr: Translator): String {
+        return """
+          <section class="managementBox">
+            <div class="managementTop">
+              <div>
+                <div class="managementTitle">${escapeHtml(tr.text("web_batch_download_title"))}</div>
+                <div class="uploadHint">${escapeHtml(tr.text("web_batch_download_hint"))}</div>
+              </div>
+              <div class="managementButtons">
+                <button class="secondary" type="button" onclick="toggleSelectAll()">${escapeHtml(tr.text("web_select_all"))}</button>
+              </div>
+            </div>
+            <div id="selectionBar" class="selectionBar hidden">
+              <strong id="selectionCount">${escapeHtml(tr.text("web_selected_count", 0))}</strong>
+              <button type="button" onclick="downloadSelectedSeparately()">${escapeHtml(tr.text("web_download_separately"))}</button>
+              <button type="button" onclick="downloadSelectedZip(false)">${escapeHtml(tr.text("web_zip_fast"))}</button>
+              <button type="button" onclick="downloadSelectedZip(true)">${escapeHtml(tr.text("web_zip_compress"))}</button>
+              <button type="button" onclick="clearSelection()">${escapeHtml(tr.text("web_clear_selection"))}</button>
+            </div>
+          </section>
         """.trimIndent()
     }
 

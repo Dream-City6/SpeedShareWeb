@@ -1,15 +1,68 @@
-<h1 align="center">Speed Share Web</h1>
-
 <p align="center">
-  Turn an Android phone into a private local file server and access it from any modern web browser.
-</p>
+  <h1 align="center">SpeedShareWeb</h1>
+  <p align="center">
+    Turn an Android phone into a local file server and access it from any modern web browser.
+  </p>
 
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="README.ja.md">日本語</a>
-</p>>
+</p>
 
-> This repository is currently being prepared for its first public release. Screenshots, signed APKs and complete build instructions will be added before the repository becomes public.
+
+
+## Screenshots
+
+### Android app
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/app-home-en.jpg" width="300" alt="SpeedShareWeb English home screen">
+      <br>
+      <sub>English interface</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/app-home-ja.jpg" width="300" alt="SpeedShareWeb Japanese home screen">
+      <br>
+      <sub>Japanese interface and live transfer</sub>
+    </td>
+  </tr>
+</table>
+
+### Browser file manager
+
+<p align="center">
+  <img src="docs/screenshots/web-file-manager.png" width="100%" alt="SpeedShareWeb browser file manager">
+</p>
+
+<p align="center">
+  Browse, upload, download, organize, and restore files directly from a browser on the same local network.
+</p>
+
+### Settings
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/settings-en-general.jpg" width="260" alt="SpeedShareWeb general settings">
+      <br>
+      <sub>General settings</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/settings-en-network.jpg" width="260" alt="SpeedShareWeb network settings">
+      <br>
+      <sub>Network and shortcuts</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/settings-ja-general.jpg" width="260" alt="SpeedShareWeb Japanese settings">
+      <br>
+      <sub>Japanese settings</sub>
+    </td>
+  </tr>
+</table>
+
+
 
 ## Overview
 
@@ -24,6 +77,7 @@ The receiving device does not need to install an app. Open the local address sho
 - Local-network file browsing, downloading and uploading
 - File management from a responsive web interface
 - List and grid display modes
+- Optional access protection
 - Designed for temporary, direct file sharing
 - No advertising
 
@@ -50,7 +104,7 @@ Recommended layout:
 
 SpeedShareWeb is designed to operate on the local network. It does not require an account or cloud storage.
 
-The app uses plain HTTP and does not provide password or token authentication. Other devices on the same local network may be able to access the server. Use it only on a trusted private network, do not expose the port through router port forwarding, do not transfer sensitive files over public Wi-Fi, and stop the server after use.
+Network traffic may be visible to other devices on an untrusted network when the app is operating over plain HTTP. Use the app only on networks you trust, enable access protection when available, and stop the server after use.
 
 See [PRIVACY.md](PRIVACY.md) for details.
 
@@ -98,5 +152,3 @@ A license will be selected after all third-party dependencies have been reviewed
 ## Disclaimer
 
 Use SpeedShareWeb only with files and devices you are authorized to access. The project is provided without warranty.
-
-Developed by Alex
