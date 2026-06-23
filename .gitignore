@@ -16,3 +16,8 @@ local.properties
 # Local release output
 /app/release/
 *.dm
+# Signing keys and credentials
+*.jks
+*.keystore
+keystore.properties
+signing.properties

@@ -6,7 +6,7 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-06-23
+## [1.1.1] - 2026-06-23
 
 ### Added
 
