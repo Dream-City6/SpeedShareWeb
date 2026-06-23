@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="speedshare_icon_background">#1769E0</color>
+    <string name="speedshare_shortcut_whole_short">Share entire phone</string>
+    <string name="speedshare_shortcut_whole_long">Start sharing the entire phone storage</string>
+    <string name="speedshare_shortcut_choose_short">Choose files</string>
+    <string name="speedshare_shortcut_choose_long">Choose files and prepare a share</string>
+    <string name="speedshare_shortcut_stop_short">Stop server</string>
+    <string name="speedshare_shortcut_stop_long">Stop the SpeedShare server now</string>
+    <string name="speedshare_tile_label">SpeedShare</string>
+</resources>

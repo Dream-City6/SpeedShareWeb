@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="share_whole_storage"
+        android:enabled="true"
+        android:icon="@drawable/ic_speedshare_shortcut"
+        android:shortcutShortLabel="@string/speedshare_shortcut_whole_short"
+        android:shortcutLongLabel="@string/speedshare_shortcut_whole_long">
+        <intent
+            android:action="com.alex.speedshare.action.SHARE_WHOLE_STORAGE"
+            android:targetPackage="com.alex.speedshare"
+            android:targetClass="com.alex.speedshare.ShortcutActionActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="choose_files"
+        android:enabled="true"
+        android:icon="@drawable/ic_speedshare_shortcut"
+        android:shortcutShortLabel="@string/speedshare_shortcut_choose_short"
+        android:shortcutLongLabel="@string/speedshare_shortcut_choose_long">
+        <intent
+            android:action="com.alex.speedshare.action.CHOOSE_FILES"
+            android:targetPackage="com.alex.speedshare"
+            android:targetClass="com.alex.speedshare.ShortcutActionActivity" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="stop_server"
+        android:enabled="true"
+        android:icon="@drawable/ic_speedshare_shortcut"
+        android:shortcutShortLabel="@string/speedshare_shortcut_stop_short"
+        android:shortcutLongLabel="@string/speedshare_shortcut_stop_long">
+        <intent
+            android:action="com.alex.speedshare.action.STOP_SERVER"
+            android:targetPackage="com.alex.speedshare"
+            android:targetClass="com.alex.speedshare.ShortcutActionActivity" />
+    </shortcut>
+</shortcuts>

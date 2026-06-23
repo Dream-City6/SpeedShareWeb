@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible problem
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Remove passwords, private filenames, local IP addresses and personal information before submitting.
+        Security vulnerabilities must be reported privately according to SECURITY.md.
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      placeholder: "Example: 0.1.0"
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Android device and version
+      placeholder: "Example: Xiaomi 13 Ultra, Android 16"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser device and version
+      placeholder: "Example: Chrome 138 on Windows 11"
+    validations:
+      required: true
+  - type: dropdown
+    id: network
+    attributes:
+      label: Network type
+      options:
+        - Home or office Wi-Fi
+        - Phone hotspot
+        - Public Wi-Fi
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the server
+        2. Open...
+        3. Select...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional information
+      description: Add sanitized screenshots or logs when useful.

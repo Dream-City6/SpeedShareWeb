@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="speedshare_shortcut_whole_short">端末全体を共有</string>
+    <string name="speedshare_shortcut_whole_long">端末ストレージ全体の共有を開始</string>
+    <string name="speedshare_shortcut_choose_short">ファイルを選択</string>
+    <string name="speedshare_shortcut_choose_long">ファイルを選択して共有を準備</string>
+    <string name="speedshare_shortcut_stop_short">サーバーを停止</string>
+    <string name="speedshare_shortcut_stop_long">SpeedShare サーバーを今すぐ停止</string>
+    <string name="speedshare_tile_label">SpeedShare</string>
+</resources>
