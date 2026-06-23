@@ -7,6 +7,8 @@ import android.os.Build
 import android.os.Environment
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
+import androidx.core.service.quicksettings.PendingIntentActivityWrapper
+import androidx.core.service.quicksettings.TileServiceCompat
 
 class SpeedShareTileService : TileService() {
 
@@ -17,30 +19,39 @@ class SpeedShareTileService : TileService() {
 
     override fun onClick() {
         super.onClick()
+
         val settings = AppSettings.load(this)
         val tr = Localization.translator(this, settings.language)
-
         val current = SpeedShareRuntime.state.value
+
         if (current.running || current.starting) {
             SpeedShareService.stopServer(applicationContext)
+
             qsTile?.apply {
                 state = Tile.STATE_INACTIVE
-                label = "SpeedShare"
+                label = "SpeedShareWeb"
                 subtitleCompat(tr.text("stopped"))
                 updateTile()
             }
+
             return
         }
 
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || !Environment.isExternalStorageManager()) {
+        val needsAllFilesPermission =
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.R ||
+                    !Environment.isExternalStorageManager()
+
+        if (needsAllFilesPermission) {
             openActivity(
                 Intent(this, MainActivity::class.java).apply {
                     action = AppActions.REQUEST_ALL_FILES_ACCESS
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    flags =
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                                Intent.FLAG_ACTIVITY_SINGLE_TOP
                 }
             )
+
             return
         }
 
@@ -62,7 +73,7 @@ class SpeedShareTileService : TileService() {
 
         qsTile?.apply {
             state = Tile.STATE_ACTIVE
-            label = "SpeedShare"
+            label = "SpeedShareWeb"
             subtitleCompat(tr.text("starting"))
             updateTile()
         }
@@ -72,45 +83,71 @@ class SpeedShareTileService : TileService() {
         val settings = AppSettings.load(this)
         val tr = Localization.translator(this, settings.language)
         val current = SpeedShareRuntime.state.value
+
         qsTile?.apply {
-            label = "SpeedShare"
-            state = if (current.running || current.starting) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
+            label = "SpeedShareWeb"
+
+            state =
+                if (current.running || current.starting) {
+                    Tile.STATE_ACTIVE
+                } else {
+                    Tile.STATE_INACTIVE
+                }
+
             subtitleCompat(
                 when {
-                    current.starting -> tr.text("starting")
-                    current.running && current.uploadEnabled -> tr.text("running_upload")
-                    current.running -> tr.text("running_readonly")
-                    else -> tr.text("stopped")
+                    current.starting ->
+                        tr.text("starting")
+
+                    current.running && current.uploadEnabled ->
+                        tr.text("running_upload")
+
+                    current.running ->
+                        tr.text("running_readonly")
+
+                    else ->
+                        tr.text("stopped")
                 }
             )
+
             updateTile()
         }
     }
 
     private fun openActivity(intent: Intent) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            val pendingIntent = PendingIntent.getActivity(
-                this,
-                7301,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            startActivityAndCollapse(pendingIntent)
-        } else {
-            @Suppress("DEPRECATION")
-            startActivityAndCollapse(intent)
-        }
+        val wrapper = PendingIntentActivityWrapper(
+            this,
+            7301,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT,
+            false
+        )
+
+        TileServiceCompat.startActivityAndCollapse(
+            this,
+            wrapper
+        )
     }
 
     private fun Tile.subtitleCompat(value: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) subtitle = value
-        contentDescription = "SpeedShare, $value"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            subtitle = value
+        }
+
+        contentDescription = "SpeedShareWeb, $value"
     }
 
     companion object {
+
         fun requestRefresh(context: android.content.Context) {
             runCatching {
-                requestListeningState(context, ComponentName(context, SpeedShareTileService::class.java))
+                requestListeningState(
+                    context,
+                    ComponentName(
+                        context,
+                        SpeedShareTileService::class.java
+                    )
+                )
             }
         }
     }

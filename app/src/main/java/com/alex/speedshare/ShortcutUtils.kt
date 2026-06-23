@@ -52,7 +52,7 @@ fun requestQuickSettingsTile(
 
     manager.requestAddTileService(
         component,
-        "SpeedShare",
+        "SpeedShareWeb",
         icon,
         context.mainExecutor
     ) { result ->

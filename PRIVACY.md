@@ -4,7 +4,7 @@ _Last updated: 2026-06-23_
 
 ## Summary
 
-Speed Share Web is designed to provide file access and transfer over a local network. It does not require an account or cloud storage.
+SpeedShareWeb is designed to provide file access and transfer over a local network. It does not require an account or cloud storage.
 
 ## Data processed by the app
 
@@ -27,12 +27,11 @@ Files remain in locations selected or authorized by the user. Temporary data may
 
 ## Network security
 
-The local server may use HTTP. HTTP traffic is not end-to-end encrypted and may be observable or modified by other parties on an untrusted network.
+The local server uses plain HTTP and does not provide password or token authentication. HTTP traffic is not end-to-end encrypted, and other devices on the same local network may be able to access the server or observe or modify traffic.
 
 Users should:
 
-- Use the app only on trusted networks
-- Enable access protection where available
+- Use the app only on trusted private local networks
 - Avoid exposing the server through router port forwarding
 - Stop the server after use
 - Avoid transferring sensitive files over public Wi-Fi
@@ -49,7 +48,7 @@ The initial public release is intended to contain no advertising and no develope
 
 ## Children
 
-Speed Share Web is a general-purpose utility and is not designed to collect personal information from children.
+SpeedShareWeb is a general-purpose utility and is not designed to collect personal information from children.
 
 ## Changes
 

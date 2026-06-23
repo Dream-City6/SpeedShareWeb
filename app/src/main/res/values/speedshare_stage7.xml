@@ -6,6 +6,6 @@
     <string name="speedshare_shortcut_choose_short">Choose files</string>
     <string name="speedshare_shortcut_choose_long">Choose files and prepare a share</string>
     <string name="speedshare_shortcut_stop_short">Stop server</string>
-    <string name="speedshare_shortcut_stop_long">Stop the SpeedShare server now</string>
-    <string name="speedshare_tile_label">SpeedShare</string>
+    <string name="speedshare_shortcut_stop_long">Stop the SpeedShareWeb server now</string>
+    <string name="speedshare_tile_label">SpeedShareWeb</string>
 </resources>

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Speed Share Web will be documented in this file.
+All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers will follow Semantic Versioning where practical.
 

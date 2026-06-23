@@ -20,4 +20,4 @@ Choose this when you want broad reuse with an explicit patent grant and do not r
 - Confirm whether the app contains generated or third-party assets
 - Add copyright notices required by dependencies
 
-Provisional recommendation for Speed Share Web: GPL-3.0, subject to the dependency review.
+Provisional recommendation for SpeedShareWeb: GPL-3.0, subject to the dependency review.

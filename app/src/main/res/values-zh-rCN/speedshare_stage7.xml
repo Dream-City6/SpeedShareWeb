@@ -5,6 +5,6 @@
     <string name="speedshare_shortcut_choose_short">选择文件</string>
     <string name="speedshare_shortcut_choose_long">选择文件并准备分享</string>
     <string name="speedshare_shortcut_stop_short">停止服务器</string>
-    <string name="speedshare_shortcut_stop_long">立即停止 SpeedShare 服务器</string>
-    <string name="speedshare_tile_label">SpeedShare</string>
+    <string name="speedshare_shortcut_stop_long">立即停止 SpeedShareWeb 服务器</string>
+    <string name="speedshare_tile_label">SpeedShareWeb</string>
 </resources>

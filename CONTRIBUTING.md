@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve Speed Share Web.
+Thank you for helping improve SpeedShareWeb.
 
 ## Before opening an issue
 

@@ -8,7 +8,7 @@ speed-share-web
 
 Display name:
 
-Speed Share Web
+SpeedShareWeb
 
 Description:
 

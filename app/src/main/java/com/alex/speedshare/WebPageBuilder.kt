@@ -87,7 +87,7 @@ object WebPageBuilder {
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
               <meta name="theme-color" content="#4057d6">
-              <title>${escapeHtml(title)} - SpeedShare</title>
+              <title>${escapeHtml(title)} - SpeedShareWeb</title>
               <style>
                 :root{color-scheme:light dark;--bg:#f4f6fc;--bg2:#eef1fb;--panel:rgba(255,255,255,.92);--panelSolid:#fff;--panel2:#f1f3fa;--text:#151a2d;--muted:#6d7488;--line:rgba(65,77,119,.14);--brand:#4057d6;--brand2:#7656b8;--success:#0b9f6e;--danger:#d04444;--shadow:0 12px 32px rgba(43,54,99,.09);--shadowHover:0 18px 42px rgba(43,54,99,.15);--radius:17px}
                 @media(prefers-color-scheme:dark){:root{--bg:#090e1b;--bg2:#11172a;--panel:rgba(18,24,42,.9);--panelSolid:#12182a;--panel2:#1b2237;--text:#f1f3ff;--muted:#a3aac0;--line:rgba(190,199,235,.13);--brand:#8f9dff;--brand2:#c2a2ff;--success:#56d6a7;--danger:#ff7979;--shadow:0 14px 38px rgba(0,0,0,.28);--shadowHover:0 20px 48px rgba(0,0,0,.38)}}
@@ -611,7 +611,7 @@ object WebPageBuilder {
                 async function downloadSelectedZip(compress){
                   const paths=selectedPaths();
                   if(paths.length===0){alert(t('web_select_items'));return;}
-                  const defaultName='SpeedShare_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.zip';
+                  const defaultName='SpeedShareWeb_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.zip';
                   const name=prompt(t('web_zip_name'),defaultName);
                   if(name===null)return;
                   try{

@@ -452,7 +452,7 @@ private fun SpeedShareApp(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "SpeedShare",
+                            text = "SpeedShareWeb",
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Black
                         )

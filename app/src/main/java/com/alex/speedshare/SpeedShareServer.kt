@@ -753,7 +753,7 @@ class SpeedShareServer(
         }
         zipSelections.entries.removeIf { System.currentTimeMillis() - it.value.createdAtMs > 15 * 60_000L }
         val id = UUID.randomUUID().toString().replace("-", "")
-        val requestedName = validateSimpleName(target.query["name"].orEmpty()) ?: "SpeedShare.zip"
+        val requestedName = validateSimpleName(target.query["name"].orEmpty()) ?: "SpeedShareWeb.zip"
         val fileName = if (requestedName.endsWith(".zip", true)) requestedName else "$requestedName.zip"
         zipSelections[id] = ZipSelection(
             paths = paths,

@@ -5,6 +5,6 @@
     <string name="speedshare_shortcut_choose_short">ファイルを選択</string>
     <string name="speedshare_shortcut_choose_long">ファイルを選択して共有を準備</string>
     <string name="speedshare_shortcut_stop_short">サーバーを停止</string>
-    <string name="speedshare_shortcut_stop_long">SpeedShare サーバーを今すぐ停止</string>
-    <string name="speedshare_tile_label">SpeedShare</string>
+    <string name="speedshare_shortcut_stop_long">SpeedShareWeb サーバーを今すぐ停止</string>
+    <string name="speedshare_tile_label">SpeedShareWeb</string>
 </resources>

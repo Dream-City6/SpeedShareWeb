@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "SpeedShare"
+rootProject.name = "SpeedShareWeb"
 include(":app")

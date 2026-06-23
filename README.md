@@ -1,22 +1,21 @@
+<h1 align="center">Speed Share Web</h1>
+
 <p align="center">
-  <h1 align="center">Speed Share Web</h1>
-  <p align="center">
-    Turn an Android phone into a private local file server and access it from any modern web browser.
-  </p>
+  Turn an Android phone into a private local file server and access it from any modern web browser.
 </p>
 
 <p align="center">
   <a href="README.zh-CN.md">简体中文</a> ·
   <a href="README.ja.md">日本語</a>
-</p>
+</p>>
 
 > This repository is currently being prepared for its first public release. Screenshots, signed APKs and complete build instructions will be added before the repository becomes public.
 
 ## Overview
 
-Speed Share Web lets you browse and transfer files between an Android device and other devices on the same local network.
+SpeedShareWeb lets you browse and transfer files between an Android device and other devices on the same local network.
 
-The receiving device does not need to install an app. Open the local address shown by Speed Share Web in a browser and start transferring files.
+The receiving device does not need to install an app. Open the local address shown by SpeedShareWeb in a browser and start transferring files.
 
 ## Highlights
 
@@ -25,14 +24,13 @@ The receiving device does not need to install an app. Open the local address sho
 - Local-network file browsing, downloading and uploading
 - File management from a responsive web interface
 - List and grid display modes
-- Optional access protection
 - Designed for temporary, direct file sharing
 - No advertising
 
 ## How it works
 
 1. Connect the Android phone and the other device to the same trusted local network.
-2. Start the local server in Speed Share Web.
+2. Start the local server in SpeedShareWeb.
 3. Open the displayed local address in a browser.
 4. Browse, upload, download or manage files.
 5. Stop the server when file sharing is complete.
@@ -50,9 +48,9 @@ Recommended layout:
 
 ## Privacy
 
-Speed Share Web is designed to operate on the local network. It does not require an account or cloud storage.
+SpeedShareWeb is designed to operate on the local network. It does not require an account or cloud storage.
 
-Network traffic may be visible to other devices on an untrusted network when the app is operating over plain HTTP. Use the app only on networks you trust, enable access protection when available, and stop the server after use.
+The app uses plain HTTP and does not provide password or token authentication. Other devices on the same local network may be able to access the server. Use it only on a trusted private network, do not expose the port through router port forwarding, do not transfer sensitive files over public Wi-Fi, and stop the server after use.
 
 See [PRIVACY.md](PRIVACY.md) for details.
 
@@ -99,4 +97,6 @@ A license will be selected after all third-party dependencies have been reviewed
 
 ## Disclaimer
 
-Use Speed Share Web only with files and devices you are authorized to access. The project is provided without warranty.
+Use SpeedShareWeb only with files and devices you are authorized to access. The project is provided without warranty.
+
+Developed by Alex

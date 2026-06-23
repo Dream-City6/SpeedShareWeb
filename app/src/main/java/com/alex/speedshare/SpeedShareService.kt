@@ -726,7 +726,7 @@ class SpeedShareService : Service() {
                 putExtra(EXTRA_SUCCESS_PREFIX, successPrefix)
 
                 if (uris.isNotEmpty()) {
-                    val data = ClipData.newRawUri("SpeedShare files", uris.first())
+                    val data = ClipData.newRawUri("SpeedShareWeb files", uris.first())
                     uris.drop(1).forEach { data.addItem(ClipData.Item(it)) }
                     clipData = data
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
