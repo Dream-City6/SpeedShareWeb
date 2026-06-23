@@ -121,8 +121,9 @@ See [SECURITY.md](SECURITY.md).
 
 ## Download
 
-The first signed APK will be published on the GitHub Releases page after release testing is complete.
+The official signed APK is available on the GitHub Releases page.
 
+Download APK files only from this repository's official Releases page.
 Do not install APK files distributed by unofficial third parties.
 
 ## Build from source
@@ -150,9 +151,6 @@ Bug reports, feature suggestions, translations and pull requests are welcome aft
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md) before contributing.
 
-## License
-
-A license will be selected after all third-party dependencies have been reviewed. Until a license file is added, the source code remains copyrighted and no reuse permission is granted.
 
 ## Disclaimer
 
