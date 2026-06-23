@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.1/SpeedShareWeb-v1.1.1.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.1.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.1.1 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.2/SpeedShareWeb-v1.1.2.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.1.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.1.2 APK">
 </a>
 
 <br><br>
 
-v1.1.1 is the first public release of SpeedShareWeb.  
+v1.1.2 is an official stable release of SpeedShareWeb.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>

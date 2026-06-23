@@ -6,6 +6,14 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-06-23
+
+### Changed
+
+- Published SpeedShareWeb as an official stable release
+- Updated the APK launcher icon to the new colorful folder-and-lightning design
+- Updated monochrome notification, Quick Settings tile and shortcut icons to match the new visual identity
+
 ## [1.1.1] - 2026-06-23
 
 ### Added

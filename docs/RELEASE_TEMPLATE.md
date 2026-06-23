@@ -1,40 +1,36 @@
-# SpeedShareWeb v0.1.0
+# SpeedShareWeb v1.1.2
 
-This is the first public preview of SpeedShareWeb.
+This is an official stable release of SpeedShareWeb.
+
+SpeedShareWeb turns an Android phone into a local file server that can be accessed from a modern web browser on the same local network.
 
 ## Highlights
 
-- Turn an Android phone into a local file server
-- Access files from a modern web browser
-- Browse, upload and download files over the local network
-- Use list or grid view
-- Optional access protection
-- No account and no cloud storage required
+- Browse, upload, download and manage files from a web browser
+- Preview supported images, videos, audio files and PDFs
+- Create ZIP downloads and manage files with the recycle bin
+- Use Quick Settings tiles, Home screen shortcuts and QR-code access
+- English, Simplified Chinese and Japanese interfaces
+- No account, cloud storage or advertising
+
+## What changed in v1.1.2
+
+- Updated the APK launcher icon to the new colorful folder-and-lightning design
+- Updated monochrome notification, Quick Settings tile and shortcut icons
+- Unified the SpeedShareWeb visual identity across Android system surfaces
 
 ## Installation
 
 1. Download the APK attached to this release.
-2. Verify that the file was downloaded from the official GitHub repository.
+2. Verify that it was downloaded from the official SpeedShareWeb repository.
 3. Allow installation from the browser or file manager when Android asks.
-4. Install the APK.
-5. Disable the temporary unknown-app installation permission afterward if desired.
+4. Install or update the app.
 
-## Important security note
+## Security notice
 
-Use the app only on trusted local networks. Do not expose its server port to the public internet. Stop the server after use.
-
-## Known limitations
-
-- First preview release
-- Browser compatibility and large-file behavior are still being tested
-- Language coverage may be incomplete
-- HTTPS may not yet be available
-
-## Feedback
-
-Use GitHub Issues for reproducible bugs and feature suggestions. Report security vulnerabilities privately according to SECURITY.md.
+SpeedShareWeb uses plain HTTP and does not provide password or token authentication. Use it only on a trusted private local network. Do not expose the server through router port forwarding, and stop the server after use.
 
 ## Files
 
-- `SpeedShareWeb-v0.1.0.apk`
-- Optional checksum file: `SpeedShareWeb-v0.1.0.apk.sha256`
+- `SpeedShareWeb-v1.1.2.apk`
+- Optional checksum file: `SpeedShareWeb-v1.1.2.apk.sha256`
