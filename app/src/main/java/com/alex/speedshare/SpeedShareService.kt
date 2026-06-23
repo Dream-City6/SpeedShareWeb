@@ -666,7 +666,14 @@ class SpeedShareService : Service() {
             stopForeground(true)
         }
     }
-
+    @Suppress("DEPRECATION")
+    private fun getUriListExtra(intent: Intent, key: String): List<Uri> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(key, Uri::class.java).orEmpty()
+        } else {
+            intent.getParcelableArrayListExtra<Uri>(key).orEmpty()
+        }
+    }
     companion object {
         private const val CHANNEL_ID = "speedshare_server"
         private const val NOTIFICATION_ID = 9001
@@ -758,11 +765,4 @@ class SpeedShareService : Service() {
     }
 }
 
-@Suppress("DEPRECATION")
-private fun getUriListExtra(intent: Intent, key: String): List<Uri> {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        intent.getParcelableArrayListExtra(key, Uri::class.java).orEmpty()
-    } else {
-        intent.getParcelableArrayListExtra<Uri>(key).orEmpty()
-    }
-}
+
