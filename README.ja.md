@@ -1,112 +1,90 @@
+<div align="center">
+
 # SpeedShareWeb
 
-Android端末を一時的なローカルファイルサーバーとして使用し、パソコン、タブレット、ほかのスマートフォンからWebブラウザでアクセスできるアプリです。
+Androidスマートフォンを高速なローカルネットワーク用ファイルサーバーにし、ブラウザから直接アクセスできます。
 
+[English](README.md) · [简体中文](README.zh-CN.md)
 
-## 概要
+<br>
 
-SpeedShareWebは、同じローカルネットワーク上にある端末間でファイルを閲覧・転送するためのアプリです。
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.1/SpeedShareWeb-v1.1.1.apk">
+  <img src="https://img.shields.io/badge/ダウンロード-SpeedShareWeb%20v1.1.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="SpeedShareWeb v1.1.1 APKをダウンロード">
+</a>
 
-受信側の端末にアプリをインストールする必要はありません。SpeedShareWebに表示されるローカルアドレスをブラウザで開くだけで、ファイルのアップロード、ダウンロード、閲覧、管理ができます。
+<br><br>
+
+v1.1.1 は SpeedShareWeb の最初の公開バージョンです。  
+その他のバージョンや更新内容については、[GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)をご確認ください。
+
+</div>
 
 ## このプロジェクトを作った理由
 
-自宅には複数のスマートフォン、タブレット、パソコンがありますが、それぞれ異なるOSやエコシステムを使用しています。
+自宅には複数のスマートフォン、タブレット、パソコンがありますが、それぞれ異なるOSやデバイス環境を使用しています。
 
-端末間でファイルを転送するたびに、互換性のあるアプリを探したり、クラウドなどの中継サービスを利用したりする必要があり、操作が面倒なだけでなく、自宅のローカルネットワークの速度を十分に活かせないこともありました。
+ファイルを転送するたびに対応するアプリやサービスを探す必要があり、ルーターの性能を十分に引き出せないうえ、動作が遅く、手間もかかり、広告が表示されるものもありました。
 
-そこで、SpeedShareWebを開発しました。
+さすがに我慢できなくなり、SpeedShareWebを自分で作りました。同じローカルネットワークに接続されていれば、特定のメーカー、アカウント、クラウドストレージに依存せず、ファイルの閲覧、アップロード、ダウンロード、管理を直接行えます。
 
-特定のメーカーや端末のエコシステムに依存せず、同じローカルネットワークに接続され、ブラウザを利用できる端末であれば、ファイルの閲覧、アップロード、ダウンロード、管理を直接行えます。
+## プロジェクト概要
 
-また、ローカルネットワークとルーターの性能をできる限り活かせるよう、転送性能の最適化にも取り組みました。
+SpeedShareWebを使うと、Android端末と同じローカルネットワーク上にあるスマートフォン、タブレット、パソコンとの間でファイルを転送できます。
 
-このプロジェクトは、まず自分自身の実際の問題を解決するために作ったものです。同じような悩みを持つ方のファイル転送を、少しでも便利にできればうれしいです。
+受信側の端末にアプリをインストールする必要はありません。SpeedShareWebに表示されるローカルアドレスをブラウザで開くだけで利用できます。
 
+## 主な機能
 
-## Screenshots
-
-### Android app
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/app-home-en.jpg" width="300" alt="SpeedShareWeb English home screen">
-      <br>
-      <sub>English interface</sub>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/app-home-ja.jpg" width="300" alt="SpeedShareWeb Japanese home screen">
-      <br>
-      <sub>Japanese interface and live transfer</sub>
-    </td>
-  </tr>
-</table>
-
-### Browser file manager
-
-<p align="center">
-  <img src="docs/screenshots/web-file-manager.png" width="100%" alt="SpeedShareWeb browser file manager">
-</p>
-
-<p align="center">
-  Browse, upload, download, organize, and restore files directly from a browser on the same local network.
-</p>
-
-### Settings
-
-<table>
-  <tr>
-    <td align="center">
-      <img src="docs/screenshots/settings-en-general.jpg" width="260" alt="SpeedShareWeb general settings">
-      <br>
-      <sub>General settings</sub>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/settings-en-network.jpg" width="260" alt="SpeedShareWeb network settings">
-      <br>
-      <sub>Network and shortcuts</sub>
-    </td>
-    <td align="center">
-      <img src="docs/screenshots/settings-ja-general.jpg" width="260" alt="SpeedShareWeb Japanese settings">
-      <br>
-      <sub>Japanese settings</sub>
-    </td>
-  </tr>
-</table>
-## 主な特徴
-
-- パソコン、タブレット、スマートフォンのブラウザからアクセス可能
-- アカウント登録やクラウドストレージが不要
-- ローカルネットワーク内でファイルを閲覧、アップロード、ダウンロード
-- スマートフォンとデスクトップに対応したWeb画面
-- リスト表示とグリッド表示
-- 任意のアクセス保護
-- 一時的で直接的なファイル共有に適した設計
+- スマートフォン、タブレット、パソコンのブラウザからアクセス可能
+- アカウントやクラウドストレージは不要
+- ファイルの閲覧、アップロード、ダウンロード、移動、削除
+- 単一ファイル、複数ファイル、ZIP形式でのダウンロード
+- レスポンシブ対応のリスト表示とグリッド表示
+- ごみ箱からの復元、完全削除、一括削除
+- 日本語、簡体字中国語、英語に対応
 - 広告なし
+
+## スクリーンショット
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/app-home-en.jpg" width="300" alt="SpeedShareWeb 英語ホーム画面">
+      <br>
+      <sub>Androidアプリのホーム画面</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/app-home-ja.jpg" width="300" alt="SpeedShareWeb 日本語ホーム画面">
+      <br>
+      <sub>リアルタイム転送状況</sub>
+    </td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/web-file-manager.png" width="100%" alt="SpeedShareWeb ブラウザファイルマネージャー">
+</p>
 
 ## 使い方
 
-1. Android端末と相手側の端末を、同じ信頼できるローカルネットワークに接続します。
-2. SpeedShareWebでローカルサーバーを起動します。
-3. 相手側の端末のブラウザで、アプリに表示されたローカルアドレスを開きます。
-4. ファイルを閲覧、アップロード、ダウンロード、管理します。
-5. 利用後はサーバーを停止します。
+1. Android端末ともう一方の端末を、同じ信頼できるローカルネットワークに接続します。
+2. SpeedShareWebでサーバーを起動します。
+3. もう一方の端末のブラウザで、表示されたローカルアドレスを開きます。
+4. ファイルの閲覧、転送、管理を行います。
+5. 使用後はサーバーを停止します。
 
 ## プライバシーとセキュリティ
 
-SpeedShareWebはローカルネットワーク内での動作を前提としており、アカウントやクラウドストレージを必要としません。
+SpeedShareWebは主にローカルネットワーク内で動作し、アカウントやクラウドストレージを必要としません。
 
-通常のHTTP通信を使用する場合、信頼できないネットワーク上の第三者に通信内容を確認される可能性があります。信頼できるネットワークのみで使用し、利用可能なアクセス保護を有効にして、転送後はサーバーを停止してください。
+信頼できるネットワーク上でのみ使用し、ローカルHTTPサーバーをインターネットへ直接公開しないでください。
 
-詳細は [PRIVACY.md](PRIVACY.md) と [SECURITY.md](SECURITY.md) をご確認ください。
-
-## ダウンロード
-
-テスト完了後、最初の署名済みAPKをGitHub Releasesで公開します。
-
-非公式な第三者が再配布したAPKはインストールしないでください。
+詳細については、[PRIVACY.md](PRIVACY.md)および[SECURITY.md](SECURITY.md)をご確認ください。
 
 ## ライセンス
-本プロジェクトは GNU General Public License v3.0 のもとで公開されています。
-詳細については LICENSE ファイルをご確認ください。
+
+本プロジェクトは GNU General Public License v3.0 のもとで公開されています。詳細については[LICENSE](LICENSE)をご確認ください。
+
+## 免責事項
+
+SpeedShareWebは、アクセスおよび管理する権限のあるファイルと端末に対してのみ使用してください。本プロジェクトはいかなる保証もなく提供されます。
