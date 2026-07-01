@@ -36,6 +36,7 @@ class SpeedShareService : Service() {
         val mimeTypes: List<String>,
         val uploadEnabled: Boolean,
         val remoteManagementEnabled: Boolean,
+        val clipboardSyncEnabled: Boolean,
         val deleteToTrashByDefault: Boolean,
         val keepAwakeDuringTransfer: Boolean,
         val autoStopMinutes: Int,
@@ -183,6 +184,7 @@ class SpeedShareService : Service() {
             mimeTypes = intent.getStringArrayListExtra(EXTRA_MIME_TYPES).orEmpty(),
             uploadEnabled = intent.getBooleanExtra(EXTRA_UPLOAD_ENABLED, false),
             remoteManagementEnabled = intent.getBooleanExtra(EXTRA_REMOTE_MANAGEMENT, false),
+            clipboardSyncEnabled = intent.getBooleanExtra(EXTRA_CLIPBOARD_SYNC, false),
             deleteToTrashByDefault = intent.getBooleanExtra(EXTRA_DELETE_TO_TRASH_DEFAULT, true),
             keepAwakeDuringTransfer = intent.getBooleanExtra(EXTRA_KEEP_AWAKE, true),
             autoStopMinutes = intent.getIntExtra(EXTRA_AUTO_STOP_MINUTES, 0)
@@ -267,6 +269,7 @@ class SpeedShareService : Service() {
                     rootDirectory = Environment.getExternalStorageDirectory(),
                     uploadEnabled = config.uploadEnabled && config.mode == ShareMode.WHOLE_STORAGE,
                     remoteManagementEnabled = config.remoteManagementEnabled && config.mode == ShareMode.WHOLE_STORAGE,
+                    clipboardSyncEnabled = config.clipboardSyncEnabled,
                     deleteToTrashByDefault = config.deleteToTrashByDefault,
                     language = Localization.resolve(this, config.language),
                     port = candidatePort,
@@ -706,6 +709,7 @@ class SpeedShareService : Service() {
         private const val EXTRA_MIME_TYPES = "mime_types"
         private const val EXTRA_UPLOAD_ENABLED = "upload_enabled"
         private const val EXTRA_REMOTE_MANAGEMENT = "remote_management"
+        private const val EXTRA_CLIPBOARD_SYNC = "clipboard_sync"
         private const val EXTRA_DELETE_TO_TRASH_DEFAULT = "delete_to_trash_default"
         private const val EXTRA_KEEP_AWAKE = "keep_awake"
         private const val EXTRA_AUTO_STOP_MINUTES = "auto_stop_minutes"
@@ -721,6 +725,7 @@ class SpeedShareService : Service() {
             files: List<SharedFile>,
             uploadEnabled: Boolean,
             remoteManagementEnabled: Boolean = false,
+            clipboardSyncEnabled: Boolean = false,
             deleteToTrashByDefault: Boolean = true,
             keepAwakeDuringTransfer: Boolean = true,
             autoStopMinutes: Int = 0,
@@ -739,6 +744,7 @@ class SpeedShareService : Service() {
                 putStringArrayListExtra(EXTRA_MIME_TYPES, ArrayList(files.map { it.mimeType }))
                 putExtra(EXTRA_UPLOAD_ENABLED, uploadEnabled)
                 putExtra(EXTRA_REMOTE_MANAGEMENT, remoteManagementEnabled)
+                putExtra(EXTRA_CLIPBOARD_SYNC, clipboardSyncEnabled)
                 putExtra(EXTRA_DELETE_TO_TRASH_DEFAULT, deleteToTrashByDefault)
                 putExtra(EXTRA_KEEP_AWAKE, keepAwakeDuringTransfer)
                 putExtra(EXTRA_AUTO_STOP_MINUTES, autoStopMinutes)

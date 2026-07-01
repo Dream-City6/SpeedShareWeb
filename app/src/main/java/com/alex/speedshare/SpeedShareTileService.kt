@@ -50,6 +50,7 @@ class SpeedShareTileService : TileService() {
             files = emptyList(),
             uploadEnabled = settings.defaultUploadEnabled,
             remoteManagementEnabled = settings.remoteManagementEnabled,
+            clipboardSyncEnabled = settings.clipboardSyncEnabled,
             deleteToTrashByDefault = settings.deleteToTrashByDefault,
             keepAwakeDuringTransfer = settings.keepAwakeDuringTransfer,
             autoStopMinutes = settings.autoStopMinutes,

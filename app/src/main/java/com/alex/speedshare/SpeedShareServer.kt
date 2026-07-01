@@ -1,6 +1,8 @@
 package com.alex.speedshare
 
 import android.content.Context
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.media.MediaScannerConnection
 import android.os.ParcelFileDescriptor
 import java.io.File
@@ -32,6 +34,7 @@ class SpeedShareServer(
     private val rootDirectory: File,
     private val uploadEnabled: Boolean,
     private val remoteManagementEnabled: Boolean,
+    private val clipboardSyncEnabled: Boolean,
     private val deleteToTrashByDefault: Boolean,
     private val language: ResolvedLanguage,
     private val port: Int,
@@ -437,6 +440,14 @@ class SpeedShareServer(
                         sendStatusJson(socket, request.method)
                     }
 
+                    isGetOrHead && target.path == "/api/clipboard" -> {
+                        sendClipboardJson(socket, request.method)
+                    }
+
+                    request.method == "POST" && target.path == "/api/clipboard" -> {
+                        updateClipboardFromWeb(socket, input, request)
+                    }
+
                     target.path == "/favicon.ico" -> {
                         sendEmptyResponse(socket, "204 No Content")
                     }
@@ -507,6 +518,7 @@ class SpeedShareServer(
         val html = WebPageBuilder.buildSelectedPage(
             items = items,
             language = language,
+            clipboardSyncEnabled = clipboardSyncEnabled,
             pageVersion = contentVersion
         )
         sendHtmlResponse(socket, method, html)
@@ -595,6 +607,7 @@ class SpeedShareServer(
             items = items,
             uploadEnabled = uploadEnabled,
             remoteManagementEnabled = remoteManagementEnabled,
+            clipboardSyncEnabled = clipboardSyncEnabled,
             deleteToTrashByDefault = deleteToTrashByDefault,
             language = language,
             pageVersion = contentVersion
@@ -697,6 +710,55 @@ class SpeedShareServer(
             .map(::urlDecode)
             .distinct()
             .toList()
+    }
+
+    private fun readTextBody(input: InputStream, request: HttpRequest, maxLength: Int): String {
+        val length = request.headers["content-length"]?.toIntOrNull()
+            ?: throw IllegalArgumentException("Content-Length is required")
+        if (length < 0 || length > maxLength) {
+            throw IllegalArgumentException("Request body is too large")
+        }
+        val bytes = ByteArray(length)
+        var offset = 0
+        while (offset < length) {
+            val read = input.read(bytes, offset, length - offset)
+            if (read < 0) throw IllegalStateException("Request body ended early")
+            offset += read
+        }
+        return String(bytes, StandardCharsets.UTF_8)
+    }
+
+    private fun sendClipboardJson(socket: SocketChannel, method: String) {
+        if (!clipboardSyncEnabled) {
+            sendTextResponse(socket, "403 Forbidden", "Clipboard sync is disabled")
+            return
+        }
+        val snapshot = ClipboardSyncRuntime.snapshot.value
+        sendJsonResponse(
+            socket = socket,
+            method = method,
+            json = "{\"enabled\":true,\"text\":\"${jsonEscape(snapshot.text)}\",\"updatedAtMs\":${snapshot.updatedAtMs}}"
+        )
+    }
+
+    private fun updateClipboardFromWeb(socket: SocketChannel, input: InputStream, request: HttpRequest) {
+        if (!clipboardSyncEnabled) {
+            sendTextResponse(socket, "403 Forbidden", "Clipboard sync is disabled")
+            return
+        }
+        val text = try {
+            readTextBody(input, request, maxLength = 64 * 1024)
+        } catch (error: IllegalArgumentException) {
+            sendTextResponse(socket, "400 Bad Request", error.message ?: "Invalid clipboard text")
+            return
+        }
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(translator.text("clipboard_sync"), text))
+        ClipboardSyncRuntime.snapshot.value = ClipboardSyncSnapshot(
+            text = text,
+            updatedAtMs = System.currentTimeMillis()
+        )
+        sendJsonResponse(socket, request.method, "{\"ok\":true}")
     }
 
     private fun sendTreeJson(socket: SocketChannel, method: String, relativePath: String) {

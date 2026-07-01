@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.2/SpeedShareWeb-v1.1.2.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.1.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.1.2 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.3/SpeedShareWeb-v1.1.3.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.1.3%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.1.3 APK">
 </a>
 
 <br><br>
 
-v1.1.2 is an official stable release of SpeedShareWeb.
+v1.1.3 is an official stable release of SpeedShareWeb with the updated APK icon and optional clipboard sync.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -39,6 +39,7 @@ The receiving device does not need to install an app. Simply open the local addr
 - No account or cloud storage required
 - Browse, upload, download, move, and delete files
 - Single-file, multi-file, and ZIP downloads
+- Optional clipboard sync between the Android app and the browser page
 - Responsive list and grid views
 - Restore, permanently delete, or clear files from the recycle bin
 - English, Simplified Chinese, and Japanese interfaces
@@ -71,13 +72,16 @@ The receiving device does not need to install an app. Simply open the local addr
 2. Start the server in SpeedShareWeb.
 3. Open the displayed local address in a browser on the other device.
 4. Browse, transfer, or manage files.
-5. Stop the server when finished.
+5. Optional: enable clipboard sync in Settings if you want to send text between the phone and browser page.
+6. Stop the server when finished.
 
 ## Privacy and Security
 
 SpeedShareWeb mainly operates on the local network and does not require an account or cloud storage.
 
 Use it only on trusted networks. Do not expose the local HTTP server directly to the public internet.
+
+Clipboard sync also uses the same local HTTP connection. Do not sync passwords, verification codes, tokens, or other sensitive text.
 
 For details, see [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).
 

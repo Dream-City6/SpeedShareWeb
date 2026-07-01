@@ -1,23 +1,44 @@
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
-.DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+.idea/
+.gradle/
 local.properties
-# Local release output
-/app/release/
-*.dm
+
+# Build outputs
+/build/
+**/build/
+/captures/
+app/release/
+*.apk
+*.aab
+*.ap_
+output-metadata.json
+
+# Native / generated build folders
+.externalNativeBuild/
+.cxx/
+
 # Signing keys and credentials
 *.jks
 *.keystore
 keystore.properties
 signing.properties
+secrets.properties
+.env
+.env.*
+*.pem
+*.p12
+*.key
+google-services.json
+service-account*.json
+
+# Logs, temporary files and OS files
+*.log
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+*.hprof
+
+# Keep safe examples and required wrapper files
+!gradle/wrapper/gradle-wrapper.jar
+!.env.example

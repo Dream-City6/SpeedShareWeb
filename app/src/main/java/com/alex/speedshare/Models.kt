@@ -157,3 +157,12 @@ data class ServerUiState(
 object SpeedShareRuntime {
     val state = MutableStateFlow(ServerUiState())
 }
+
+data class ClipboardSyncSnapshot(
+    val text: String = "",
+    val updatedAtMs: Long = 0L
+)
+
+object ClipboardSyncRuntime {
+    val snapshot = MutableStateFlow(ClipboardSyncSnapshot())
+}

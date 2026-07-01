@@ -2,7 +2,12 @@ package com.alex.speedshare
 
 object WebPageBuilder {
 
-    fun buildSelectedPage(items: List<WebItem>, language: ResolvedLanguage, pageVersion: String): String {
+    fun buildSelectedPage(
+        items: List<WebItem>,
+        language: ResolvedLanguage,
+        clipboardSyncEnabled: Boolean,
+        pageVersion: String
+    ): String {
         val tr = Localization.translator(language)
         val subtitle = tr.text("web_selected_sub", items.size)
         return buildPage(
@@ -14,6 +19,7 @@ object WebPageBuilder {
             currentRelativePath = "",
             directoryMode = false,
             remoteManagementEnabled = false,
+            clipboardSyncEnabled = clipboardSyncEnabled,
             deleteToTrashByDefault = true,
             language = language,
             pageVersion = pageVersion
@@ -26,6 +32,7 @@ object WebPageBuilder {
         items: List<WebItem>,
         uploadEnabled: Boolean,
         remoteManagementEnabled: Boolean,
+        clipboardSyncEnabled: Boolean,
         deleteToTrashByDefault: Boolean,
         language: ResolvedLanguage,
         pageVersion: String
@@ -40,6 +47,7 @@ object WebPageBuilder {
             currentRelativePath = relativePath,
             directoryMode = true,
             remoteManagementEnabled = remoteManagementEnabled,
+            clipboardSyncEnabled = clipboardSyncEnabled,
             deleteToTrashByDefault = deleteToTrashByDefault,
             language = language,
             pageVersion = pageVersion
@@ -55,6 +63,7 @@ object WebPageBuilder {
         currentRelativePath: String,
         directoryMode: Boolean,
         remoteManagementEnabled: Boolean,
+        clipboardSyncEnabled: Boolean,
         deleteToTrashByDefault: Boolean,
         language: ResolvedLanguage,
         pageVersion: String
@@ -75,6 +84,7 @@ object WebPageBuilder {
         } else {
             ""
         }
+        val clipboardPanel = if (clipboardSyncEnabled) buildClipboardPanel(tr) else ""
         val jsTranslations = Localization.table(language)
             .filterKeys { it.startsWith("web_") || it == "speed_upload" || it == "speed_download" }
             .entries
@@ -129,6 +139,9 @@ object WebPageBuilder {
                 .viewButtons button.active{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff}
 
                 .uploadBox,.managementBox{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:10px;margin:10px 0;box-shadow:var(--shadow)}
+                .clipboardText{width:100%;min-height:84px;resize:vertical;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:12px;padding:9px 10px;outline:none;margin-top:8px}
+                .clipboardText:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(64,87,214,.13)}
+                .clipboardOutput{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin-top:8px;min-height:42px;font-size:12px;color:var(--text)}
                 .dropZone{border:1.5px dashed var(--line);border-radius:13px;padding:12px;text-align:center;transition:.16s}
                 .dropZone.drag{border-color:var(--brand);background:rgba(64,87,214,.08);transform:scale(.995)}
                 .uploadTitle,.managementTitle{font-weight:800;margin-bottom:3px}
@@ -213,6 +226,7 @@ object WebPageBuilder {
 
                 $uploadPanel
                 $managementPanel
+                $clipboardPanel
 
                 <section class="toolbar">
                   <input id="search" class="control" type="search" placeholder="${escapeHtml(tr.text("web_search"))}" oninput="applyFilters()">
@@ -265,9 +279,11 @@ object WebPageBuilder {
                 const CURRENT_PATH = ${jsString(currentRelativePath)};
                 const DIRECTORY_MODE = ${directoryMode};
                 const REMOTE_MANAGEMENT = ${remoteManagementEnabled};
+                const CLIPBOARD_SYNC = ${clipboardSyncEnabled};
                 const DELETE_TO_TRASH_DEFAULT = ${deleteToTrashByDefault};
                 let liveEvents = null;
                 let livePollTimer = null;
+                let clipboardPollTimer = null;
                 let consecutiveFailures = 0;
                 let wasDisconnected = false;
                 let bannerTimer = null;
@@ -597,6 +613,37 @@ object WebPageBuilder {
                   try{return JSON.parse(text);}catch(_){return {text:text};}
                 }
 
+                async function sendClipboardToPhone(){
+                  if(!CLIPBOARD_SYNC)return;
+                  const input=document.getElementById('clipboardInput');
+                  if(!input)return;
+                  try{
+                    const response=await fetch('/api/clipboard',{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:input.value || ''});
+                    const text=await response.text();
+                    if(!response.ok)throw new Error(text || ('HTTP '+response.status));
+                    showConnectionBanner(t('web_clipboard_sent'),'ok',false);
+                    refreshPhoneClipboard();
+                  }catch(error){alert(t('web_clipboard_failed',error.message));}
+                }
+
+                async function refreshPhoneClipboard(){
+                  if(!CLIPBOARD_SYNC)return;
+                  const output=document.getElementById('phoneClipboardText');
+                  if(!output)return;
+                  try{
+                    const response=await fetch('/api/clipboard?t='+Date.now(),{cache:'no-store'});
+                    const data=await response.json();
+                    if(!response.ok)throw new Error(data.message || ('HTTP '+response.status));
+                    output.textContent=data.text || t('web_clipboard_empty');
+                  }catch(error){output.textContent=t('web_clipboard_failed',error.message);}
+                }
+
+                async function pollPhoneClipboard(){
+                  if(!CLIPBOARD_SYNC)return;
+                  await refreshPhoneClipboard();
+                  clipboardPollTimer=setTimeout(pollPhoneClipboard,1000);
+                }
+
                 function downloadSelectedSeparately(){
                   const cards = selectedCards().filter(function(card){return card.dataset.dir !== '1';});
                   if(cards.length === 0){alert(t('web_select_file_zip_folder'));return;}
@@ -788,11 +835,13 @@ object WebPageBuilder {
                 setView(localStorage.getItem('speedshare-view') || 'grid');
                 applyFilters();
                 installUpload();
+                pollPhoneClipboard();
                 connectLiveEvents();
                 pollLiveStatus();
                 window.addEventListener('beforeunload',function(){
                   if(liveEvents) liveEvents.close();
                   if(livePollTimer) clearTimeout(livePollTimer);
+                  if(clipboardPollTimer) clearTimeout(clipboardPollTimer);
                 });
               </script>
             </body>
@@ -1010,6 +1059,22 @@ object WebPageBuilder {
                 <input id="uploadDirectory" type="hidden" value="${escapeHtml(relativePath)}">
                 <div id="uploadStatus" class="uploadStatus" style="margin-top:10px">${escapeHtml(tr.text("web_no_files_selected"))}</div>
               </div>
+            </section>
+        """.trimIndent()
+    }
+
+    private fun buildClipboardPanel(tr: Translator): String {
+        return """
+            <section class="managementBox">
+              <div class="managementTitle">${escapeHtml(tr.text("web_clipboard_sync"))}</div>
+              <div class="uploadHint">${escapeHtml(tr.text("web_clipboard_hint"))}</div>
+              <textarea id="clipboardInput" class="clipboardText" maxlength="65536" placeholder="${escapeHtml(tr.text("web_clipboard_placeholder"))}"></textarea>
+              <div class="uploadActions">
+                <button class="primary" type="button" onclick="sendClipboardToPhone()">${escapeHtml(tr.text("web_clipboard_to_phone"))}</button>
+                <button class="secondary" type="button" onclick="refreshPhoneClipboard()">${escapeHtml(tr.text("web_clipboard_from_phone"))}</button>
+              </div>
+              <div class="uploadHint" style="margin-top:10px">${escapeHtml(tr.text("web_clipboard_phone_text"))}</div>
+              <div id="phoneClipboardText" class="clipboardOutput">${escapeHtml(tr.text("web_clipboard_empty"))}</div>
             </section>
         """.trimIndent()
     }

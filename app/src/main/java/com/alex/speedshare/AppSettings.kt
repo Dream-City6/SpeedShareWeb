@@ -7,6 +7,7 @@ data class SpeedShareSettings(
     val defaultMode: ShareMode = ShareMode.WHOLE_STORAGE,
     val defaultUploadEnabled: Boolean = false,
     val remoteManagementEnabled: Boolean = false,
+    val clipboardSyncEnabled: Boolean = false,
     val deleteToTrashByDefault: Boolean = true,
     val autoStartIncomingShare: Boolean = true,
     val keepAwakeDuringTransfer: Boolean = true,
@@ -22,6 +23,7 @@ object AppSettings {
     private const val KEY_DEFAULT_MODE = "default_mode"
     private const val KEY_DEFAULT_UPLOAD = "default_upload"
     private const val KEY_REMOTE_MANAGEMENT = "remote_management"
+    private const val KEY_CLIPBOARD_SYNC = "clipboard_sync"
     private const val KEY_DELETE_TO_TRASH = "delete_to_trash"
     private const val KEY_AUTO_START_SHARE = "auto_start_share"
     private const val KEY_KEEP_AWAKE = "keep_awake"
@@ -44,6 +46,7 @@ object AppSettings {
             defaultMode = mode,
             defaultUploadEnabled = prefs.getBoolean(KEY_DEFAULT_UPLOAD, false),
             remoteManagementEnabled = prefs.getBoolean(KEY_REMOTE_MANAGEMENT, false),
+            clipboardSyncEnabled = prefs.getBoolean(KEY_CLIPBOARD_SYNC, false),
             deleteToTrashByDefault = prefs.getBoolean(KEY_DELETE_TO_TRASH, true),
             autoStartIncomingShare = prefs.getBoolean(KEY_AUTO_START_SHARE, true),
             keepAwakeDuringTransfer = prefs.getBoolean(KEY_KEEP_AWAKE, true),
@@ -63,6 +66,7 @@ object AppSettings {
             .putString(KEY_DEFAULT_MODE, settings.defaultMode.name)
             .putBoolean(KEY_DEFAULT_UPLOAD, settings.defaultUploadEnabled)
             .putBoolean(KEY_REMOTE_MANAGEMENT, settings.remoteManagementEnabled)
+            .putBoolean(KEY_CLIPBOARD_SYNC, settings.clipboardSyncEnabled)
             .putBoolean(KEY_DELETE_TO_TRASH, settings.deleteToTrashByDefault)
             .putBoolean(KEY_AUTO_START_SHARE, settings.autoStartIncomingShare)
             .putBoolean(KEY_KEEP_AWAKE, settings.keepAwakeDuringTransfer)

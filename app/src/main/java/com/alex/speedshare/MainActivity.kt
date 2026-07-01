@@ -255,6 +255,7 @@ private fun SpeedShareApp(
             files = targetFiles,
             uploadEnabled = targetUploadEnabled,
             remoteManagementEnabled = targetRemoteManagementEnabled,
+            clipboardSyncEnabled = settings.clipboardSyncEnabled,
             deleteToTrashByDefault = settings.deleteToTrashByDefault,
             keepAwakeDuringTransfer = targetKeepAwake,
             autoStopMinutes = settings.autoStopMinutes,
@@ -290,6 +291,28 @@ private fun SpeedShareApp(
             targetKeepAwake = settings.keepAwakeDuringTransfer,
             successPrefix = successPrefix
         )
+    }
+
+    fun syncCurrentClipboardToWeb(showStatus: Boolean = false) {
+        if (!settings.clipboardSyncEnabled || !serverState.running) return
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val text = clipboard.primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)
+            ?.coerceToText(context)
+            ?.toString()
+            .orEmpty()
+        ClipboardSyncRuntime.snapshot.value = ClipboardSyncSnapshot(
+            text = text,
+            updatedAtMs = System.currentTimeMillis()
+        )
+        if (showStatus) {
+            localStatusText = if (text.isBlank()) {
+                tr.text("clipboard_sync_empty")
+            } else {
+                tr.text("clipboard_sync_updated")
+            }
+        }
     }
 
     val filePicker = rememberLauncherForActivityResult(
@@ -376,6 +399,7 @@ private fun SpeedShareApp(
             if (event == Lifecycle.Event.ON_RESUME) {
                 val granted = hasManageAllFilesAccess()
                 hasAllFilesAccess = granted
+                syncCurrentClipboardToWeb()
 
                 if (waitingForAllFilesAccess && granted) {
                     waitingForAllFilesAccess = false
@@ -397,6 +421,22 @@ private fun SpeedShareApp(
 
         activity?.lifecycle?.addObserver(observer)
         onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
+
+    DisposableEffect(context, settings.clipboardSyncEnabled, serverState.running) {
+        if (!settings.clipboardSyncEnabled || !serverState.running) {
+            onDispose { }
+        } else {
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val listener = ClipboardManager.OnPrimaryClipChangedListener {
+                syncCurrentClipboardToWeb()
+            }
+            clipboard.addPrimaryClipChangedListener(listener)
+            syncCurrentClipboardToWeb()
+            onDispose {
+                clipboard.removePrimaryClipChangedListener(listener)
+            }
+        }
     }
 
     BackHandler(enabled = showSettings || showTrashManager) {
@@ -552,6 +592,33 @@ private fun SpeedShareApp(
                                     }
                                 }
                             }
+                        }
+                    }
+                }
+
+                AnimatedVisibility(visible = settings.clipboardSyncEnabled && serverState.running) {
+                    CompactCard {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(tr.text("clipboard_sync"), fontWeight = FontWeight.Bold)
+                                Text(
+                                    tr.text("clipboard_sync_phone_sub"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    syncCurrentClipboardToWeb(showStatus = true)
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) { Text(tr.text("clipboard_sync_now")) }
                         }
                     }
                 }
@@ -1235,6 +1302,9 @@ private fun SettingsScreen(
                     }
                     CompactSwitchRow(tr.text("remote_management"), tr.text("remote_management_sub"), draft.remoteManagementEnabled) {
                         saveDraft(draft.copy(remoteManagementEnabled = it))
+                    }
+                    CompactSwitchRow(tr.text("clipboard_sync"), tr.text("clipboard_sync_sub"), draft.clipboardSyncEnabled) {
+                        saveDraft(draft.copy(clipboardSyncEnabled = it))
                     }
                     CompactSwitchRow(tr.text("delete_to_trash"), tr.text("delete_to_trash_sub"), draft.deleteToTrashByDefault) {
                         saveDraft(draft.copy(deleteToTrashByDefault = it))

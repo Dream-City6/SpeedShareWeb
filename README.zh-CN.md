@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.2/SpeedShareWeb-v1.1.2.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.1.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.1.2 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.3/SpeedShareWeb-v1.1.3.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.1.3%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.1.3 APK">
 </a>
 
 <br><br>
 
-v1.1.2 是 SpeedShareWeb 的正式稳定版本。
+v1.1.3 是 SpeedShareWeb 的正式稳定版本，更新了 APK 图标，并加入了可选剪贴板同步功能。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
@@ -38,6 +38,7 @@ SpeedShareWeb 可以让安卓设备与同一局域网内的手机、平板和电
 - 不需要账号或云存储
 - 浏览、上传、下载、移动和删除文件
 - 支持单文件、多文件和 ZIP 打包下载
+- 可选手机与浏览器页面剪贴板同步
 - 响应式列表与网格视图
 - 回收站恢复、永久删除和清空
 - 支持简体中文、日语和英语
@@ -69,11 +70,13 @@ SpeedShareWeb 可以让安卓设备与同一局域网内的手机、平板和电
 2. 在 SpeedShareWeb 中启动服务器。
 3. 在另一台设备的浏览器中打开显示的局域网地址。
 4. 浏览、传输或管理文件。
-5. 使用结束后停止服务器。
+5. 如需同步文字，可在设置中开启剪贴板同步。
+6. 使用结束后停止服务器。
 
 ## 隐私与安全
 SpeedShareWeb 主要在局域网内运行，不需要账号或云存储。
 请仅在可信网络中使用，不要把本地 HTTP 服务直接暴露到公网。
+剪贴板同步同样使用局域网普通 HTTP，请不要同步密码、验证码、Token 或其他敏感文本。
 详细信息请参阅 [PRIVACY.md](PRIVACY.md) 和 [SECURITY.md](SECURITY.md)。
 
 ## 开源许可证

@@ -6,7 +6,11 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 
 ## [Unreleased]
 
-## [1.1.2] - 2026-06-23
+## [1.1.3] - 2026-07-01
+
+### Added
+
+- Optional clipboard sync between the Android app and the browser page
 
 ### Changed
 
@@ -44,7 +48,7 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 - Browser-based file access
 - File browsing and transfer interface
 - List and grid display modes
-- Initial access-protection functionality
+- Initial privacy and security documentation
 - English, Simplified Chinese and Japanese interfaces
 
 ### Security
