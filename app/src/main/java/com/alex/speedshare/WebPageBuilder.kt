@@ -124,11 +124,11 @@ object WebPageBuilder {
                 .breadcrumbs a{text-decoration:none;color:var(--brand);background:var(--panel2);border:1px solid var(--line);padding:6px 9px;border-radius:9px;transition:.16s}
                 .breadcrumbs a:hover{transform:translateY(-1px);border-color:var(--brand)}
 
-                .livePanel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:9px 0;background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:7px;box-shadow:var(--shadow)}
-                .liveCard{background:var(--panel2);border:1px solid transparent;border-radius:10px;padding:7px 9px;min-width:0}
+                .livePanel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+                .liveCard{background:var(--panel2);border:1px solid transparent;border-radius:9px;padding:6px 8px;min-width:0}
                 .liveLabel{font-size:10px;color:var(--muted);margin-bottom:2px}
                 .liveValue{font-size:14px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-                .liveTransfers{grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere;padding:7px 10px}
+                .liveTransfers{display:none;grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere;padding:7px 10px}.liveTransfers.active{display:block}
 
                 .connectionBanner{position:fixed;left:50%;bottom:16px;z-index:240;transform:translate(-50%,130%);opacity:0;transition:.22s;background:#151a2d;color:#fff;border-radius:12px;padding:10px 14px;box-shadow:0 14px 42px rgba(0,0,0,.34);font-size:12px;max-width:min(92vw,620px);text-align:center;pointer-events:none}
                 .connectionBanner.show{transform:translate(-50%,0);opacity:1}
@@ -142,16 +142,16 @@ object WebPageBuilder {
                 .viewButtons button.active{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff}
 
                 .uploadBox,.managementBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;margin:9px 0;box-shadow:var(--shadow)}
-                .uploadDetails{padding:0;overflow:hidden}.uploadDetails summary{list-style:none}.uploadDetails summary::-webkit-details-marker{display:none}
-                .uploadSummary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer}.uploadSummary .primary{flex:0 0 auto;padding:7px 10px}
-                .uploadDetails[open] .uploadSummary{border-bottom:1px solid var(--line)}.uploadDetails .dropZone{margin:10px}
                 .clipboardText{width:100%;min-height:84px;resize:vertical;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:12px;padding:9px 10px;outline:none;margin-top:8px}
                 .clipboardText:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
                 .clipboardOutput{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin-top:8px;min-height:42px;font-size:12px;color:var(--text)}
-                .dropZone{border:1.5px dashed var(--line);border-radius:12px;padding:12px;text-align:center;transition:.16s}
-                .dropZone.drag{border-color:var(--brand);background:rgba(37,99,235,.08);transform:scale(.995)}
+                .dropZone{min-height:142px;display:flex;flex-direction:column;justify-content:center;border:2px dashed var(--line);border-radius:12px;padding:16px;text-align:center;transition:.16s;background:var(--panel2)}
+                .dropZone.drag{border-color:var(--brand);background:rgba(37,99,235,.12);box-shadow:inset 0 0 0 2px rgba(37,99,235,.08);transform:scale(.995)}
+                .dropPrompt{font-weight:800;color:var(--text);margin-bottom:2px}.dropZone.drag .dropPrompt{color:var(--brand)}
                 .uploadTitle,.managementTitle{font-weight:800;margin-bottom:3px}
-                .uploadHint,.uploadStatus,.readOnlyHint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+                .uploadHint,.uploadStatus,.readOnlyHint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.uploadStatus{min-height:20px;font-weight:700}.uploadStatus.success{color:var(--success)}.uploadStatus.error{color:var(--danger)}
+                .uploadProgress{height:9px;background:rgba(120,130,160,.16);border-radius:999px;overflow:hidden;margin-top:10px;border:1px solid var(--line)}.uploadProgress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .18s ease}
+                .uploadQueue{display:grid;gap:6px;margin-top:8px;text-align:left}.uploadQueue:empty{display:none}.uploadQueueItem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:rgba(120,130,160,.08);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px}.uploadQueueName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}.uploadQueueState{color:var(--muted);font-weight:750}.uploadQueueItem.done .uploadQueueState{color:var(--success)}.uploadQueueItem.failed .uploadQueueState,.uploadQueueItem.cancelled .uploadQueueState{color:var(--danger)}
                 .uploadActions,.managementButtons{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
                 .primary,.secondary{border:0;border-radius:9px;padding:9px 12px;font-weight:750;cursor:pointer;transition:.15s}
                 .primary{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(37,99,235,.18)}
@@ -205,7 +205,7 @@ object WebPageBuilder {
                 .progressTrack{height:6px;background:var(--panel2);border-radius:999px;overflow:hidden;margin-top:6px}.progressBar{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));width:0%;transition:width .18s}
                 .hidden{display:none!important}
 
-                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:7px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}}
+                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:12px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}}
                 @media(max-width:390px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info{padding:8px}.name{font-size:12px}.sub{font-size:10px}.actions a,.actions button{font-size:10px}.folderIcon{font-size:26px}}
                 @media(hover:none){.card:hover{transform:none;box-shadow:var(--shadow)}}
               </style>
@@ -224,15 +224,14 @@ object WebPageBuilder {
                     </div>
                   </div>
                   $breadcrumbs
+                  <section class="livePanel" aria-label="${escapeHtml(tr.text("web_live"))}">
+                    <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_connections"))}</div><div id="liveConnections" class="liveValue">0</div></div>
+                    <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_send_speed"))}</div><div id="liveDownload" class="liveValue">0 B/s</div></div>
+                    <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_receive_speed"))}</div><div id="liveUpload" class="liveValue">0 B/s</div></div>
+                    <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_active_tasks"))}</div><div id="liveTaskCount" class="liveValue">0</div></div>
+                    <div id="liveTransfers" class="liveCard liveTransfers"></div>
+                  </section>
                 </header>
-
-                <section class="livePanel" aria-label="${escapeHtml(tr.text("web_live"))}">
-                  <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_connections"))}</div><div id="liveConnections" class="liveValue">0</div></div>
-                  <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_send_speed"))}</div><div id="liveDownload" class="liveValue">0 B/s</div></div>
-                  <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_receive_speed"))}</div><div id="liveUpload" class="liveValue">0 B/s</div></div>
-                  <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_active_tasks"))}</div><div id="liveTaskCount" class="liveValue">0</div></div>
-                  <div id="liveTransfers" class="liveCard liveTransfers">${escapeHtml(tr.text("web_no_transfers"))}</div>
-                </section>
 
                 $uploadPanel
                 $managementPanel
@@ -375,7 +374,8 @@ object WebPageBuilder {
                   const transfers = Array.isArray(data.activeTransfers) ? data.activeTransfers : [];
                   document.getElementById('liveTaskCount').textContent = String(transfers.length);
                   const panel = document.getElementById('liveTransfers');
-                  if(transfers.length === 0){panel.textContent = t('web_no_transfers');return;}
+                  panel.classList.toggle('active',transfers.length > 0);
+                  if(transfers.length === 0){panel.textContent = '';return;}
                   panel.innerHTML = transfers.map(function(item){
                     const direction = item.direction === 'upload' ? t('speed_upload') : t('speed_download');
                     const total = Number(item.totalBytes || 0);
@@ -470,6 +470,9 @@ object WebPageBuilder {
                 let previewItems = [];
                 let previewIndex = -1;
                 let droppedUploadFiles = [];
+                let currentUploadXhr = null;
+                let uploadCancelled = false;
+                let failedUploadEntries = [];
 
                 function setView(mode){
                   const chosen = mode === 'list' ? 'list' : 'grid';
@@ -542,7 +545,7 @@ object WebPageBuilder {
                     media.src = url;
                     media.controls = true;
                     media.playsInline = true;
-                    media.preload = 'metadata';
+                    media.preload = 'auto';
                   }else if(kind === 'audio'){
                     media = document.createElement('audio');
                     media.src = url;
@@ -554,7 +557,18 @@ object WebPageBuilder {
                     media.title = item.dataset.name || 'PDF';
                   }
 
-                  if(media) viewer.appendChild(media);
+                  if(media){
+                    if(kind === 'video' || kind === 'audio'){
+                      media.addEventListener('error',function(){
+                        const message=document.createElement('div');
+                        message.className='empty';
+                        message.textContent=t('web_media_load_failed');
+                        viewer.replaceChildren(message);
+                      });
+                    }
+                    viewer.appendChild(media);
+                    if(typeof media.load === 'function') media.load();
+                  }
                   document.getElementById('modalTitle').textContent = item.dataset.name || '';
                   document.getElementById('modalDetails').textContent = item.dataset.details || '';
                   const download = document.getElementById('modalDownload');
@@ -603,20 +617,90 @@ object WebPageBuilder {
                   return size.toFixed(index === 0 ? 0 : 2) + ' ' + units[index];
                 }
 
+                function readAllDirectoryEntries(reader){
+                  return new Promise(function(resolve){
+                    const entries = [];
+                    function readNext(){
+                      reader.readEntries(function(batch){
+                        if(!batch || batch.length === 0){
+                          resolve(entries);
+                          return;
+                        }
+                        entries.push.apply(entries,batch);
+                        readNext();
+                      },function(){resolve(entries);});
+                    }
+                    readNext();
+                  });
+                }
+
+                function fileFromEntry(entry,path){
+                  return new Promise(function(resolve){
+                    entry.file(function(file){
+                      resolve({file:file,path:path + file.name});
+                    },function(){resolve(null);});
+                  });
+                }
+
+                async function walkDroppedEntry(entry,path){
+                  if(entry.isFile){
+                    const fileEntry = await fileFromEntry(entry,path);
+                    return fileEntry ? [fileEntry] : [];
+                  }
+                  if(entry.isDirectory){
+                    const children = await readAllDirectoryEntries(entry.createReader());
+                    const nested = await Promise.all(children.map(function(child){
+                      return walkDroppedEntry(child,path + entry.name + '/');
+                    }));
+                    return nested.flat();
+                  }
+                  return [];
+                }
+
+                async function readDroppedUploadEntries(dataTransfer){
+                  const items = Array.from(dataTransfer.items || []);
+                  const entries = items.map(function(item){
+                    return item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
+                  }).filter(Boolean);
+                  if(entries.length > 0){
+                    const nested = await Promise.all(entries.map(function(entry){
+                      return walkDroppedEntry(entry,'');
+                    }));
+                    return nested.flat();
+                  }
+                  return Array.from(dataTransfer.files || []).map(function(file){
+                    return {file:file,path:file.webkitRelativePath || file.name};
+                  });
+                }
+
                 function installUpload(){
                   const zone = document.getElementById('dropZone');
                   const input = document.getElementById('uploadFiles');
                   const folderInput = document.getElementById('uploadFolder');
                   if(!zone || !input) return;
                   ['dragenter','dragover'].forEach(function(name){
-                    zone.addEventListener(name,function(event){event.preventDefault();zone.classList.add('drag');});
+                    zone.addEventListener(name,function(event){
+                      event.preventDefault();
+                      zone.classList.add('drag');
+                      const prompt = document.getElementById('dropPrompt');
+                      if(prompt) prompt.textContent = t('web_release_to_upload');
+                    });
                   });
-                  ['dragleave','drop'].forEach(function(name){
-                    zone.addEventListener(name,function(event){event.preventDefault();zone.classList.remove('drag');});
+                  zone.addEventListener('dragleave',function(event){
+                    if(event.relatedTarget && zone.contains(event.relatedTarget)) return;
+                    zone.classList.remove('drag');
+                    const prompt = document.getElementById('dropPrompt');
+                    if(prompt) prompt.textContent = t('web_drop_files_here');
                   });
-                  zone.addEventListener('drop',function(event){
-                    droppedUploadFiles = Array.from(event.dataTransfer.files || []);
-                    selectedUploadEntries = droppedUploadFiles.map(function(file){return {file:file,path:file.webkitRelativePath || file.name};});
+                  zone.addEventListener('drop',async function(event){
+                    event.preventDefault();
+                    zone.classList.remove('drag');
+                    const prompt = document.getElementById('dropPrompt');
+                    if(prompt) prompt.textContent = t('web_drop_files_here');
+                    const status = document.getElementById('uploadStatus');
+                    if(status) status.textContent = t('web_loading');
+                    selectedUploadEntries = await readDroppedUploadEntries(event.dataTransfer);
+                    droppedUploadFiles = selectedUploadEntries.map(function(entry){return entry.file;});
                     updateUploadSelection();
                   });
                   input.addEventListener('change',function(){
@@ -655,16 +739,78 @@ object WebPageBuilder {
                 function updateUploadSelection(){
                   const status = document.getElementById('uploadStatus');
                   const entries = getUploadEntries();
-                  if(status) status.textContent = t('web_selected_count',entries.length);
+                  if(status){
+                    status.className = 'uploadStatus';
+                    status.textContent = t('web_selected_count',entries.length);
+                  }
+                  renderUploadQueue(entries,entries.map(function(){return 'waiting';}));
+                  setUploadProgress(0);
+                  const retry = document.getElementById('retryUpload');
+                  if(retry) retry.style.display = 'none';
                 }
 
-                function uploadOne(entry,index,total){
+                function setUploadProgress(percent){
+                  const bar = document.querySelector('#uploadProgress span');
+                  if(bar) bar.style.width = Math.max(0,Math.min(100,percent || 0)) + '%';
+                }
+
+                function queueLabel(state){
+                  return t('web_queue_' + state);
+                }
+
+                function renderUploadQueue(entries,states){
+                  const queue = document.getElementById('uploadQueue');
+                  if(!queue) return;
+                  queue.replaceChildren();
+                  entries.forEach(function(entry,index){
+                    const state = states[index] || 'waiting';
+                    const item = document.createElement('div');
+                    item.className = 'uploadQueueItem ' + state;
+                    const name = document.createElement('div');
+                    name.className = 'uploadQueueName';
+                    name.textContent = entry.path || entry.file.name;
+                    const status = document.createElement('div');
+                    status.className = 'uploadQueueState';
+                    status.textContent = queueLabel(state);
+                    item.appendChild(name);
+                    item.appendChild(status);
+                    queue.appendChild(item);
+                  });
+                }
+
+                function cancelUploadQueue(){
+                  uploadCancelled = true;
+                  if(currentUploadXhr) currentUploadXhr.abort();
+                }
+
+                function ensureUploadId(entry){
+                  if(!entry.uploadId){
+                    entry.uploadId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
+                  }
+                  return entry.uploadId;
+                }
+
+                async function getUploadOffset(entry){
+                  const uploadId = ensureUploadId(entry);
+                  const response = await fetch('/api/upload-status?id=' + encodeURIComponent(uploadId),{cache:'no-store'});
+                  if(!response.ok) return 0;
+                  const data = await response.json();
+                  return Math.max(0,Number(data.offset || 0));
+                }
+
+                function uploadChunk(entry,index,total,chunk,offset,fileSize,finalChunk,onProgress){
                   return new Promise(function(resolve,reject){
                     const file = entry.file;
                     const xhr = new XMLHttpRequest();
+                    currentUploadXhr = xhr;
                     const directory = document.getElementById('uploadDirectory').value;
                     const uploadName = entry.path || file.name;
-                    const url = '/upload?path=' + encodeURIComponent(directory) + '&name=' + encodeURIComponent(uploadName);
+                    const url = '/upload?path=' + encodeURIComponent(directory) +
+                      '&name=' + encodeURIComponent(uploadName) +
+                      '&uploadId=' + encodeURIComponent(ensureUploadId(entry)) +
+                      '&offset=' + encodeURIComponent(offset) +
+                      '&total=' + encodeURIComponent(fileSize) +
+                      '&final=' + (finalChunk ? '1' : '0');
                     const started = performance.now();
                     xhr.open('POST',url);
                     xhr.setRequestHeader('Content-Type','application/octet-stream');
@@ -672,30 +818,114 @@ object WebPageBuilder {
                       if(!event.lengthComputable) return;
                       const seconds = Math.max((performance.now() - started) / 1000,0.001);
                       const speed = event.loaded / seconds;
-                      const percent = Math.round(event.loaded * 100 / event.total);
+                      const absoluteLoaded = Math.min(fileSize,offset + event.loaded);
+                      const percent = fileSize > 0 ? Math.round(absoluteLoaded * 100 / fileSize) : 100;
+                      if(onProgress) onProgress(absoluteLoaded,fileSize);
                       document.getElementById('uploadStatus').textContent =
                         t('web_upload_file_progress',index+1,total,uploadName,percent,humanBytes(speed));
                     };
                     xhr.onload = function(){
+                      currentUploadXhr = null;
                       if(xhr.status >= 200 && xhr.status < 300) resolve();
                       else reject(new Error(xhr.responseText || ('HTTP ' + xhr.status)));
                     };
-                    xhr.onerror = function(){reject(new Error(t('web_network_failed')));};
-                    xhr.send(file);
+                    xhr.onerror = function(){
+                      currentUploadXhr = null;
+                      reject(new Error(t('web_network_failed')));
+                    };
+                    xhr.onabort = function(){
+                      currentUploadXhr = null;
+                      reject(new Error(t('web_upload_cancelled')));
+                    };
+                    xhr.send(chunk);
                   });
                 }
 
-                async function uploadFilesNow(){
+                async function uploadOne(entry,index,total,onProgress){
+                  const file = entry.file;
+                  const chunkSize = 8 * 1024 * 1024;
+                  let offset = await getUploadOffset(entry);
+                  if(offset > file.size) offset = 0;
+                  if(onProgress) onProgress(offset,file.size);
+                  if(offset === file.size){
+                    await uploadChunk(entry,index,total,file.slice(file.size,file.size),offset,file.size,true,onProgress);
+                    return;
+                  }
+                  while(offset < file.size){
+                    if(uploadCancelled) throw new Error(t('web_upload_cancelled'));
+                    const end = Math.min(offset + chunkSize,file.size);
+                    const finalChunk = end >= file.size;
+                    await uploadChunk(entry,index,total,file.slice(offset,end),offset,file.size,finalChunk,onProgress);
+                    offset = end;
+                    if(onProgress) onProgress(offset,file.size);
+                  }
+                }
+
+                async function uploadFilesNow(retryFailed){
                   const input = document.getElementById('uploadFiles');
                   const status = document.getElementById('uploadStatus');
                   if(!input || !status) return;
-                  const entries = getUploadEntries();
-                  if(entries.length === 0){status.textContent = t('web_choose_or_drop');return;}
+                  const entries = retryFailed ? failedUploadEntries.slice() : getUploadEntries();
+                  if(entries.length === 0){
+                    status.className = 'uploadStatus error';
+                    status.textContent = t('web_choose_or_drop');
+                    return;
+                  }
+                  const cancelButton = document.getElementById('cancelUpload');
+                  const retryButton = document.getElementById('retryUpload');
+                  const states = entries.map(function(){return 'waiting';});
+                  const totalBytes = entries.reduce(function(sum,entry){return sum + (entry.file.size || 0);},0);
+                  let completedBytes = 0;
+                  uploadCancelled = false;
+                  failedUploadEntries = [];
+                  if(cancelButton) cancelButton.style.display = '';
+                  if(retryButton) retryButton.style.display = 'none';
+                  renderUploadQueue(entries,states);
+                  setUploadProgress(0);
                   try{
-                    for(let i = 0;i < entries.length;i++) await uploadOne(entries[i],i,entries.length);
+                    status.className = 'uploadStatus';
+                    for(let i = 0;i < entries.length;i++){
+                      if(uploadCancelled){
+                        states[i] = 'cancelled';
+                        failedUploadEntries.push(entries[i]);
+                        continue;
+                      }
+                      states[i] = 'uploading';
+                      renderUploadQueue(entries,states);
+                      let currentLoaded = 0;
+                      try{
+                        await uploadOne(entries[i],i,entries.length,function(loaded,total){
+                          currentLoaded = loaded;
+                          setUploadProgress(totalBytes > 0 ? ((completedBytes + loaded) * 100 / totalBytes) : 0);
+                        });
+                        completedBytes += entries[i].file.size || currentLoaded;
+                        states[i] = 'done';
+                        renderUploadQueue(entries,states);
+                        setUploadProgress(totalBytes > 0 ? (completedBytes * 100 / totalBytes) : ((i + 1) * 100 / entries.length));
+                      }catch(error){
+                        states[i] = uploadCancelled ? 'cancelled' : 'failed';
+                        failedUploadEntries.push(entries[i]);
+                        renderUploadQueue(entries,states);
+                        if(!uploadCancelled) continue;
+                      }
+                    }
+                    if(failedUploadEntries.length > 0){
+                      status.textContent = uploadCancelled ? t('web_upload_cancelled') : t('web_upload_failed_count',failedUploadEntries.length);
+                      status.className = 'uploadStatus error';
+                      if(retryButton && !uploadCancelled) retryButton.style.display = '';
+                      return;
+                    }
                     status.textContent = t('web_upload_done');
-                    setTimeout(function(){ location.reload(); },1500);
-                  }catch(error){status.textContent = t('web_upload_failed',error.message);}
+                    status.className = 'uploadStatus success';
+                    setUploadProgress(100);
+                    setTimeout(function(){ location.reload(); },2200);
+                  }catch(error){
+                    status.textContent = t('web_upload_failed',error.message);
+                    status.className = 'uploadStatus error';
+                  }finally{
+                    currentUploadXhr = null;
+                    if(cancelButton) cancelButton.style.display = 'none';
+                  }
                 }
 
                 function selectedCards(){
@@ -1222,15 +1452,11 @@ object WebPageBuilder {
 
     private fun buildUploadPanel(relativePath: String, tr: Translator): String {
         return """
-            <details class="uploadBox uploadDetails">
-              <summary class="uploadSummary">
-                <div>
-                  <div class="uploadTitle">${escapeHtml(tr.text("web_upload_here"))}</div>
-                  <div class="uploadHint">${escapeHtml(tr.text("web_upload_hint"))}</div>
-                </div>
-                <span class="primary">${escapeHtml(tr.text("web_expand_upload"))}</span>
-              </summary>
+            <section class="uploadBox">
+              <div class="uploadTitle">${escapeHtml(tr.text("web_upload_here"))}</div>
               <div id="dropZone" class="dropZone">
+                <div id="dropPrompt" class="dropPrompt">${escapeHtml(tr.text("web_drop_files_here"))}</div>
+                <div class="uploadHint">${escapeHtml(tr.text("web_upload_hint"))}</div>
                 <div class="uploadActions">
                   <label class="secondary" style="cursor:pointer;flex:1;text-align:center">
                     ${escapeHtml(tr.text("web_choose_files"))}
@@ -1243,9 +1469,15 @@ object WebPageBuilder {
                   <button class="primary" type="button" style="flex:1" onclick="uploadFilesNow()">${escapeHtml(tr.text("web_start_upload"))}</button>
                 </div>
                 <input id="uploadDirectory" type="hidden" value="${escapeHtml(relativePath)}">
+                <div id="uploadProgress" class="uploadProgress" aria-hidden="true"><span></span></div>
                 <div id="uploadStatus" class="uploadStatus" style="margin-top:10px">${escapeHtml(tr.text("web_no_files_selected"))}</div>
+                <div class="uploadActions">
+                  <button id="cancelUpload" class="secondary" type="button" style="display:none;flex:1" onclick="cancelUploadQueue()">${escapeHtml(tr.text("web_cancel_upload"))}</button>
+                  <button id="retryUpload" class="secondary" type="button" style="display:none;flex:1" onclick="uploadFilesNow(true)">${escapeHtml(tr.text("web_retry_failed"))}</button>
+                </div>
+                <div id="uploadQueue" class="uploadQueue"></div>
               </div>
-            </details>
+            </section>
         """.trimIndent()
     }
 

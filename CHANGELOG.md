@@ -4,7 +4,18 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
-## [Unreleased]
+## [1.3.0] - 2026-07-09
+
+### Changed
+
+- Keep the browser upload drop zone visible and provide clearer drag, queue, progress, cancel, retry, success and failure feedback
+- Send browser uploads in resumable chunks so failed items can continue from the server-side partial offset when retried
+- Merge live connection and transfer metrics into the compact sticky header
+
+### Fixed
+
+- Improve browser video preview compatibility by handling HTTP range requests more strictly and surfacing media load failures
+- Preserve nested folder structure when dropping folders into the browser upload area
 
 ## [1.2.0] - 2026-07-09
 

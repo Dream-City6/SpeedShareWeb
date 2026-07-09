@@ -73,11 +73,11 @@ fun parseTarget(target: String): ParsedTarget {
 }
 
 fun parseRange(rangeHeader: String?, totalSize: Long): LongRange? {
-    if (totalSize <= 0L || rangeHeader == null || !rangeHeader.startsWith("bytes=")) {
+    if (totalSize <= 0L || rangeHeader == null || !rangeHeader.startsWith("bytes=", ignoreCase = true)) {
         return null
     }
 
-    val value = rangeHeader.removePrefix("bytes=").substringBefore(',').trim()
+    val value = rangeHeader.substringAfter('=').substringBefore(',').trim()
     val separator = value.indexOf('-')
     if (separator < 0) return null
 

@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.2.0/SpeedShareWeb-v1.2.0.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.2.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.2.0 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.0/SpeedShareWeb-v1.3.0.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.3.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.3.0 APK">
 </a>
 
 <br><br>
 
-v1.2.0 新增传输历史、保留目录结构的文件夹上传与拖放支持，并重新优化了 Android 和浏览器界面。
+v1.3.0 新增网页端断点续传、上传队列进度、取消/失败重试、更可靠的文件夹拖放，并改善了视频预览兼容性。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
