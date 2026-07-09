@@ -1351,7 +1351,8 @@ class SpeedShareServer(
             direction = TransferDirection.UPLOAD,
             fileName = destinationName,
             clientAddress = clientAddress(socket),
-            totalBytes = expectedTotal
+            totalBytes = expectedTotal,
+            initialBytes = offset
         )
 
         try {
@@ -1367,7 +1368,7 @@ class SpeedShareServer(
                     transferTracker.addBytes(transferId, read.toLong())
                     remaining -= read.toLong()
                 }
-                output.fd.sync()
+                if (finalChunk) output.fd.sync()
             }
 
             val writtenSize = partFile.length()

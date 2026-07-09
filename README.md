@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.0/SpeedShareWeb-v1.3.0.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.3.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.3.0 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.1/SpeedShareWeb-v1.3.1.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.3.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.3.1 APK">
 </a>
 
 <br><br>
 
-v1.3.0 adds resumable browser uploads, upload queue progress with cancel/retry controls, more reliable folder drag-and-drop, and improved video preview compatibility.
+v1.3.1 tunes resumable browser uploads for smoother large-file transfers, with larger chunks, fewer intermediate disk syncs, and steadier full-file progress.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>

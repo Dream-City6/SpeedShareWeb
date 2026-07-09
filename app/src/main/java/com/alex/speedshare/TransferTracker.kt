@@ -52,16 +52,20 @@ class TransferTracker(
         direction: TransferDirection,
         fileName: String,
         clientAddress: String,
-        totalBytes: Long
+        totalBytes: Long,
+        initialBytes: Long = 0L
     ): Long {
         val id = nextId.getAndIncrement()
+        val normalizedInitialBytes = initialBytes.coerceIn(0L, totalBytes.coerceAtLeast(0L))
         activeTasks[id] = Task(
             id = id,
             direction = direction,
             fileName = fileName,
             clientAddress = clientAddress,
             totalBytes = totalBytes.coerceAtLeast(0L),
-            startedAtMs = System.currentTimeMillis()
+            startedAtMs = System.currentTimeMillis(),
+            transferredBytes = AtomicLong(normalizedInitialBytes),
+            lastSampleBytes = normalizedInitialBytes
         )
         publishSnapshot()
         return id

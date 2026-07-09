@@ -843,7 +843,7 @@ object WebPageBuilder {
 
                 async function uploadOne(entry,index,total,onProgress){
                   const file = entry.file;
-                  const chunkSize = 8 * 1024 * 1024;
+                  const chunkSize = 256 * 1024 * 1024;
                   let offset = await getUploadOffset(entry);
                   if(offset > file.size) offset = 0;
                   if(onProgress) onProgress(offset,file.size);

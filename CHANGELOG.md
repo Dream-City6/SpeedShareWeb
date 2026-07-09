@@ -4,6 +4,12 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.3.1] - 2026-07-10
+
+### Changed
+
+- Tune resumable browser uploads to use larger 256 MB chunks, reduce intermediate disk syncs, and keep transfer progress aligned with the full file offset
+
 ## [1.3.0] - 2026-07-09
 
 ### Changed
