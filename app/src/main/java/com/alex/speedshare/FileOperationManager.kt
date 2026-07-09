@@ -7,6 +7,7 @@ class FileOperationManager(
     private val rootDirectory: File,
     private val trashManager: TrashManager,
     private val tracker: FileOperationTracker,
+    private val historyTracker: TransferHistoryTracker,
     private val translator: Translator,
     private val onContentChanged: () -> Unit
 ) {
@@ -17,32 +18,36 @@ class FileOperationManager(
     fun submitCopy(
         relativePaths: List<String>,
         destinationRelativePath: String,
-        policy: ConflictPolicy
+        policy: ConflictPolicy,
+        clientAddress: String
     ): Long {
         return submitTransfer(
             kind = FileOperationKind.COPY,
             relativePaths = relativePaths,
             destinationRelativePath = destinationRelativePath,
             policy = policy,
-            move = false
+            move = false,
+            clientAddress = clientAddress
         )
     }
 
     fun submitMove(
         relativePaths: List<String>,
         destinationRelativePath: String,
-        policy: ConflictPolicy
+        policy: ConflictPolicy,
+        clientAddress: String
     ): Long {
         return submitTransfer(
             kind = FileOperationKind.MOVE,
             relativePaths = relativePaths,
             destinationRelativePath = destinationRelativePath,
             policy = policy,
-            move = true
+            move = true,
+            clientAddress = clientAddress
         )
     }
 
-    fun submitDelete(relativePaths: List<String>, permanent: Boolean): Long {
+    fun submitDelete(relativePaths: List<String>, permanent: Boolean, clientAddress: String): Long {
         val kind = if (permanent) FileOperationKind.DELETE else FileOperationKind.TRASH
         val handle = tracker.create(kind, if (permanent) translator.text("op_delete") else translator.text("op_trash"))
         executor.execute {
@@ -74,6 +79,14 @@ class FileOperationManager(
                 }
 
                 tracker.complete(handle)
+                historyTracker.add(
+                    kind = if (permanent) TransferHistoryKind.DELETE else TransferHistoryKind.TRASH,
+                    name = summarizeSources(sources),
+                    path = summarizeRelativePaths(sources),
+                    clientAddress = clientAddress,
+                    bytes = totalBytes,
+                    itemCount = totalItems
+                )
                 onContentChanged()
             } catch (_: InterruptedException) {
                 tracker.cancelled(handle)
@@ -84,16 +97,18 @@ class FileOperationManager(
         return handle.id
     }
 
-    fun submitRestore(ids: List<String>, policy: ConflictPolicy): Long {
+    fun submitRestore(ids: List<String>, policy: ConflictPolicy, clientAddress: String): Long {
         val handle = tracker.create(FileOperationKind.RESTORE, translator.text("op_restore"))
         executor.execute {
             try {
                 val entryMap = trashManager.listEntries().associateBy { it.id }
                 val selected = ids.mapNotNull(entryMap::get)
+                val totalBytes = selected.sumOf { it.size }
+                val totalItems = selected.size
                 tracker.start(
                     handle = handle,
-                    totalBytes = selected.sumOf { it.size },
-                    totalItems = selected.size
+                    totalBytes = totalBytes,
+                    totalItems = totalItems
                 )
 
                 selected.forEach { entry ->
@@ -109,6 +124,14 @@ class FileOperationManager(
                 }
 
                 tracker.complete(handle)
+                historyTracker.add(
+                    kind = TransferHistoryKind.RESTORE,
+                    name = summarizeNames(selected.map { it.name }),
+                    path = selected.joinToString(", ") { it.originalRelativePath }.take(240),
+                    clientAddress = clientAddress,
+                    bytes = totalBytes,
+                    itemCount = totalItems
+                )
                 onContentChanged()
             } catch (_: InterruptedException) {
                 tracker.cancelled(handle)
@@ -133,7 +156,8 @@ class FileOperationManager(
         relativePaths: List<String>,
         destinationRelativePath: String,
         policy: ConflictPolicy,
-        move: Boolean
+        move: Boolean,
+        clientAddress: String
     ): Long {
         val handle = tracker.create(kind, operationKindText(kind, translator))
         executor.execute {
@@ -203,6 +227,14 @@ class FileOperationManager(
                 }
 
                 tracker.complete(handle)
+                historyTracker.add(
+                    kind = if (move) TransferHistoryKind.MOVE else TransferHistoryKind.COPY,
+                    name = summarizeSources(sources),
+                    path = destinationRelativePath.ifBlank { "/" },
+                    clientAddress = clientAddress,
+                    bytes = totalBytes,
+                    itemCount = totalItems
+                )
                 onContentChanged()
             } catch (_: InterruptedException) {
                 tracker.cancelled(handle)
@@ -234,5 +266,18 @@ class FileOperationManager(
 
     private fun ensureNotCancelled(handle: FileOperationTracker.Handle) {
         if (handle.isCancelled()) throw InterruptedException(translator.text("op_cancelled_exception"))
+    }
+
+    private fun summarizeSources(sources: List<File>): String = summarizeNames(sources.map { it.name })
+
+    private fun summarizeNames(names: List<String>): String {
+        val first = names.firstOrNull().orEmpty()
+        return if (names.size <= 1) first else "$first +${names.size - 1}"
+    }
+
+    private fun summarizeRelativePaths(sources: List<File>): String {
+        return sources.joinToString(", ") { source ->
+            source.relativeTo(rootDirectory).invariantSeparatorsPath
+        }.take(240)
     }
 }

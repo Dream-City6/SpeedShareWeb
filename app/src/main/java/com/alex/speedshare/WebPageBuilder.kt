@@ -98,31 +98,34 @@ object WebPageBuilder {
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
-              <meta name="theme-color" content="#4057d6">
+              <meta name="theme-color" content="#2563eb">
               <title>${escapeHtml(title)} - SpeedShareWeb</title>
               <style>
-                :root{color-scheme:light dark;--bg:#f4f6fc;--bg2:#eef1fb;--panel:rgba(255,255,255,.92);--panelSolid:#fff;--panel2:#f1f3fa;--text:#151a2d;--muted:#6d7488;--line:rgba(65,77,119,.14);--brand:#4057d6;--brand2:#7656b8;--success:#0b9f6e;--danger:#d04444;--shadow:0 12px 32px rgba(43,54,99,.09);--shadowHover:0 18px 42px rgba(43,54,99,.15);--radius:17px}
-                @media(prefers-color-scheme:dark){:root{--bg:#090e1b;--bg2:#11172a;--panel:rgba(18,24,42,.9);--panelSolid:#12182a;--panel2:#1b2237;--text:#f1f3ff;--muted:#a3aac0;--line:rgba(190,199,235,.13);--brand:#8f9dff;--brand2:#c2a2ff;--success:#56d6a7;--danger:#ff7979;--shadow:0 14px 38px rgba(0,0,0,.28);--shadowHover:0 20px 48px rgba(0,0,0,.38)}}
+                :root{color-scheme:light dark;--bg:#f6f8fc;--bg2:#eef3f8;--panel:rgba(255,255,255,.94);--panelSolid:#fff;--panel2:#eef3f8;--text:#111827;--muted:#697386;--line:rgba(31,41,55,.13);--brand:#2563eb;--brand2:#0f766e;--success:#0b9f6e;--danger:#d04444;--shadow:0 8px 24px rgba(31,41,55,.08);--shadowHover:0 14px 34px rgba(31,41,55,.13);--radius:14px}
+                @media(prefers-color-scheme:dark){:root{--bg:#07111f;--bg2:#101827;--panel:rgba(16,24,39,.92);--panelSolid:#101827;--panel2:#172033;--text:#f4f7fb;--muted:#9aa7bb;--line:rgba(203,213,225,.13);--brand:#8bb7ff;--brand2:#5eead4;--success:#56d6a7;--danger:#ff7979;--shadow:0 12px 32px rgba(0,0,0,.25);--shadowHover:0 18px 42px rgba(0,0,0,.34)}}
+                html[data-theme="light"]{--bg:#f6f8fc;--bg2:#eef3f8;--panel:rgba(255,255,255,.94);--panelSolid:#fff;--panel2:#eef3f8;--text:#111827;--muted:#697386;--line:rgba(31,41,55,.13);--brand:#2563eb;--brand2:#0f766e;--success:#0b9f6e;--danger:#d04444;--shadow:0 8px 24px rgba(31,41,55,.08);--shadowHover:0 14px 34px rgba(31,41,55,.13)}
+                html[data-theme="dark"]{--bg:#07111f;--bg2:#101827;--panel:rgba(16,24,39,.92);--panelSolid:#101827;--panel2:#172033;--text:#f4f7fb;--muted:#9aa7bb;--line:rgba(203,213,225,.13);--brand:#8bb7ff;--brand2:#5eead4;--success:#56d6a7;--danger:#ff7979;--shadow:0 12px 32px rgba(0,0,0,.25);--shadowHover:0 18px 42px rgba(0,0,0,.34)}
                 *{box-sizing:border-box}
                 html{scroll-behavior:smooth}
                 html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans SC","Microsoft YaHei",sans-serif}
-                body{background-image:radial-gradient(circle at 12% -8%,rgba(64,87,214,.14),transparent 32%),radial-gradient(circle at 94% 2%,rgba(118,86,184,.13),transparent 30%),linear-gradient(180deg,var(--bg2),var(--bg) 280px)}
+                body{background-image:linear-gradient(180deg,var(--bg2),var(--bg) 280px)}
                 button,input,select{font:inherit}
                 button,a{-webkit-tap-highlight-color:transparent}
                 a{color:inherit}
-                .wrap{max-width:1380px;margin:0 auto;padding:12px 14px 72px}
-                .header{position:sticky;top:8px;z-index:30;background:var(--panel);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:20px;padding:12px 14px;box-shadow:var(--shadow)}
+                .wrap{max-width:1380px;margin:0 auto;padding:10px 12px 72px}
+                .header{position:sticky;top:8px;z-index:30;background:var(--panel);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--line);border-radius:16px;padding:11px 13px;box-shadow:var(--shadow)}
                 .titleRow{display:flex;align-items:center;justify-content:space-between;gap:12px}
-                h1{font-size:22px;line-height:1.15;margin:0 0 3px;font-weight:850;letter-spacing:-.35px;background:linear-gradient(110deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
+                h1{font-size:22px;line-height:1.15;margin:0 0 3px;font-weight:850;letter-spacing:0;background:linear-gradient(110deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
                 .subtitle{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
                 .badge{flex:0 0 auto;padding:6px 9px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--muted);white-space:nowrap}
+                .headerActions{display:flex;align-items:center;gap:7px;flex:0 0 auto}.themeToggle{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:6px 9px;font-size:11px;cursor:pointer}
                 .syncDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success);margin-right:6px;box-shadow:0 0 0 4px rgba(11,159,110,.1)}
                 .breadcrumbs{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:9px 0 0;font-size:12px}
                 .breadcrumbs a{text-decoration:none;color:var(--brand);background:var(--panel2);border:1px solid var(--line);padding:6px 9px;border-radius:9px;transition:.16s}
                 .breadcrumbs a:hover{transform:translateY(-1px);border-color:var(--brand)}
 
-                .livePanel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:10px 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:8px;box-shadow:var(--shadow)}
-                .liveCard{background:var(--panel2);border:1px solid transparent;border-radius:12px;padding:8px 10px;min-width:0}
+                .livePanel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:9px 0;background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:7px;box-shadow:var(--shadow)}
+                .liveCard{background:var(--panel2);border:1px solid transparent;border-radius:10px;padding:7px 9px;min-width:0}
                 .liveLabel{font-size:10px;color:var(--muted);margin-bottom:2px}
                 .liveValue{font-size:14px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
                 .liveTransfers{grid-column:1/-1;font-size:11px;color:var(--muted);line-height:1.55;overflow-wrap:anywhere;padding:7px 10px}
@@ -131,44 +134,47 @@ object WebPageBuilder {
                 .connectionBanner.show{transform:translate(-50%,0);opacity:1}
                 .connectionBanner.error{background:#9f3030}.connectionBanner.ok{background:#087d58}
 
-                .toolbar{display:grid;grid-template-columns:minmax(170px,1fr) auto auto;gap:7px;margin:10px 0}
-                .control{min-height:38px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:11px;padding:0 11px;outline:none;box-shadow:0 4px 14px rgba(43,54,99,.04)}
-                .control:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(64,87,214,.13)}
+                .toolbar{display:grid;grid-template-columns:minmax(170px,1fr) auto auto;gap:7px;margin:9px 0}
+                .control{min-height:38px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:0 11px;outline:none;box-shadow:0 4px 14px rgba(43,54,99,.04)}
+                .control:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
                 .viewButtons{display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--panel)}
                 .viewButtons button{border:0;background:transparent;color:var(--muted);padding:0 12px;cursor:pointer;transition:.15s}
                 .viewButtons button.active{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff}
 
-                .uploadBox,.managementBox{background:var(--panel);border:1px solid var(--line);border-radius:17px;padding:10px;margin:10px 0;box-shadow:var(--shadow)}
+                .uploadBox,.managementBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px;margin:9px 0;box-shadow:var(--shadow)}
+                .uploadDetails{padding:0;overflow:hidden}.uploadDetails summary{list-style:none}.uploadDetails summary::-webkit-details-marker{display:none}
+                .uploadSummary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;cursor:pointer}.uploadSummary .primary{flex:0 0 auto;padding:7px 10px}
+                .uploadDetails[open] .uploadSummary{border-bottom:1px solid var(--line)}.uploadDetails .dropZone{margin:10px}
                 .clipboardText{width:100%;min-height:84px;resize:vertical;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:12px;padding:9px 10px;outline:none;margin-top:8px}
-                .clipboardText:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(64,87,214,.13)}
+                .clipboardText:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
                 .clipboardOutput{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin-top:8px;min-height:42px;font-size:12px;color:var(--text)}
-                .dropZone{border:1.5px dashed var(--line);border-radius:13px;padding:12px;text-align:center;transition:.16s}
-                .dropZone.drag{border-color:var(--brand);background:rgba(64,87,214,.08);transform:scale(.995)}
+                .dropZone{border:1.5px dashed var(--line);border-radius:12px;padding:12px;text-align:center;transition:.16s}
+                .dropZone.drag{border-color:var(--brand);background:rgba(37,99,235,.08);transform:scale(.995)}
                 .uploadTitle,.managementTitle{font-weight:800;margin-bottom:3px}
                 .uploadHint,.uploadStatus,.readOnlyHint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
                 .uploadActions,.managementButtons{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
-                .primary,.secondary{border:0;border-radius:10px;padding:9px 12px;font-weight:750;cursor:pointer;transition:.15s}
-                .primary{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(64,87,214,.2)}
+                .primary,.secondary{border:0;border-radius:9px;padding:9px 12px;font-weight:750;cursor:pointer;transition:.15s}
+                .primary{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(37,99,235,.18)}
                 .secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
                 .primary:active,.secondary:active,.actions a:active,.actions button:active{transform:scale(.97)}
                 .managementTop{display:flex;align-items:center;justify-content:space-between;gap:10px}
                 .selectionBar{position:sticky;bottom:10px;z-index:80;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:rgba(21,26,45,.94);color:#fff;border-radius:14px;padding:9px 10px;margin-top:9px;box-shadow:0 16px 44px rgba(0,0,0,.27);backdrop-filter:blur(14px)}
                 .selectionBar.hidden{display:none}.selectionBar strong{margin-right:auto;font-size:12px}.selectionBar button{border:0;border-radius:9px;padding:7px 9px;background:rgba(255,255,255,.13);color:#fff;cursor:pointer;font-size:11px}.selectionBar .danger{background:#b83b3b}.selectionBar .dangerGhost{border:1px solid rgba(255,121,121,.55);color:#ffb2b2;background:transparent}
 
-                .items{display:grid;gap:10px}
-                .items.grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}
+                .items{display:grid;gap:9px}
+                .items.grid{grid-template-columns:repeat(auto-fill,minmax(156px,1fr))}
                 .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);min-width:0;transition:transform .17s ease,box-shadow .17s ease,border-color .17s ease}
-                .card:hover{transform:translateY(-3px);box-shadow:var(--shadowHover);border-color:rgba(64,87,214,.28)}
+                .card:hover{transform:translateY(-3px);box-shadow:var(--shadowHover);border-color:rgba(37,99,235,.28)}
                 .card.selected{outline:2px solid var(--brand);outline-offset:-2px}
                 .selectBox{position:absolute;top:8px;left:8px;z-index:12;width:27px;height:27px;border-radius:9px;background:rgba(15,20,35,.58);display:grid;place-items:center;color:#fff;backdrop-filter:blur(8px);cursor:pointer;border:1px solid rgba(255,255,255,.22)}
                 .selectBox input{position:absolute;opacity:0}.selectBox span{opacity:.3;font-weight:900}.selectBox input:checked+span{opacity:1;color:#94f3ca}
                 .folder-card{text-decoration:none;display:flex;align-items:center;gap:10px;padding:12px;min-height:72px}
-                .folderIcon{width:42px;height:42px;display:grid;place-items:center;font-size:28px;background:linear-gradient(145deg,rgba(64,87,214,.13),rgba(118,86,184,.13));border-radius:12px;flex:0 0 auto}
+                .folderIcon{width:42px;height:42px;display:grid;place-items:center;font-size:28px;background:linear-gradient(145deg,rgba(37,99,235,.12),rgba(15,118,110,.12));border-radius:12px;flex:0 0 auto}
                 .folderInfo{min-width:0;flex:1}.folderArrow{font-size:21px;color:var(--muted);flex:0 0 auto}
                 .items.grid .folder-card{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:8px;padding:10px;min-height:160px}
                 .items.grid .folderIcon{grid-column:1/-1;width:100%;height:88px;font-size:46px;border-radius:13px}
                 .items.grid .folderInfo{grid-column:1;grid-row:2;min-width:0}.items.grid .folder-card .miniManage{grid-column:2;grid-row:2;align-self:center}.items.grid .folderArrow{display:none}
-                .thumb{position:relative;width:100%;aspect-ratio:4/3;background:linear-gradient(145deg,var(--panel2),rgba(64,87,214,.08));overflow:hidden;display:grid;place-items:center;cursor:pointer}
+                .thumb{position:relative;width:100%;aspect-ratio:4/3;background:linear-gradient(145deg,var(--panel2),rgba(37,99,235,.08));overflow:hidden;display:grid;place-items:center;cursor:pointer}
                 .thumb img{width:100%;height:100%;object-fit:cover;display:block;animation:thumbIn .24s ease both}
                 @keyframes thumbIn{from{opacity:0;transform:scale(1.025)}to{opacity:1;transform:scale(1)}}
                 .fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:42px;background:var(--panel2)}
@@ -186,19 +192,20 @@ object WebPageBuilder {
                 .items.list{display:block}.items.list .card{margin-bottom:7px}.items.list .file-card{display:grid;grid-template-columns:70px minmax(0,1fr)}.items.list .thumb{height:70px;aspect-ratio:auto}.items.list .info{padding:8px 10px}.items.list .actions{justify-content:flex-end}.items.list .actions a,.items.list .actions button{flex:0 0 auto;min-width:58px}.items.list .folder-card{min-height:64px}.items.list .folderIcon{width:40px;height:40px}
 
                 .modal{position:fixed;inset:0;z-index:150;background:rgba(3,6,15,.8);display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(10px)}.modal.open{display:flex}
-                .modalPanel{width:min(1050px,100%);height:min(90vh,840px);background:var(--panelSolid);border:1px solid var(--line);border-radius:20px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto;box-shadow:0 30px 100px rgba(0,0,0,.5)}
+                .modalPanel{width:min(1050px,100%);height:min(90vh,840px);background:var(--panelSolid);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto;box-shadow:0 30px 100px rgba(0,0,0,.5)}
                 .modalHeader,.modalFooter{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}.modalFooter{border-bottom:0;border-top:1px solid var(--line)}
                 .modalTitle{flex:1;min-width:0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.iconBtn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;padding:7px 9px;cursor:pointer;text-decoration:none;font-size:12px}
                 .viewer{min-height:0;display:flex;align-items:center;justify-content:center;background:#05070d;overflow:auto}.viewer img,.viewer video{max-width:100%;max-height:100%;object-fit:contain}.viewer audio{width:min(720px,92%)}.viewer iframe{width:100%;height:100%;border:0;background:#fff}.details{flex:1;min-width:0;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
 
-                .managerModal{position:fixed;inset:0;z-index:180;background:rgba(3,6,15,.76);display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(10px)}.managerModal.open{display:flex}
-                .managerPanel{width:min(880px,100%);max-height:88vh;background:var(--panelSolid);border:1px solid var(--line);border-radius:20px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr);box-shadow:0 28px 90px rgba(0,0,0,.45)}
+                .managerModal,.dialogModal{position:fixed;inset:0;z-index:180;background:rgba(3,6,15,.76);display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(10px)}.managerModal.open,.dialogModal.open{display:flex}
+                .managerPanel{width:min(880px,100%);max-height:88vh;background:var(--panelSolid);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr);box-shadow:0 28px 90px rgba(0,0,0,.45)}
                 .managerHeader{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line)}.managerBody{overflow:auto;padding:12px}
                 .managerRow{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--line)}.managerRow:last-child{border-bottom:0}.managerRowMain{flex:1;min-width:0}.managerName{font-weight:760;overflow-wrap:anywhere}.managerMeta{font-size:11px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}.managerActions{display:flex;gap:6px;flex-wrap:wrap}.managerActions button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;padding:6px 8px;cursor:pointer;font-size:11px}
+                .dialogPanel{width:min(460px,100%);background:var(--panelSolid);border:1px solid var(--line);border-radius:18px;box-shadow:0 28px 90px rgba(0,0,0,.45);overflow:hidden}.dialogBody{padding:14px}.dialogTitle{font-size:16px;font-weight:850;margin-bottom:5px}.dialogMessage{font-size:12px;color:var(--muted);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.dialogField{width:100%;min-height:40px;margin-top:12px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:0 11px;outline:none}.dialogField:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}.dialogActions{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}.dialogActions button{min-width:88px}.dialogActions .danger{background:var(--danger);color:#fff}
                 .progressTrack{height:6px;background:var(--panel2);border-radius:999px;overflow:hidden;margin-top:6px}.progressBar{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));width:0%;transition:width .18s}
                 .hidden{display:none!important}
 
-                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:16px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:7px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}}
+                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:7px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}}
                 @media(max-width:390px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info{padding:8px}.name{font-size:12px}.sub{font-size:10px}.actions a,.actions button{font-size:10px}.folderIcon{font-size:26px}}
                 @media(hover:none){.card:hover{transform:none;box-shadow:var(--shadow)}}
               </style>
@@ -211,7 +218,10 @@ object WebPageBuilder {
                       <h1>${escapeHtml(title)}</h1>
                       <div class="subtitle">${escapeHtml(subtitle)}</div>
                     </div>
-                    <div class="badge"><span class="syncDot"></span><span id="syncState">${escapeHtml(tr.text("web_live"))}</span></div>
+                    <div class="headerActions">
+                      <button id="themeToggle" class="themeToggle" type="button" onclick="cycleTheme()">${escapeHtml(tr.text("web_theme_auto"))}</button>
+                      <div class="badge"><span class="syncDot"></span><span id="syncState">${escapeHtml(tr.text("web_live"))}</span></div>
+                    </div>
                   </div>
                   $breadcrumbs
                 </header>
@@ -252,6 +262,21 @@ object WebPageBuilder {
 
               <div id="connectionBanner" class="connectionBanner">${escapeHtml(tr.text("web_connecting"))}</div>
 
+              <div id="dialogModal" class="dialogModal" onclick="dialogBackdrop(event)">
+                <div class="dialogPanel">
+                  <div class="dialogBody">
+                    <div id="dialogTitle" class="dialogTitle"></div>
+                    <div id="dialogMessage" class="dialogMessage"></div>
+                    <input id="dialogInput" class="dialogField" type="text">
+                    <select id="dialogSelect" class="dialogField"></select>
+                  </div>
+                  <div class="dialogActions">
+                    <button id="dialogCancel" class="secondary" type="button">${escapeHtml(tr.text("web_cancel"))}</button>
+                    <button id="dialogOk" class="primary" type="button">${escapeHtml(tr.text("web_ok"))}</button>
+                  </div>
+                </div>
+              </div>
+
               <div id="modal" class="modal" onclick="modalBackdrop(event)">
                 <div class="modalPanel">
                   <div class="modalHeader">
@@ -287,6 +312,22 @@ object WebPageBuilder {
                 let consecutiveFailures = 0;
                 let wasDisconnected = false;
                 let bannerTimer = null;
+                let selectedUploadEntries = [];
+
+                function applyTheme(mode){
+                  const selected = ['light','dark','auto'].includes(mode) ? mode : 'auto';
+                  if(selected === 'auto') document.documentElement.removeAttribute('data-theme');
+                  else document.documentElement.setAttribute('data-theme',selected);
+                  localStorage.setItem('speedshare-theme',selected);
+                  const button=document.getElementById('themeToggle');
+                  if(button) button.textContent = selected === 'dark' ? t('web_theme_dark') : selected === 'light' ? t('web_theme_light') : t('web_theme_auto');
+                }
+
+                function cycleTheme(){
+                  const current = localStorage.getItem('speedshare-theme') || 'auto';
+                  const next = current === 'auto' ? 'dark' : current === 'dark' ? 'light' : 'auto';
+                  applyTheme(next);
+                }
 
                 function showConnectionBanner(text,type,persistent){
                   const banner = document.getElementById('connectionBanner');
@@ -348,6 +389,62 @@ object WebPageBuilder {
                   return String(value).replace(/[&<>"']/g,function(char){
                     return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char];
                   });
+                }
+
+                let dialogResolve = null;
+                function closeDialog(result){
+                  const modal = document.getElementById('dialogModal');
+                  if(modal) modal.classList.remove('open');
+                  document.body.style.overflow = '';
+                  if(dialogResolve){
+                    const resolve = dialogResolve;
+                    dialogResolve = null;
+                    resolve(result);
+                  }
+                }
+
+                function dialogBackdrop(event){
+                  if(event.target.id === 'dialogModal') closeDialog(null);
+                }
+
+                function openDialog(options){
+                  return new Promise(function(resolve){
+                    dialogResolve = resolve;
+                    const modal = document.getElementById('dialogModal');
+                    const title = document.getElementById('dialogTitle');
+                    const message = document.getElementById('dialogMessage');
+                    const input = document.getElementById('dialogInput');
+                    const select = document.getElementById('dialogSelect');
+                    const cancel = document.getElementById('dialogCancel');
+                    const ok = document.getElementById('dialogOk');
+                    title.textContent = options.title || '';
+                    message.textContent = options.message || '';
+                    input.value = options.value || '';
+                    input.placeholder = options.placeholder || '';
+                    input.style.display = options.input ? 'block' : 'none';
+                    select.replaceChildren();
+                    (options.choices || []).forEach(function(choice){
+                      const option = document.createElement('option');
+                      option.value = choice.value;
+                      option.textContent = choice.label;
+                      select.appendChild(option);
+                    });
+                    if(options.choice) select.value = options.choice;
+                    select.style.display = options.choices ? 'block' : 'none';
+                    ok.textContent = options.okText || t('web_ok');
+                    ok.className = options.danger ? 'primary danger' : 'primary';
+                    cancel.onclick = function(){closeDialog(null);};
+                    ok.onclick = function(){
+                      closeDialog(options.choices ? select.value : (options.input ? input.value : true));
+                    };
+                    modal.classList.add('open');
+                    document.body.style.overflow = 'hidden';
+                    setTimeout(function(){(options.input ? input : (options.choices ? select : ok)).focus();},30);
+                  });
+                }
+
+                function confirmDialog(title,message,danger){
+                  return openDialog({title:title,message:message,danger:danger,okText:t('web_ok')});
                 }
 
                 async function pollLiveStatus(){
@@ -486,6 +583,11 @@ object WebPageBuilder {
                 }
 
                 document.addEventListener('keydown',function(event){
+                  const dialogOpen = document.getElementById('dialogModal').classList.contains('open');
+                  if(dialogOpen){
+                    if(event.key === 'Escape') closeDialog(null);
+                    return;
+                  }
                   const modalOpen = document.getElementById('modal').classList.contains('open');
                   if(!modalOpen) return;
                   if(event.key === 'Escape') closeModal();
@@ -504,6 +606,7 @@ object WebPageBuilder {
                 function installUpload(){
                   const zone = document.getElementById('dropZone');
                   const input = document.getElementById('uploadFiles');
+                  const folderInput = document.getElementById('uploadFolder');
                   if(!zone || !input) return;
                   ['dragenter','dragover'].forEach(function(name){
                     zone.addEventListener(name,function(event){event.preventDefault();zone.classList.add('drag');});
@@ -513,12 +616,34 @@ object WebPageBuilder {
                   });
                   zone.addEventListener('drop',function(event){
                     droppedUploadFiles = Array.from(event.dataTransfer.files || []);
+                    selectedUploadEntries = droppedUploadFiles.map(function(file){return {file:file,path:file.webkitRelativePath || file.name};});
                     updateUploadSelection();
                   });
                   input.addEventListener('change',function(){
                     droppedUploadFiles = [];
+                    selectedUploadEntries = Array.from(input.files || []).map(function(file){return {file:file,path:file.name};});
                     updateUploadSelection();
                   });
+                  if(folderInput){
+                    folderInput.addEventListener('change',function(){
+                      droppedUploadFiles = [];
+                      selectedUploadEntries = Array.from(folderInput.files || []).map(function(file){return {file:file,path:file.webkitRelativePath || file.name};});
+                      updateUploadSelection();
+                    });
+                  }
+                }
+
+                function safeUploadPath(path){
+                  return String(path || '').replace(/\\/g,'/').split('/').filter(function(part){
+                    return part && part !== '.' && part !== '..';
+                  }).join('/');
+                }
+
+                function getUploadEntries(){
+                  if(selectedUploadEntries.length > 0) return selectedUploadEntries.map(function(entry){
+                    return {file:entry.file,path:safeUploadPath(entry.path || entry.file.name)};
+                  }).filter(function(entry){return entry.path;});
+                  return getUploadFiles().map(function(file){return {file:file,path:file.name};});
                 }
 
                 function getUploadFiles(){
@@ -529,15 +654,17 @@ object WebPageBuilder {
 
                 function updateUploadSelection(){
                   const status = document.getElementById('uploadStatus');
-                  const files = getUploadFiles();
-                  if(status) status.textContent = t('web_selected_count',files.length);
+                  const entries = getUploadEntries();
+                  if(status) status.textContent = t('web_selected_count',entries.length);
                 }
 
-                function uploadOne(file,index,total){
+                function uploadOne(entry,index,total){
                   return new Promise(function(resolve,reject){
+                    const file = entry.file;
                     const xhr = new XMLHttpRequest();
                     const directory = document.getElementById('uploadDirectory').value;
-                    const url = '/upload?path=' + encodeURIComponent(directory) + '&name=' + encodeURIComponent(file.name);
+                    const uploadName = entry.path || file.name;
+                    const url = '/upload?path=' + encodeURIComponent(directory) + '&name=' + encodeURIComponent(uploadName);
                     const started = performance.now();
                     xhr.open('POST',url);
                     xhr.setRequestHeader('Content-Type','application/octet-stream');
@@ -547,7 +674,7 @@ object WebPageBuilder {
                       const speed = event.loaded / seconds;
                       const percent = Math.round(event.loaded * 100 / event.total);
                       document.getElementById('uploadStatus').textContent =
-                        t('web_upload_file_progress',index+1,total,file.name,percent,humanBytes(speed));
+                        t('web_upload_file_progress',index+1,total,uploadName,percent,humanBytes(speed));
                     };
                     xhr.onload = function(){
                       if(xhr.status >= 200 && xhr.status < 300) resolve();
@@ -562,10 +689,10 @@ object WebPageBuilder {
                   const input = document.getElementById('uploadFiles');
                   const status = document.getElementById('uploadStatus');
                   if(!input || !status) return;
-                  const files = getUploadFiles();
-                  if(files.length === 0){status.textContent = t('web_choose_or_drop');return;}
+                  const entries = getUploadEntries();
+                  if(entries.length === 0){status.textContent = t('web_choose_or_drop');return;}
                   try{
-                    for(let i = 0;i < files.length;i++) await uploadOne(files[i],i,files.length);
+                    for(let i = 0;i < entries.length;i++) await uploadOne(entries[i],i,entries.length);
                     status.textContent = t('web_upload_done');
                     setTimeout(function(){ location.reload(); },1500);
                   }catch(error){status.textContent = t('web_upload_failed',error.message);}
@@ -641,7 +768,7 @@ object WebPageBuilder {
                 async function pollPhoneClipboard(){
                   if(!CLIPBOARD_SYNC)return;
                   await refreshPhoneClipboard();
-                  clipboardPollTimer=setTimeout(pollPhoneClipboard,1000);
+                  clipboardPollTimer=setTimeout(pollPhoneClipboard,2500);
                 }
 
                 function downloadSelectedSeparately(){
@@ -661,7 +788,7 @@ object WebPageBuilder {
                   const paths=selectedPaths();
                   if(paths.length===0){alert(t('web_select_items'));return;}
                   const defaultName='SpeedShareWeb_' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.zip';
-                  const name=prompt(t('web_zip_name'),defaultName);
+                  const name=await openDialog({title:t('web_zip_name'),message:t('web_zip_hint'),input:true,value:defaultName,okText:compress?t('web_zip_compress'):t('web_zip_fast')});
                   if(name===null)return;
                   try{
                     const endpoint=DIRECTORY_MODE?'/api/zip/prepare':'/api/selected-zip/prepare';
@@ -671,24 +798,35 @@ object WebPageBuilder {
                   }catch(error){alert(t('web_zip_failed',error.message));}
                 }
 
-                function createFolderNow(){
+                async function createFolderNow(){
                   if(!REMOTE_MANAGEMENT)return;
-                  const name=prompt(t('web_new_folder_name'));
+                  const name=await openDialog({title:t('web_new_folder'),message:t('web_new_folder_name'),input:true,placeholder:t('web_new_folder')});
                   if(!name)return;
                   apiPost('/api/mkdir?path='+encodeURIComponent(CURRENT_PATH)+'&name='+encodeURIComponent(name),[])
                     .then(function(){showConnectionBanner(t('web_folder_created'),'ok',false);setTimeout(function(){location.reload();},300);})
                     .catch(function(error){alert(t('web_create_failed',error.message));});
                 }
 
-                function manageOne(card){
+                async function manageOne(card){
                   if(!REMOTE_MANAGEMENT || !card)return;
                   const path=card.dataset.path || '';
                   const name=card.dataset.name || '';
-                  const action=prompt(t('web_manage_prompt',name),DELETE_TO_TRASH_DEFAULT?'trash':'rename');
+                  const action=await openDialog({
+                    title:t('web_manage_title'),
+                    message:name,
+                    choices:[
+                      {value:'rename',label:t('web_action_rename')},
+                      {value:'copy',label:t('web_action_copy')},
+                      {value:'move',label:t('web_action_move')},
+                      {value:'trash',label:t('web_action_trash')},
+                      {value:'delete',label:t('web_action_delete')}
+                    ],
+                    choice:DELETE_TO_TRASH_DEFAULT?'trash':'rename'
+                  });
                   if(!action)return;
                   const normalized=action.toLowerCase().trim();
                   if(normalized==='rename'){
-                    const newName=prompt(t('web_new_name'),name);
+                    const newName=await openDialog({title:t('web_action_rename'),message:t('web_new_name'),input:true,value:name});
                     if(!newName || newName===name)return;
                     apiPost('/api/rename?path='+encodeURIComponent(path)+'&name='+encodeURIComponent(newName),[])
                       .then(function(){location.reload();}).catch(function(error){alert(t('web_rename_failed',error.message));});
@@ -738,15 +876,24 @@ object WebPageBuilder {
                   }catch(error){body.innerHTML='<div class="managerMeta">'+escapeText(t('web_load_failed',error.message))+'</div>';}
                 }
 
-                function conflictPolicy(){
-                  const value=prompt(t('web_conflict_prompt'),'rename');
+                async function conflictPolicy(){
+                  const value=await openDialog({
+                    title:t('web_conflict_title'),
+                    message:t('web_conflict_prompt'),
+                    choices:[
+                      {value:'rename',label:t('web_conflict_rename')},
+                      {value:'overwrite',label:t('web_conflict_overwrite')},
+                      {value:'skip',label:t('web_conflict_skip')}
+                    ],
+                    choice:'rename'
+                  });
                   if(value===null)return null;
                   const normalized=value.toLowerCase().trim();
                   return ['rename','overwrite','skip'].includes(normalized)?normalized:'rename';
                 }
 
                 async function confirmDestination(){
-                  const policy=conflictPolicy();if(policy===null)return;
+                  const policy=await conflictPolicy();if(policy===null)return;
                   const kind=pendingTransferKind;
                   const paths=selectedPaths();
                   closeManagerModal();
@@ -763,7 +910,7 @@ object WebPageBuilder {
                   const paths=selectedPaths();
                   if(paths.length===0){alert(t('web_select_items'));return;}
                   const message=permanent?t('web_delete_permanent_confirm'):t('web_delete_trash_confirm');
-                  if(!confirm(message))return;
+                  if(!await confirmDialog(permanent?t('web_permanent_delete'):t('web_move_trash'),message,permanent))return;
                   try{
                     await apiPost('/api/delete?permanent='+(permanent?'1':'0'),paths);
                     showConnectionBanner(t('web_delete_started'),'ok',false);clearSelection();setTimeout(openOperations,350);
@@ -788,11 +935,11 @@ object WebPageBuilder {
                   try{await apiPost('/api/restore?conflict=rename',[id]);showConnectionBanner(t('web_restore_started'),'ok',false);setTimeout(openOperations,350);}catch(error){alert(t('web_restore_failed',error.message));}
                 }
                 async function deleteTrashPermanently(id){
-                  if(!confirm(t('web_delete_trash_item_confirm')))return;
+                  if(!await confirmDialog(t('web_delete_forever'),t('web_delete_trash_item_confirm'),true))return;
                   try{await apiPost('/api/trash/delete',[id]);openTrash();}catch(error){alert(t('web_delete_failed',error.message));}
                 }
                 async function emptyTrashNow(){
-                  if(!confirm(t('web_empty_trash_confirm')))return;
+                  if(!await confirmDialog(t('web_empty_trash_action'),t('web_empty_trash_confirm'),true))return;
                   try{await apiPost('/api/trash/empty',[]);openTrash();}catch(error){alert(t('web_empty_failed',error.message));}
                 }
 
@@ -821,6 +968,30 @@ object WebPageBuilder {
                   try{await apiPost('/api/operations/cancel?id='+id,[]);refreshOperations();}catch(error){alert(t('web_cancel_failed',error.message));}
                 }
 
+                async function openHistory(){
+                  openManagerModal(t('web_history_title'));
+                  const body=document.getElementById('managerBody');
+                  body.innerHTML='<div class="managerMeta">'+escapeText(t('web_loading'))+'</div>';
+                  try{
+                    const response=await fetch('/api/history',{cache:'no-store'});
+                    const data=await response.json();
+                    if(!response.ok)throw new Error(data.message||('HTTP '+response.status));
+                    const items=data.items||[];
+                    if(items.length===0){body.innerHTML='<div class="managerMeta">'+escapeText(t('web_history_empty'))+'</div>';return;}
+                    body.innerHTML=items.map(function(item){
+                      const time=new Date(item.timestampMs||0).toLocaleString();
+                      const meta=[
+                        time,
+                        item.path ? '/' + item.path : '',
+                        item.clientAddress || '',
+                        item.bytes ? humanBytes(item.bytes) : '',
+                        item.itemCount > 1 ? t('web_items',item.itemCount) : ''
+                      ].filter(Boolean).join(' · ');
+                      return '<div class="managerRow"><div class="managerRowMain"><div class="managerName">'+escapeText(item.kindName || item.kind)+' · '+escapeText(item.name || '')+'</div><div class="managerMeta">'+escapeText(meta)+'</div></div></div>';
+                    }).join('');
+                  }catch(error){body.innerHTML='<div class="managerMeta">'+escapeText(t('web_load_failed',error.message))+'</div>';}
+                }
+
                 window.addEventListener('offline',function(){
                   wasDisconnected = true;
                   setSyncState(t('web_device_offline'),false);
@@ -832,6 +1003,7 @@ object WebPageBuilder {
                   pollLiveStatus();
                 });
 
+                applyTheme(localStorage.getItem('speedshare-theme') || 'auto');
                 setView(localStorage.getItem('speedshare-view') || 'grid');
                 applyFilters();
                 installUpload();
@@ -955,6 +1127,7 @@ object WebPageBuilder {
               </div>
               <div class="managementButtons">
                 <button class="secondary" type="button" onclick="toggleSelectAll()">${escapeHtml(tr.text("web_select_all"))}</button>
+                <button class="secondary" type="button" onclick="openHistory()">${escapeHtml(tr.text("web_history_short"))}</button>
               </div>
             </div>
             <div id="selectionBar" class="selectionBar hidden">
@@ -978,9 +1151,13 @@ object WebPageBuilder {
               <button class="secondary" type="button" onclick="createFolderNow()">${escapeHtml(tr.text("web_new_folder"))}</button>
               <button class="secondary" type="button" onclick="openTrash()">${escapeHtml(tr.text("web_trash"))}</button>
               <button class="secondary" type="button" onclick="openOperations()">${escapeHtml(tr.text("web_task_center_short"))}</button>
+              <button class="secondary" type="button" onclick="openHistory()">${escapeHtml(tr.text("web_history_short"))}</button>
             """.trimIndent()
         } else {
-            "<span class=\"readOnlyHint\">${escapeHtml(tr.text("web_readonly_hint"))}</span>"
+            """
+              <button class="secondary" type="button" onclick="openHistory()">${escapeHtml(tr.text("web_history_short"))}</button>
+              <span class="readOnlyHint">${escapeHtml(tr.text("web_readonly_hint"))}</span>
+            """.trimIndent()
         }
 
         val destructiveButtons = if (remoteManagementEnabled) {
@@ -1045,21 +1222,30 @@ object WebPageBuilder {
 
     private fun buildUploadPanel(relativePath: String, tr: Translator): String {
         return """
-            <section class="uploadBox">
+            <details class="uploadBox uploadDetails">
+              <summary class="uploadSummary">
+                <div>
+                  <div class="uploadTitle">${escapeHtml(tr.text("web_upload_here"))}</div>
+                  <div class="uploadHint">${escapeHtml(tr.text("web_upload_hint"))}</div>
+                </div>
+                <span class="primary">${escapeHtml(tr.text("web_expand_upload"))}</span>
+              </summary>
               <div id="dropZone" class="dropZone">
-                <div class="uploadTitle">${escapeHtml(tr.text("web_upload_here"))}</div>
-                <div class="uploadHint">${escapeHtml(tr.text("web_upload_hint"))}</div>
                 <div class="uploadActions">
                   <label class="secondary" style="cursor:pointer;flex:1;text-align:center">
                     ${escapeHtml(tr.text("web_choose_files"))}
                     <input id="uploadFiles" type="file" multiple style="display:none">
+                  </label>
+                  <label class="secondary" style="cursor:pointer;flex:1;text-align:center">
+                    ${escapeHtml(tr.text("web_choose_folder"))}
+                    <input id="uploadFolder" type="file" multiple webkitdirectory directory style="display:none">
                   </label>
                   <button class="primary" type="button" style="flex:1" onclick="uploadFilesNow()">${escapeHtml(tr.text("web_start_upload"))}</button>
                 </div>
                 <input id="uploadDirectory" type="hidden" value="${escapeHtml(relativePath)}">
                 <div id="uploadStatus" class="uploadStatus" style="margin-top:10px">${escapeHtml(tr.text("web_no_files_selected"))}</div>
               </div>
-            </section>
+            </details>
         """.trimIndent()
     }
 

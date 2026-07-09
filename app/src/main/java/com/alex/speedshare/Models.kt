@@ -76,6 +76,30 @@ data class TransferSnapshot(
     val updatedAtMs: Long = System.currentTimeMillis()
 )
 
+enum class TransferHistoryKind(val webValue: String) {
+    DOWNLOAD("download"),
+    UPLOAD("upload"),
+    COPY("copy"),
+    MOVE("move"),
+    TRASH("trash"),
+    DELETE("delete"),
+    RESTORE("restore"),
+    RENAME("rename"),
+    MKDIR("mkdir")
+}
+
+data class TransferHistoryItem(
+    val id: Long,
+    val kind: TransferHistoryKind,
+    val name: String,
+    val path: String,
+    val clientAddress: String,
+    val bytes: Long,
+    val itemCount: Int,
+    val timestampMs: Long,
+    val status: FileOperationState = FileOperationState.COMPLETED
+)
+
 enum class ConflictPolicy(val webValue: String) {
     AUTO_RENAME("rename"),
     OVERWRITE("overwrite"),
@@ -151,7 +175,8 @@ data class ServerUiState(
     val uploadBytesPerSecond: Long = 0L,
     val totalDownloadedBytes: Long = 0L,
     val totalUploadedBytes: Long = 0L,
-    val activeTransfers: List<ActiveTransferSnapshot> = emptyList()
+    val activeTransfers: List<ActiveTransferSnapshot> = emptyList(),
+    val history: List<TransferHistoryItem> = emptyList()
 )
 
 object SpeedShareRuntime {

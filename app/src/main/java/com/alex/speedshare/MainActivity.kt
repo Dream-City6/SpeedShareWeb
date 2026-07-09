@@ -52,6 +52,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -80,6 +81,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,7 +91,10 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.LinkedHashSet
+import java.util.Locale
 
 private data class IncomingShareRequest(
     val requestId: Long,
@@ -547,7 +552,7 @@ private fun SpeedShareApp(
                         val percent = if (transfer.totalBytes > 0L) {
                             transfer.transferredBytes * 100.0 / transfer.totalBytes
                         } else 0.0
-                        "$direction · ${transfer.fileName} · ${String.format("%.1f%%", percent)} · ${formatBytes(transfer.bytesPerSecond)}/s"
+                        "$direction · ${transfer.fileName} · ${String.format(Locale.getDefault(), "%.1f%%", percent)} · ${formatBytes(transfer.bytesPerSecond)}/s"
                     },
                     onCopy = {
                         address?.let {
@@ -587,8 +592,33 @@ private fun SpeedShareApp(
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        Text(
+                                            buildAccessSummary(tr, serverState),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 3,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
                                         Spacer(Modifier.height(8.dp))
-                                        OutlinedButton(onClick = { showQr = false }) { Text(tr.text("collapse")) }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                    clipboard.setPrimaryClip(
+                                                        ClipData.newPlainText(
+                                                            tr.text("qr_access_instructions"),
+                                                            buildAccessInstructions(tr, serverState)
+                                                        )
+                                                    )
+                                                    localStatusText = tr.text("qr_access_copied")
+                                                },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                                            ) { Text(tr.text("copy_access_info")) }
+                                            OutlinedButton(
+                                                onClick = { showQr = false },
+                                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 7.dp)
+                                            ) { Text(tr.text("collapse")) }
+                                        }
                                     }
                                 }
                             }
@@ -623,19 +653,35 @@ private fun SpeedShareApp(
                     }
                 }
 
+                AnimatedVisibility(visible = serverState.history.isNotEmpty()) {
+                    CompactCard(modifier = Modifier.fillMaxWidth()) {
+                        Text(tr.text("transfer_history"), fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(6.dp))
+                        serverState.history.take(4).forEach { item ->
+                            Text(
+                                formatHistoryLine(item, tr),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     ActionTile(
-                        symbol = "＋",
+                        iconRes = R.drawable.ic_add_24,
                         title = tr.text("choose_files"),
                         subtitle = tr.text("choose_files_sub"),
                         modifier = Modifier.weight(1f),
                         onClick = { filePicker.launch(arrayOf("*/*")) }
                     )
                     ActionTile(
-                        symbol = "↗",
+                        iconRes = R.drawable.ic_storage_24,
                         title = tr.text("whole_phone"),
                         subtitle = tr.text("whole_phone_sub"),
                         modifier = Modifier.weight(1f),
@@ -665,7 +711,7 @@ private fun SpeedShareApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text("🗑", style = MaterialTheme.typography.headlineSmall)
+                        IconBubble(iconRes = R.drawable.ic_delete_24, size = 38.dp, corner = 12.dp)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(tr.text("open_trash"), fontWeight = FontWeight.Bold)
                             Text(
@@ -674,7 +720,11 @@ private fun SpeedShareApp(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        Text("›", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                        Icon(
+                            painter = painterResource(R.drawable.ic_chevron_right_24),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
 
@@ -692,19 +742,7 @@ private fun SpeedShareApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(11.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(13.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("⚙", color = Color.White, fontWeight = FontWeight.Black)
-                        }
+                        IconBubble(iconRes = R.drawable.ic_settings_24, size = 40.dp, corner = 13.dp)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(tr.text("custom_start"), fontWeight = FontWeight.Black)
                             Text(
@@ -1229,17 +1267,7 @@ private fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(11.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(
-                                    Brush.linearGradient(
-                                        listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) { Text("⚙", color = Color.White, fontWeight = FontWeight.Black) }
+                        IconBubble(iconRes = R.drawable.ic_settings_24, size = 42.dp, corner = 14.dp)
                         Column(modifier = Modifier.weight(1f)) {
                             Text(tr.text("settings"), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
                             Text(
@@ -1408,27 +1436,27 @@ private fun SpeedShareTheme(content: @Composable () -> Unit) {
         darkColorScheme(
             primary = Color(0xFF9EA8FF),
             onPrimary = Color(0xFF111A53),
-            primaryContainer = Color(0xFF26327A),
+            primaryContainer = Color(0xFF213B78),
             onPrimaryContainer = Color(0xFFE0E3FF),
-            secondary = Color(0xFFC8A8FF),
-            secondaryContainer = Color(0xFF3E2762),
-            background = Color(0xFF0B1020),
-            surface = Color(0xFF12182A),
-            surfaceVariant = Color(0xFF1B2236),
-            outline = Color(0xFF39435D)
+            secondary = Color(0xFF5EEAD4),
+            secondaryContainer = Color(0xFF134E4A),
+            background = Color(0xFF07111F),
+            surface = Color(0xFF101827),
+            surfaceVariant = Color(0xFF172033),
+            outline = Color(0xFF34415B)
         )
     } else {
         lightColorScheme(
-            primary = Color(0xFF4057D6),
+            primary = Color(0xFF2563EB),
             onPrimary = Color.White,
-            primaryContainer = Color(0xFFE1E5FF),
-            onPrimaryContainer = Color(0xFF111D63),
-            secondary = Color(0xFF7656B8),
-            secondaryContainer = Color(0xFFEBDDFF),
-            background = Color(0xFFF5F7FF),
+            primaryContainer = Color(0xFFDBEAFE),
+            onPrimaryContainer = Color(0xFF0F2D6B),
+            secondary = Color(0xFF0F766E),
+            secondaryContainer = Color(0xFFCCFBF1),
+            background = Color(0xFFF6F8FC),
             surface = Color(0xFFFFFFFF),
-            surfaceVariant = Color(0xFFEEF1FA),
-            outline = Color(0xFFD7DCEA)
+            surfaceVariant = Color(0xFFEEF3F8),
+            outline = Color(0xFFD5DEE8)
         )
     }
     MaterialTheme(colorScheme = colorScheme, content = content)
@@ -1673,9 +1701,59 @@ private fun formatTransferRate(bytesPerSecond: Long): Pair<String, String> {
     return number to units[index]
 }
 
+private fun buildAccessSummary(tr: Translator, state: ServerUiState): String {
+    val address = state.address.orEmpty()
+    val host = runCatching { java.net.URI(address).host }.getOrNull().orEmpty()
+    val port = state.port?.toString().orEmpty()
+    val mode = when (state.mode) {
+        ShareMode.WHOLE_STORAGE -> tr.text("whole_phone")
+        ShareMode.SELECTED_FILES -> tr.text("selected_files")
+        null -> tr.text("mode_server")
+    }
+    val permissions = listOfNotNull(
+        if (state.uploadEnabled) tr.text("mode_upload") else tr.text("mode_readonly"),
+        if (state.remoteManagementEnabled) tr.text("mode_manage") else null
+    ).joinToString(" · ")
+    return listOf(
+        tr.text("qr_ip", host.ifBlank { "-" }),
+        tr.text("qr_port", port.ifBlank { "-" }),
+        mode,
+        permissions
+    ).filter { it.isNotBlank() }.joinToString(" · ")
+}
+
+private fun buildAccessInstructions(tr: Translator, state: ServerUiState): String {
+    val address = state.address.orEmpty()
+    return buildString {
+        appendLine(tr.text("qr_access_title"))
+        appendLine(address)
+        appendLine(buildAccessSummary(tr, state))
+    }.trim()
+}
+
+private fun formatHistoryLine(item: TransferHistoryItem, tr: Translator): String {
+    val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(item.timestampMs))
+    val kind = historyKindText(item.kind, tr)
+    val size = if (item.bytes > 0L) " · ${formatBytes(item.bytes)}" else ""
+    val count = if (item.itemCount > 1) " · ${tr.text("web_items", item.itemCount)}" else ""
+    return "$time · $kind · ${item.name}$size$count · ${item.clientAddress}"
+}
+
+private fun historyKindText(kind: TransferHistoryKind, tr: Translator): String = when (kind) {
+    TransferHistoryKind.DOWNLOAD -> tr.text("speed_download")
+    TransferHistoryKind.UPLOAD -> tr.text("speed_upload")
+    TransferHistoryKind.COPY -> tr.text("op_copy")
+    TransferHistoryKind.MOVE -> tr.text("op_move")
+    TransferHistoryKind.TRASH -> tr.text("op_trash")
+    TransferHistoryKind.DELETE -> tr.text("op_delete")
+    TransferHistoryKind.RESTORE -> tr.text("op_restore")
+    TransferHistoryKind.RENAME -> tr.text("web_action_rename")
+    TransferHistoryKind.MKDIR -> tr.text("web_new_folder")
+}
+
 @Composable
 private fun ActionTile(
-    symbol: String,
+    iconRes: Int,
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
@@ -1688,24 +1766,12 @@ private fun ActionTile(
         modifier = modifier
             .scale(scale)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(symbol, color = Color.White, fontWeight = FontWeight.Black)
-            }
+            IconBubble(iconRes = iconRes, size = 38.dp, corner = 12.dp)
             Text(title, fontWeight = FontWeight.Bold)
             Text(
                 subtitle,
@@ -1725,11 +1791,37 @@ private fun CompactCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp), content = content)
+    }
+}
+
+@Composable
+private fun IconBubble(
+    iconRes: Int,
+    size: androidx.compose.ui.unit.Dp,
+    corner: androidx.compose.ui.unit.Dp
+) {
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(RoundedCornerShape(corner))
+            .background(
+                Brush.linearGradient(
+                    listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                )
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(size * 0.56f)
+        )
     }
 }
 

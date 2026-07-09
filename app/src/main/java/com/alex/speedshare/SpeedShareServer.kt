@@ -38,7 +38,8 @@ class SpeedShareServer(
     private val deleteToTrashByDefault: Boolean,
     private val language: ResolvedLanguage,
     private val port: Int,
-    private val onMetrics: (TransferSnapshot) -> Unit = {}
+    private val onMetrics: (TransferSnapshot) -> Unit = {},
+    private val onHistory: (List<TransferHistoryItem>) -> Unit = {}
 ) {
     @Volatile
     private var running = false
@@ -50,12 +51,14 @@ class SpeedShareServer(
     private val thumbnailManager = ThumbnailManager(context)
     private val contentRevision = AtomicLong(1L)
     private val transferTracker = TransferTracker(onMetrics)
+    private val historyTracker = TransferHistoryTracker(onHistory)
     private val trashManager = TrashManager(rootDirectory, translator)
     private val operationTracker = FileOperationTracker(translator = translator)
     private val fileOperationManager = FileOperationManager(
         rootDirectory = rootDirectory,
         trashManager = trashManager,
         tracker = operationTracker,
+        historyTracker = historyTracker,
         translator = translator,
         onContentChanged = { contentRevision.incrementAndGet() }
     )
@@ -286,7 +289,8 @@ class SpeedShareServer(
                             createDirectory(
                                 socket = socket,
                                 relativeDirectory = target.query["path"].orEmpty(),
-                                requestedName = target.query["name"].orEmpty()
+                                requestedName = target.query["name"].orEmpty(),
+                                clientAddress = clientAddress(socket)
                             )
                         }
                     }
@@ -296,7 +300,8 @@ class SpeedShareServer(
                             renamePath(
                                 socket = socket,
                                 relativePath = target.query["path"].orEmpty(),
-                                requestedName = target.query["name"].orEmpty()
+                                requestedName = target.query["name"].orEmpty(),
+                                clientAddress = clientAddress(socket)
                             )
                         }
                     }
@@ -307,7 +312,8 @@ class SpeedShareServer(
                             val id = fileOperationManager.submitCopy(
                                 relativePaths = paths,
                                 destinationRelativePath = target.query["dest"].orEmpty(),
-                                policy = ConflictPolicy.fromWeb(target.query["conflict"])
+                                policy = ConflictPolicy.fromWeb(target.query["conflict"]),
+                                clientAddress = clientAddress(socket)
                             )
                             sendJsonResponse(socket, request.method, "{\"operationId\":$id}", "202 Accepted")
                         }
@@ -319,7 +325,8 @@ class SpeedShareServer(
                             val id = fileOperationManager.submitMove(
                                 relativePaths = paths,
                                 destinationRelativePath = target.query["dest"].orEmpty(),
-                                policy = ConflictPolicy.fromWeb(target.query["conflict"])
+                                policy = ConflictPolicy.fromWeb(target.query["conflict"]),
+                                clientAddress = clientAddress(socket)
                             )
                             sendJsonResponse(socket, request.method, "{\"operationId\":$id}", "202 Accepted")
                         }
@@ -329,7 +336,7 @@ class SpeedShareServer(
                         requireManagement(socket) {
                             val paths = readPathListBody(input, request)
                             val permanent = target.query["permanent"] == "1"
-                            val id = fileOperationManager.submitDelete(paths, permanent)
+                            val id = fileOperationManager.submitDelete(paths, permanent, clientAddress(socket))
                             sendJsonResponse(socket, request.method, "{\"operationId\":$id}", "202 Accepted")
                         }
                     }
@@ -339,7 +346,8 @@ class SpeedShareServer(
                             val ids = readPathListBody(input, request)
                             val id = fileOperationManager.submitRestore(
                                 ids = ids,
-                                policy = ConflictPolicy.fromWeb(target.query["conflict"])
+                                policy = ConflictPolicy.fromWeb(target.query["conflict"]),
+                                clientAddress = clientAddress(socket)
                             )
                             sendJsonResponse(socket, request.method, "{\"operationId\":$id}", "202 Accepted")
                         }
@@ -348,7 +356,20 @@ class SpeedShareServer(
                     request.method == "POST" && target.path == "/api/trash/delete" -> {
                         requireManagement(socket) {
                             val ids = readPathListBody(input, request)
-                            ids.forEach { trashManager.permanentDelete(it) }
+                            val entries = trashManager.listEntries().associateBy { it.id }
+                            ids.forEach { id ->
+                                val entry = entries[id]
+                                if (trashManager.permanentDelete(id) && entry != null) {
+                                    historyTracker.add(
+                                        kind = TransferHistoryKind.DELETE,
+                                        name = entry.name,
+                                        path = entry.originalRelativePath,
+                                        clientAddress = clientAddress(socket),
+                                        bytes = entry.size,
+                                        itemCount = 1
+                                    )
+                                }
+                            }
                             contentRevision.incrementAndGet()
                             sendJsonResponse(socket, request.method, "{\"ok\":true}")
                         }
@@ -356,7 +377,18 @@ class SpeedShareServer(
 
                     request.method == "POST" && target.path == "/api/trash/empty" -> {
                         requireManagement(socket) {
+                            val entries = trashManager.listEntries()
                             val ok = trashManager.emptyTrash()
+                            if (ok && entries.isNotEmpty()) {
+                                historyTracker.add(
+                                    kind = TransferHistoryKind.DELETE,
+                                    name = translator.text("web_empty_trash_action"),
+                                    path = entries.joinToString(", ") { it.originalRelativePath }.take(240),
+                                    clientAddress = clientAddress(socket),
+                                    bytes = entries.sumOf { it.size },
+                                    itemCount = entries.size
+                                )
+                            }
                             contentRevision.incrementAndGet()
                             sendJsonResponse(socket, request.method, "{\"ok\":$ok}")
                         }
@@ -378,6 +410,10 @@ class SpeedShareServer(
 
                     isGetOrHead && target.path == "/api/operations" -> {
                         sendOperationsJson(socket, request.method)
+                    }
+
+                    isGetOrHead && target.path == "/api/history" -> {
+                        sendHistoryJson(socket, request.method)
                     }
 
                     request.method == "POST" && target.path == "/api/operations/cancel" -> {
@@ -633,7 +669,8 @@ class SpeedShareServer(
     private fun createDirectory(
         socket: SocketChannel,
         relativeDirectory: String,
-        requestedName: String
+        requestedName: String,
+        clientAddress: String
     ) {
         val directory = safeResolve(rootDirectory, relativeDirectory)
         val safeName = validateSimpleName(requestedName)
@@ -651,14 +688,25 @@ class SpeedShareServer(
             return
         }
         val ok = destination.mkdirs()
-        if (ok) contentRevision.incrementAndGet()
+        if (ok) {
+            historyTracker.add(
+                kind = TransferHistoryKind.MKDIR,
+                name = safeName,
+                path = File(relativeDirectory.trim('/').replace('\\', '/'), safeName).invariantSeparatorsPath,
+                clientAddress = clientAddress,
+                bytes = 0L,
+                itemCount = 1
+            )
+            contentRevision.incrementAndGet()
+        }
         sendJsonResponse(socket, "POST", "{\"ok\":$ok}", if (ok) "201 Created" else "500 Internal Server Error")
     }
 
     private fun renamePath(
         socket: SocketChannel,
         relativePath: String,
-        requestedName: String
+        requestedName: String,
+        clientAddress: String
     ) {
         val source = safeResolve(rootDirectory, relativePath)
         val safeName = validateSimpleName(requestedName)
@@ -679,7 +727,17 @@ class SpeedShareServer(
             return
         }
         val ok = source.renameTo(destination)
-        if (ok) contentRevision.incrementAndGet()
+        if (ok) {
+            historyTracker.add(
+                kind = TransferHistoryKind.RENAME,
+                name = "${source.name} -> $safeName",
+                path = relativePath,
+                clientAddress = clientAddress,
+                bytes = if (destination.isFile) destination.length() else recursiveSize(destination),
+                itemCount = 1
+            )
+            contentRevision.incrementAndGet()
+        }
         sendJsonResponse(socket, "POST", "{\"ok\":$ok}", if (ok) "200 OK" else "500 Internal Server Error")
     }
 
@@ -688,6 +746,15 @@ class SpeedShareServer(
         if (trimmed.isEmpty() || trimmed == "." || trimmed == "..") return null
         if (trimmed.contains('/') || trimmed.contains('\\') || trimmed.indexOf('\u0000') >= 0) return null
         return if (File(trimmed).name == trimmed) trimmed else null
+    }
+
+    private fun validateUploadRelativePath(value: String): String? {
+        val normalized = value.trim().replace('\\', '/').trim('/')
+        if (normalized.isEmpty() || normalized.indexOf('\u0000') >= 0) return null
+        val parts = normalized.split('/').filter { it.isNotBlank() }
+        if (parts.isEmpty() || parts.size > 24) return null
+        if (parts.any { it == "." || it == ".." || File(it).name != it }) return null
+        return parts.joinToString("/")
     }
 
     private fun readPathListBody(input: InputStream, request: HttpRequest): List<String> {
@@ -823,6 +890,38 @@ class SpeedShareServer(
         sendJsonResponse(socket, method, "{\"items\":[$items]}")
     }
 
+    private fun sendHistoryJson(socket: SocketChannel, method: String) {
+        val items = historyTracker.snapshot().joinToString(",") { item ->
+            buildString {
+                append("{")
+                append("\"id\":${item.id},")
+                append("\"kind\":\"${item.kind.webValue}\",")
+                append("\"kindName\":\"${jsonEscape(historyKindText(item.kind))}\",")
+                append("\"name\":\"${jsonEscape(item.name)}\",")
+                append("\"path\":\"${jsonEscape(item.path)}\",")
+                append("\"clientAddress\":\"${jsonEscape(item.clientAddress)}\",")
+                append("\"bytes\":${item.bytes},")
+                append("\"itemCount\":${item.itemCount},")
+                append("\"timestampMs\":${item.timestampMs},")
+                append("\"status\":\"${item.status.webValue}\"")
+                append("}")
+            }
+        }
+        sendJsonResponse(socket, method, "{\"items\":[$items]}")
+    }
+
+    private fun historyKindText(kind: TransferHistoryKind): String = when (kind) {
+        TransferHistoryKind.DOWNLOAD -> translator.text("speed_download")
+        TransferHistoryKind.UPLOAD -> translator.text("speed_upload")
+        TransferHistoryKind.COPY -> translator.text("op_copy")
+        TransferHistoryKind.MOVE -> translator.text("op_move")
+        TransferHistoryKind.TRASH -> translator.text("op_trash")
+        TransferHistoryKind.DELETE -> translator.text("op_delete")
+        TransferHistoryKind.RESTORE -> translator.text("op_restore")
+        TransferHistoryKind.RENAME -> translator.text("web_action_rename")
+        TransferHistoryKind.MKDIR -> translator.text("web_new_folder")
+    }
+
     private fun prepareZipSelection(
         socket: SocketChannel,
         input: InputStream,
@@ -895,6 +994,14 @@ class SpeedShareServer(
                     addFileToZip(zip, source, uniqueZipName(initialName, usedNames))
                 }
             }
+            historyTracker.add(
+                kind = TransferHistoryKind.DOWNLOAD,
+                name = selection.fileName,
+                path = selection.paths.joinToString(", ").take(240),
+                clientAddress = clientAddress(socket),
+                bytes = totalSize,
+                itemCount = sources.sumOf(::recursiveItemCount)
+            )
         } finally {
             chunked.finish()
             transferTracker.finish(transferId)
@@ -992,6 +1099,14 @@ class SpeedShareServer(
                     }
                 }
             }
+            historyTracker.add(
+                kind = TransferHistoryKind.DOWNLOAD,
+                name = selection.fileName,
+                path = sources.joinToString(", ") { it.name }.take(240),
+                clientAddress = clientAddress(socket),
+                bytes = totalSize,
+                itemCount = sources.size
+            )
         } finally {
             chunked.finish()
             transferTracker.finish(transferId)
@@ -1080,18 +1195,31 @@ class SpeedShareServer(
         }
 
         val directory = safeResolve(rootDirectory, relativeDirectory)
-        if (directory == null || !directory.isDirectory || !directory.canWrite()) {
+        if (directory == null || !directory.isDirectory || !directory.canWrite() || trashManager.isTrashPath(directory)) {
             sendTextResponse(socket, "403 Forbidden", "Directory is not writable")
             return
         }
 
-        val safeName = File(requestedName).name.trim()
-        if (safeName.isEmpty() || safeName == "." || safeName == "..") {
+        val uploadRelativePath = validateUploadRelativePath(requestedName)
+        if (uploadRelativePath == null) {
             sendTextResponse(socket, "400 Bad Request", "Invalid file name")
             return
         }
 
-        val destination = createUniqueFile(directory, safeName)
+        val relativeParts = uploadRelativePath.split('/')
+        val destinationDirectory = relativeParts
+            .dropLast(1)
+            .fold(directory) { current, part -> File(current, part) }
+        if (!destinationDirectory.exists() && !destinationDirectory.mkdirs()) {
+            sendTextResponse(socket, "500 Internal Server Error", "Could not create upload folder")
+            return
+        }
+        if (!destinationDirectory.isDirectory || !destinationDirectory.canWrite() || trashManager.isTrashPath(destinationDirectory)) {
+            sendTextResponse(socket, "403 Forbidden", "Upload folder is not writable")
+            return
+        }
+
+        val destination = createUniqueFile(destinationDirectory, relativeParts.last())
         var success = false
         val transferId = transferTracker.begin(
             direction = TransferDirection.UPLOAD,
@@ -1119,6 +1247,14 @@ class SpeedShareServer(
 
             success = true
             contentRevision.incrementAndGet()
+            historyTracker.add(
+                kind = TransferHistoryKind.UPLOAD,
+                name = destination.name,
+                path = destination.relativeTo(rootDirectory).invariantSeparatorsPath,
+                clientAddress = clientAddress(socket),
+                bytes = contentLength,
+                itemCount = 1
+            )
             MediaScannerConnection.scanFile(
                 context,
                 arrayOf(destination.absolutePath),
@@ -1197,6 +1333,16 @@ class SpeedShareServer(
                             onBytes = { count -> transferTracker.addBytes(transferId, count) }
                         )
                     }
+                    if (disposition == "attachment") {
+                        historyTracker.add(
+                            kind = TransferHistoryKind.DOWNLOAD,
+                            name = sharedFile.name,
+                            path = sharedFile.name,
+                            clientAddress = clientAddress(socket),
+                            bytes = length,
+                            itemCount = 1
+                        )
+                    }
                 } finally {
                     transferTracker.finish(transferId)
                 }
@@ -1255,6 +1401,16 @@ class SpeedShareServer(
                         onBytes = { count ->
                             if (transferId != null) transferTracker.addBytes(transferId, count)
                         }
+                    )
+                }
+                if (trackTransfer && disposition == "attachment") {
+                    historyTracker.add(
+                        kind = TransferHistoryKind.DOWNLOAD,
+                        name = fileNameOverride ?: file.name,
+                        path = runCatching { file.relativeTo(rootDirectory).invariantSeparatorsPath }.getOrDefault(file.name),
+                        clientAddress = clientAddress(socket),
+                        bytes = length,
+                        itemCount = 1
                     )
                 }
             } finally {

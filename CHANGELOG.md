@@ -6,6 +6,25 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-09
+
+### Added
+
+- Transfer history in the Android app and browser, covering uploads, downloads and file-management actions
+- Browser folder uploads with preserved directory structure, including drag-and-drop support
+- New visual icons and quicker access to common actions in the Android interface
+
+### Changed
+
+- Redesigned the browser header, toolbar, upload panel, file cards and management dialogs for clearer desktop and mobile use
+- Improved Android controls and status presentation across compact layouts
+
+### Fixed
+
+- Reject uploads targeting invalid or recycle-bin paths
+- Keep concurrent transfer-history updates ordered so the interface cannot regress to a stale snapshot
+- Avoid bursty transfer-stat updates after Android resumes a cached process
+
 ## [1.1.3] - 2026-07-01
 
 ### Added

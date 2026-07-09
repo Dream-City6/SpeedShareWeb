@@ -67,6 +67,9 @@ class SpeedShareService : Service() {
     @Volatile
     private var lastMetrics = TransferSnapshot()
 
+    @Volatile
+    private var lastHistory: List<TransferHistoryItem> = emptyList()
+
     private val mainHandler = Handler(Looper.getMainLooper())
     private val lastNotificationAt = AtomicLong(0L)
     private lateinit var connectivityManager: ConnectivityManager
@@ -146,7 +149,12 @@ class SpeedShareService : Service() {
                 commandExecutor.execute {
                     if (generation != commandGeneration.get()) return@execute
                     stopOwnedServer()
-                    updateState(ServerUiState(statusText = Localization.translator(this, activeLanguage).text("server_stopped")))
+                    updateState(
+                        ServerUiState(
+                            statusText = Localization.translator(this, activeLanguage).text("server_stopped"),
+                            history = lastHistory
+                        )
+                    )
                     stopForegroundCompat()
                     stopSelf()
                 }
@@ -208,7 +216,7 @@ class SpeedShareService : Service() {
 
         activeLanguage = config.language
         val tr = Localization.translator(this, config.language)
-        stopOwnedServer()
+        stopOwnedServer(clearHistory = true)
 
         if (generation != commandGeneration.get()) return
 
@@ -273,7 +281,8 @@ class SpeedShareService : Service() {
                     deleteToTrashByDefault = config.deleteToTrashByDefault,
                     language = Localization.resolve(this, config.language),
                     port = candidatePort,
-                    onMetrics = ::handleMetrics
+                    onMetrics = ::handleMetrics,
+                    onHistory = ::handleHistory
                 )
 
                 try {
@@ -342,7 +351,8 @@ class SpeedShareService : Service() {
             uploadBytesPerSecond = lastMetrics.uploadBytesPerSecond,
             totalDownloadedBytes = lastMetrics.totalDownloadedBytes,
             totalUploadedBytes = lastMetrics.totalUploadedBytes,
-            activeTransfers = lastMetrics.activeTransfers
+            activeTransfers = lastMetrics.activeTransfers,
+            history = lastHistory
         )
 
         updateState(state)
@@ -361,13 +371,13 @@ class SpeedShareService : Service() {
     ) {
         if (generation != commandGeneration.get()) return
         stopOwnedServer()
-        val state = ServerUiState(statusText = message)
+        val state = ServerUiState(statusText = message, history = lastHistory)
         updateState(state)
         stopForegroundCompat()
         stopSelf(startId)
     }
 
-    private fun stopOwnedServer() {
+    private fun stopOwnedServer(clearHistory: Boolean = false) {
         val oldServer = server
         server = null
         currentConfig = null
@@ -375,6 +385,9 @@ class SpeedShareService : Service() {
         mainHandler.removeCallbacks(idleStopRunnable)
         oldServer?.stop()
         lastMetrics = TransferSnapshot()
+        if (clearHistory) {
+            lastHistory = emptyList()
+        }
         releaseTransferWakeLock()
     }
 
@@ -388,7 +401,12 @@ class SpeedShareService : Service() {
 
         val current = SpeedShareRuntime.state.value
         if (current.running || current.starting) {
-            updateState(ServerUiState(statusText = Localization.translator(this, activeLanguage).text("server_stopped")))
+            updateState(
+                ServerUiState(
+                    statusText = Localization.translator(this, activeLanguage).text("server_stopped"),
+                    history = lastHistory
+                )
+            )
         }
 
         super.onDestroy()
@@ -399,7 +417,8 @@ class SpeedShareService : Service() {
         stopOwnedServer()
         updateState(
             ServerUiState(
-                statusText = Localization.translator(this, activeLanguage).text("background_timeout")
+                statusText = Localization.translator(this, activeLanguage).text("background_timeout"),
+                history = lastHistory
             )
         )
         stopForegroundCompat()
@@ -442,6 +461,13 @@ class SpeedShareService : Service() {
         if (now - previous >= 900L && lastNotificationAt.compareAndSet(previous, now)) {
             notifyState(updated)
         }
+    }
+
+    private fun handleHistory(history: List<TransferHistoryItem>) {
+        lastHistory = history
+        val current = SpeedShareRuntime.state.value
+        if (!current.running && !current.starting) return
+        updateState(current.copy(history = history))
     }
 
     private fun createTransferWakeLock() {
@@ -567,7 +593,12 @@ class SpeedShareService : Service() {
 
         commandGeneration.incrementAndGet()
         stopOwnedServer()
-        updateState(ServerUiState(statusText = Localization.translator(this, activeLanguage).text("idle_stopped")))
+        updateState(
+            ServerUiState(
+                statusText = Localization.translator(this, activeLanguage).text("idle_stopped"),
+                history = lastHistory
+            )
+        )
         stopForegroundCompat()
         stopSelf()
     }

@@ -36,7 +36,7 @@ class TransferTracker(
     private var latestSnapshot = TransferSnapshot()
 
     init {
-        scheduler.scheduleAtFixedRate(
+        scheduler.scheduleWithFixedDelay(
             { publishSnapshot() },
             0L,
             500L,
