@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.1.3/SpeedShareWeb-v1.1.3.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.1.3%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.1.3 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.2.0/SpeedShareWeb-v1.2.0.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.2.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.2.0 APK">
 </a>
 
 <br><br>
 
-v1.1.3 是 SpeedShareWeb 的正式稳定版本，更新了 APK 图标，并加入了可选剪贴板同步功能。
+v1.2.0 新增传输历史、保留目录结构的文件夹上传与拖放支持，并重新优化了 Android 和浏览器界面。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
@@ -37,7 +37,9 @@ SpeedShareWeb 可以让安卓设备与同一局域网内的手机、平板和电
 - 支持手机、平板和电脑浏览器访问
 - 不需要账号或云存储
 - 浏览、上传、下载、移动和删除文件
+- 上传文件夹并保留原有目录结构
 - 支持单文件、多文件和 ZIP 打包下载
+- 查看最近的上传、下载和文件管理记录
 - 可选手机与浏览器页面剪贴板同步
 - 响应式列表与网格视图
 - 回收站恢复、永久删除和清空
