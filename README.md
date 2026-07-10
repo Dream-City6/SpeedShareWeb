@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.1/SpeedShareWeb-v1.3.1.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.3.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.3.1 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.2/SpeedShareWeb-v1.3.2.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.3.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.3.2 APK">
 </a>
 
 <br><br>
 
-v1.3.1 tunes resumable browser uploads for smoother large-file transfers, with larger chunks, fewer intermediate disk syncs, and steadier full-file progress.
+v1.3.2 adds a polished desktop right-click and mobile long-press workflow, safer quick actions, removable upload entries, better multi-selection, and smoother large-directory browsing.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -38,6 +38,8 @@ The receiving device does not need to install an app. Simply open the local addr
 - Access from browsers on phones, tablets, and computers
 - No account or cloud storage required
 - Browse, upload, download, move, and delete files
+- Use common file actions from a compact desktop right-click or mobile long-press menu
+- Use Ctrl/Command/Shift multi-selection on desktop and remove individual files from the upload queue before transfer
 - Upload folders while preserving their directory structure
 - Single-file, multi-file, and ZIP downloads
 - Review recent uploads, downloads, and file-management operations
@@ -94,3 +96,11 @@ This project is licensed under the GNU General Public License v3.0. See [LICENSE
 ## Disclaimer
 
 Use SpeedShareWeb only with files and devices that you are authorized to access and manage. This project is provided without warranty.
+
+## Update History
+
+- v1.3.2: Added compact right-click and mobile bottom-sheet actions, consistent SVG icons, safer deletion access, removable upload entries, desktop range selection, accessibility improvements, and large-directory rendering optimizations.
+- v1.3.0: Improved the browser file manager with direct local-network uploads, limited parallel uploads/downloads, clearer queue progress, retry/cancel controls, search feedback, browser-side settings, and clearer guidance for videos the browser cannot play.
+- v1.2.0: Added transfer history, folder uploads with preserved directory structure, drag-and-drop support, and a redesigned browser interface.
+- v1.1.0: Added clipboard sync, recycle-bin management, stronger branding, better compact layouts, and more stable Android controls.
+- v0.1.0: Initial local Android file server with browser-based file browsing, upload, download, and multilingual support.

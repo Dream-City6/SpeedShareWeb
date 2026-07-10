@@ -10,7 +10,6 @@ import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
-import java.io.RandomAccessFile
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
@@ -464,20 +463,8 @@ class SpeedShareServer(
                                 input = input,
                                 request = request,
                                 relativeDirectory = target.query["path"].orEmpty(),
-                                requestedName = target.query["name"].orEmpty(),
-                                uploadId = target.query["uploadId"],
-                                chunkOffset = target.query["offset"]?.toLongOrNull(),
-                                totalBytes = target.query["total"]?.toLongOrNull(),
-                                finalChunk = target.query["final"] == "1"
+                                requestedName = target.query["name"].orEmpty()
                             )
-                        }
-                    }
-
-                    isGetOrHead && target.path == "/api/upload-status" -> {
-                        if (mode != ShareMode.WHOLE_STORAGE || !uploadEnabled) {
-                            sendTextResponse(socket, "403 Forbidden", "Upload is disabled")
-                        } else {
-                            sendUploadStatusJson(socket, request.method, target.query["id"].orEmpty())
                         }
                     }
 
@@ -1199,11 +1186,7 @@ class SpeedShareServer(
         input: InputStream,
         request: HttpRequest,
         relativeDirectory: String,
-        requestedName: String,
-        uploadId: String?,
-        chunkOffset: Long?,
-        totalBytes: Long?,
-        finalChunk: Boolean
+        requestedName: String
     ) {
         val contentLength = request.headers["content-length"]?.toLongOrNull()
         if (contentLength == null || contentLength < 0L) {
@@ -1233,26 +1216,6 @@ class SpeedShareServer(
         }
         if (!destinationDirectory.isDirectory || !destinationDirectory.canWrite() || trashManager.isTrashPath(destinationDirectory)) {
             sendTextResponse(socket, "403 Forbidden", "Upload folder is not writable")
-            return
-        }
-
-        val normalizedUploadId = uploadId?.takeIf { isValidUploadId(it) }
-        if (uploadId != null && normalizedUploadId == null) {
-            sendTextResponse(socket, "400 Bad Request", "Invalid upload id")
-            return
-        }
-        if (normalizedUploadId != null) {
-            receiveChunkedUpload(
-                socket = socket,
-                input = input,
-                contentLength = contentLength,
-                uploadId = normalizedUploadId,
-                chunkOffset = chunkOffset,
-                totalBytes = totalBytes,
-                finalChunk = finalChunk,
-                destinationDirectory = destinationDirectory,
-                destinationName = relativeParts.last()
-            )
             return
         }
 
@@ -1312,121 +1275,6 @@ class SpeedShareServer(
                 } catch (_: Exception) {
                 }
             }
-        }
-    }
-
-    private fun receiveChunkedUpload(
-        socket: SocketChannel,
-        input: InputStream,
-        contentLength: Long,
-        uploadId: String,
-        chunkOffset: Long?,
-        totalBytes: Long?,
-        finalChunk: Boolean,
-        destinationDirectory: File,
-        destinationName: String
-    ) {
-        val offset = chunkOffset ?: run {
-            sendTextResponse(socket, "400 Bad Request", "Missing chunk offset")
-            return
-        }
-        val expectedTotal = totalBytes ?: run {
-            sendTextResponse(socket, "400 Bad Request", "Missing total size")
-            return
-        }
-        if (offset < 0L || expectedTotal < 0L || offset > expectedTotal || contentLength > expectedTotal - offset) {
-            sendTextResponse(socket, "400 Bad Request", "Invalid upload range")
-            return
-        }
-
-        val partFile = uploadPartFile(uploadId)
-        val currentSize = partFile.length()
-        if (currentSize != offset) {
-            sendJsonResponse(socket, "POST", "{\"ok\":false,\"offset\":$currentSize}", "409 Conflict")
-            return
-        }
-
-        var success = false
-        val transferId = transferTracker.begin(
-            direction = TransferDirection.UPLOAD,
-            fileName = destinationName,
-            clientAddress = clientAddress(socket),
-            totalBytes = expectedTotal,
-            initialBytes = offset
-        )
-
-        try {
-            RandomAccessFile(partFile, "rw").use { output ->
-                output.seek(offset)
-                val buffer = ByteArray(1024 * 1024)
-                var remaining = contentLength
-                while (remaining > 0L) {
-                    val wanted = min(remaining, buffer.size.toLong()).toInt()
-                    val read = input.read(buffer, 0, wanted)
-                    if (read < 0) throw IllegalStateException("Upload ended early")
-                    output.write(buffer, 0, read)
-                    transferTracker.addBytes(transferId, read.toLong())
-                    remaining -= read.toLong()
-                }
-                if (finalChunk) output.fd.sync()
-            }
-
-            val writtenSize = partFile.length()
-            if (!finalChunk) {
-                success = true
-                sendJsonResponse(socket, "POST", "{\"ok\":true,\"offset\":$writtenSize}", "202 Accepted")
-                return
-            }
-            if (writtenSize != expectedTotal) {
-                sendJsonResponse(socket, "POST", "{\"ok\":false,\"offset\":$writtenSize}", "409 Conflict")
-                return
-            }
-
-            val destination = createUniqueFile(destinationDirectory, destinationName)
-            if (!partFile.renameTo(destination)) {
-                partFile.copyTo(destination, overwrite = false)
-                runCatching { partFile.delete() }
-            }
-            success = true
-            contentRevision.incrementAndGet()
-            historyTracker.add(
-                kind = TransferHistoryKind.UPLOAD,
-                name = destination.name,
-                path = destination.relativeTo(rootDirectory).invariantSeparatorsPath,
-                clientAddress = clientAddress(socket),
-                bytes = expectedTotal,
-                itemCount = 1
-            )
-            MediaScannerConnection.scanFile(
-                context,
-                arrayOf(destination.absolutePath),
-                null,
-                null
-            )
-            sendJsonResponse(socket, "POST", "{\"ok\":true,\"offset\":$writtenSize}", "201 Created")
-        } finally {
-            transferTracker.finish(transferId)
-        }
-    }
-
-    private fun sendUploadStatusJson(socket: SocketChannel, method: String, uploadId: String) {
-        if (!isValidUploadId(uploadId)) {
-            sendTextResponse(socket, "400 Bad Request", "Invalid upload id")
-            return
-        }
-        val offset = uploadPartFile(uploadId).length().coerceAtLeast(0L)
-        sendJsonResponse(socket, method, "{\"ok\":true,\"offset\":$offset}")
-    }
-
-    private fun uploadPartFile(uploadId: String): File {
-        val directory = File(context.cacheDir, "speedshare_upload_parts")
-        if (!directory.exists()) directory.mkdirs()
-        return File(directory, "$uploadId.part")
-    }
-
-    private fun isValidUploadId(value: String): Boolean {
-        return value.length in 8..96 && value.all { char ->
-            char.isLetterOrDigit() || char == '-' || char == '_' || char == '.'
         }
     }
 

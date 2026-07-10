@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.1/SpeedShareWeb-v1.3.1.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.3.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.3.1 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.2/SpeedShareWeb-v1.3.2.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.3.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.3.2 APK">
 </a>
 
 <br><br>
 
-v1.3.1 优化网页端断点续传的大文件上传体验：使用更大的分片、减少中间磁盘同步，并让通知和网页进度按完整文件稳定显示。
+v1.3.2 完善网页端文件管理：加入电脑右键和手机长按菜单、更安全的快捷操作、上传队列单项移除、桌面连续多选，以及更流畅的大目录浏览。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
@@ -37,6 +37,8 @@ SpeedShareWeb 可以让安卓设备与同一局域网内的手机、平板和电
 - 支持手机、平板和电脑浏览器访问
 - 不需要账号或云存储
 - 浏览、上传、下载、移动和删除文件
+- 通过电脑右键或手机长按菜单快速执行常用文件操作
+- 电脑端支持 Ctrl/Command/Shift 多选，上传前可从队列中移除单个文件
 - 上传文件夹并保留原有目录结构
 - 支持单文件、多文件和 ZIP 打包下载
 - 查看最近的上传、下载和文件管理记录
@@ -87,3 +89,11 @@ SpeedShareWeb 主要在局域网内运行，不需要账号或云存储。
 
 ## 免责声明
 请仅使用 SpeedShareWeb 访问和管理你有权处理的文件及设备。本项目不提供任何形式的担保。
+
+## 更新履历
+
+- v1.3.2：新增电脑右键与手机底部操作面板，统一 SVG 图标，收紧危险操作入口，支持上传队列单项移除、桌面连续多选、无障碍操作和大目录渲染优化。
+- v1.3.0：优化网页端文件管理体验，改回局域网直传，加入受限并发上传/下载、队列进度、取消/重试、搜索反馈、网页端设置，以及浏览器无法播放视频时的清晰提示。
+- v1.2.0：新增传输历史、保留目录结构的文件夹上传、拖放支持，并重新设计网页端界面。
+- v1.1.0：新增剪贴板同步、回收站管理、统一品牌、紧凑布局优化，以及更稳定的 Android 控制体验。
+- v0.1.0：初始版本，实现 Android 本地文件服务器、浏览器文件浏览、上传、下载和多语言支持。

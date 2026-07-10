@@ -20,7 +20,6 @@ object WebPageBuilder {
             directoryMode = false,
             remoteManagementEnabled = false,
             clipboardSyncEnabled = clipboardSyncEnabled,
-            deleteToTrashByDefault = true,
             language = language,
             pageVersion = pageVersion
         )
@@ -48,7 +47,6 @@ object WebPageBuilder {
             directoryMode = true,
             remoteManagementEnabled = remoteManagementEnabled,
             clipboardSyncEnabled = clipboardSyncEnabled,
-            deleteToTrashByDefault = deleteToTrashByDefault,
             language = language,
             pageVersion = pageVersion
         )
@@ -64,7 +62,6 @@ object WebPageBuilder {
         directoryMode: Boolean,
         remoteManagementEnabled: Boolean,
         clipboardSyncEnabled: Boolean,
-        deleteToTrashByDefault: Boolean,
         language: ResolvedLanguage,
         pageVersion: String
     ): String {
@@ -118,7 +115,7 @@ object WebPageBuilder {
                 h1{font-size:22px;line-height:1.15;margin:0 0 3px;font-weight:850;letter-spacing:0;background:linear-gradient(110deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
                 .subtitle{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
                 .badge{flex:0 0 auto;padding:6px 9px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--muted);white-space:nowrap}
-                .headerActions{display:flex;align-items:center;gap:7px;flex:0 0 auto}.themeToggle{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:6px 9px;font-size:11px;cursor:pointer}
+                .headerActions{display:flex;align-items:center;gap:7px;flex:0 0 auto}.themeToggle{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:6px 9px;font-size:11px;cursor:pointer}.settingsToggle{display:flex;align-items:center;gap:5px}.settingsIcon{display:grid;place-items:center}.settingsIcon svg{width:14px;height:14px}
                 .syncDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success);margin-right:6px;box-shadow:0 0 0 4px rgba(11,159,110,.1)}
                 .breadcrumbs{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:9px 0 0;font-size:12px}
                 .breadcrumbs a{text-decoration:none;color:var(--brand);background:var(--panel2);border:1px solid var(--line);padding:6px 9px;border-radius:9px;transition:.16s}
@@ -137,6 +134,7 @@ object WebPageBuilder {
                 .toolbar{display:grid;grid-template-columns:minmax(170px,1fr) auto auto;gap:7px;margin:9px 0}
                 .control{min-height:38px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:0 11px;outline:none;box-shadow:0 4px 14px rgba(43,54,99,.04)}
                 .control:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
+                .searchBox{position:relative;min-width:0}.searchBox .control{width:100%;padding-right:38px}.clearSearch{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:27px;height:27px;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;font-size:16px}.clearSearch:hover{background:var(--panel2);color:var(--text)}
                 .viewButtons{display:flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--panel)}
                 .viewButtons button{border:0;background:transparent;color:var(--muted);padding:0 12px;cursor:pointer;transition:.15s}
                 .viewButtons button.active{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff}
@@ -151,7 +149,7 @@ object WebPageBuilder {
                 .uploadTitle,.managementTitle{font-weight:800;margin-bottom:3px}
                 .uploadHint,.uploadStatus,.readOnlyHint{font-size:12px;color:var(--muted);overflow-wrap:anywhere}.uploadStatus{min-height:20px;font-weight:700}.uploadStatus.success{color:var(--success)}.uploadStatus.error{color:var(--danger)}
                 .uploadProgress{height:9px;background:rgba(120,130,160,.16);border-radius:999px;overflow:hidden;margin-top:10px;border:1px solid var(--line)}.uploadProgress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));transition:width .18s ease}
-                .uploadQueue{display:grid;gap:6px;margin-top:8px;text-align:left}.uploadQueue:empty{display:none}.uploadQueueItem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:rgba(120,130,160,.08);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px}.uploadQueueName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}.uploadQueueState{color:var(--muted);font-weight:750}.uploadQueueItem.done .uploadQueueState{color:var(--success)}.uploadQueueItem.failed .uploadQueueState,.uploadQueueItem.cancelled .uploadQueueState{color:var(--danger)}
+                .uploadQueue{display:grid;gap:6px;margin-top:8px;text-align:left;max-height:290px;overflow:auto;overscroll-behavior:contain;padding-right:2px}.uploadQueue:empty{display:none}.uploadQueueItem{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:rgba(120,130,160,.08);border:1px solid var(--line);border-radius:10px;padding:7px 9px;font-size:12px}.uploadQueueName{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}.uploadQueueState{color:var(--muted);font-weight:750;display:flex;align-items:center;gap:6px}.uploadQueueRetry{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:7px;padding:4px 6px;cursor:pointer;font-size:11px}.uploadQueueItem.done .uploadQueueState{color:var(--success)}.uploadQueueItem.failed .uploadQueueState,.uploadQueueItem.cancelled .uploadQueueState{color:var(--danger)}
                 .uploadActions,.managementButtons{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
                 .primary,.secondary{border:0;border-radius:9px;padding:9px 12px;font-weight:750;cursor:pointer;transition:.15s}
                 .primary{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(37,99,235,.18)}
@@ -163,8 +161,9 @@ object WebPageBuilder {
 
                 .items{display:grid;gap:9px}
                 .items.grid{grid-template-columns:repeat(auto-fill,minmax(156px,1fr))}
-                .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);min-width:0;transition:transform .17s ease,box-shadow .17s ease,border-color .17s ease}
+                .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);min-width:0;transition:transform .17s ease,box-shadow .17s ease,border-color .17s ease;content-visibility:auto;contain-intrinsic-size:180px}
                 .card:hover{transform:translateY(-3px);box-shadow:var(--shadowHover);border-color:rgba(37,99,235,.28)}
+                .card:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
                 .card.selected{outline:2px solid var(--brand);outline-offset:-2px}
                 .selectBox{position:absolute;top:8px;left:8px;z-index:12;width:27px;height:27px;border-radius:9px;background:rgba(15,20,35,.58);display:grid;place-items:center;color:#fff;backdrop-filter:blur(8px);cursor:pointer;border:1px solid rgba(255,255,255,.22)}
                 .selectBox input{position:absolute;opacity:0}.selectBox span{opacity:.3;font-weight:900}.selectBox input:checked+span{opacity:1;color:#94f3ca}
@@ -175,8 +174,10 @@ object WebPageBuilder {
                 .items.grid .folderIcon{grid-column:1/-1;width:100%;height:88px;font-size:46px;border-radius:13px}
                 .items.grid .folderInfo{grid-column:1;grid-row:2;min-width:0}.items.grid .folder-card .miniManage{grid-column:2;grid-row:2;align-self:center}.items.grid .folderArrow{display:none}
                 .thumb{position:relative;width:100%;aspect-ratio:4/3;background:linear-gradient(145deg,var(--panel2),rgba(37,99,235,.08));overflow:hidden;display:grid;place-items:center;cursor:pointer}
+                .thumb.loading::before{content:"";position:absolute;inset:0;z-index:2;background:linear-gradient(100deg,transparent 20%,rgba(255,255,255,.2) 45%,transparent 70%);transform:translateX(-100%);animation:thumbShimmer 1.15s infinite}
                 .thumb img{width:100%;height:100%;object-fit:cover;display:block;animation:thumbIn .24s ease both}
                 @keyframes thumbIn{from{opacity:0;transform:scale(1.025)}to{opacity:1;transform:scale(1)}}
+                @keyframes thumbShimmer{to{transform:translateX(100%)}}
                 .fallback{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:42px;background:var(--panel2)}
                 .mediaBadge{position:absolute;right:7px;bottom:7px;background:rgba(15,20,35,.72);color:#fff;border-radius:7px;padding:3px 6px;font-size:10px;backdrop-filter:blur(6px)}
                 .info{padding:9px 10px 10px;min-width:0}.items.grid .file-card .info{display:block;min-height:96px}
@@ -195,7 +196,7 @@ object WebPageBuilder {
                 .modalPanel{width:min(1050px,100%);height:min(90vh,840px);background:var(--panelSolid);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr) auto;box-shadow:0 30px 100px rgba(0,0,0,.5)}
                 .modalHeader,.modalFooter{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line)}.modalFooter{border-bottom:0;border-top:1px solid var(--line)}
                 .modalTitle{flex:1;min-width:0;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.iconBtn{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:9px;padding:7px 9px;cursor:pointer;text-decoration:none;font-size:12px}
-                .viewer{min-height:0;display:flex;align-items:center;justify-content:center;background:#05070d;overflow:auto}.viewer img,.viewer video{max-width:100%;max-height:100%;object-fit:contain}.viewer audio{width:min(720px,92%)}.viewer iframe{width:100%;height:100%;border:0;background:#fff}.details{flex:1;min-width:0;font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+                .viewer{min-height:0;display:flex;align-items:center;justify-content:center;background:#05070d;overflow:auto}.viewer img,.viewer video{max-width:100%;max-height:100%;object-fit:contain}.viewer audio{width:min(720px,92%)}.viewer iframe{width:100%;height:100%;border:0;background:#fff}.details{flex:1;min-width:0;font-size:11px;color:var(--muted);overflow-wrap:anywhere}.emptyAction{display:inline-block;margin-top:12px;text-decoration:none;border-radius:9px;padding:8px 11px;background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;font-weight:800}
 
                 .managerModal,.dialogModal{position:fixed;inset:0;z-index:180;background:rgba(3,6,15,.76);display:none;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(10px)}.managerModal.open,.dialogModal.open{display:flex}
                 .managerPanel{width:min(880px,100%);max-height:88vh;background:var(--panelSolid);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-rows:auto minmax(0,1fr);box-shadow:0 28px 90px rgba(0,0,0,.45)}
@@ -203,11 +204,15 @@ object WebPageBuilder {
                 .managerRow{display:flex;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid var(--line)}.managerRow:last-child{border-bottom:0}.managerRowMain{flex:1;min-width:0}.managerName{font-weight:760;overflow-wrap:anywhere}.managerMeta{font-size:11px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}.managerActions{display:flex;gap:6px;flex-wrap:wrap}.managerActions button{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:8px;padding:6px 8px;cursor:pointer;font-size:11px}
                 .dialogPanel{width:min(460px,100%);background:var(--panelSolid);border:1px solid var(--line);border-radius:18px;box-shadow:0 28px 90px rgba(0,0,0,.45);overflow:hidden}.dialogBody{padding:14px}.dialogTitle{font-size:16px;font-weight:850;margin-bottom:5px}.dialogMessage{font-size:12px;color:var(--muted);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}.dialogField{width:100%;min-height:40px;margin-top:12px;border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:10px;padding:0 11px;outline:none}.dialogField:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}.dialogActions{display:flex;justify-content:flex-end;gap:8px;padding:10px 14px;border-top:1px solid var(--line)}.dialogActions button{min-width:88px}.dialogActions .danger{background:var(--danger);color:#fff}
                 .progressTrack{height:6px;background:var(--panel2);border-radius:999px;overflow:hidden;margin-top:6px}.progressBar{height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));width:0%;transition:width .18s}
+                .contextMenu{position:fixed;z-index:260;display:none;width:min(245px,calc(100vw - 16px));padding:6px;background:var(--panelSolid);border:1px solid var(--line);border-radius:13px;box-shadow:0 22px 60px rgba(0,0,0,.3);backdrop-filter:blur(18px);transform-origin:top left}.contextMenu.open{display:block;animation:contextMenuIn .14s ease-out}.contextMenu button{width:100%;display:flex;align-items:center;gap:9px;border:0;background:transparent;color:var(--text);border-radius:9px;padding:9px 10px;text-align:left;cursor:pointer;font-size:12px}.contextMenu button:hover,.contextMenu button:focus-visible{background:var(--panel2);outline:0}.contextMenu .contextIcon{width:18px;display:grid;place-items:center;color:var(--muted)}.contextIcon svg{width:17px;height:17px}.contextMenu .danger{color:var(--danger)}.contextSeparator{height:1px;background:var(--line);margin:5px 3px}.contextMore.hidden{display:none}.contextFileOnly.hidden,.contextFolderOnly.hidden{display:none}
+                @keyframes contextMenuIn{from{opacity:0;transform:scale(.96) translateY(-3px)}to{opacity:1;transform:none}}
                 .hidden{display:none!important}
 
-                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:12px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}}
-                @media(max-width:390px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info{padding:8px}.name{font-size:12px}.sub{font-size:10px}.actions a,.actions button{font-size:10px}.folderIcon{font-size:26px}}
+                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:12px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}.contextMenu{left:8px!important;right:8px;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom));width:auto;max-height:min(76vh,620px);overflow:auto;border-radius:19px;padding:8px;transform-origin:bottom center}.contextMenu.open{animation:contextSheetIn .18s ease-out}.contextMenu button{min-height:43px;font-size:13px}}
+                @keyframes contextSheetIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+                @media(max-width:390px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info{padding:8px}.name{font-size:12px}.sub{font-size:10px}.actions a,.actions button{font-size:10px}.folderIcon{font-size:26px}.settingsText{display:none}.settingsToggle{padding-inline:8px}}
                 @media(hover:none){.card:hover{transform:none;box-shadow:var(--shadow)}}
+                @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
               </style>
             </head>
             <body>
@@ -219,6 +224,7 @@ object WebPageBuilder {
                       <div class="subtitle">${escapeHtml(subtitle)}</div>
                     </div>
                     <div class="headerActions">
+                      <button class="themeToggle settingsToggle" type="button" onclick="openWebSettings()" aria-label="${escapeHtml(tr.text("web_settings"))}"><span class="settingsIcon">${svgIcon("settings")}</span><span class="settingsText">${escapeHtml(tr.text("web_settings"))}</span></button>
                       <button id="themeToggle" class="themeToggle" type="button" onclick="cycleTheme()">${escapeHtml(tr.text("web_theme_auto"))}</button>
                       <div class="badge"><span class="syncDot"></span><span id="syncState">${escapeHtml(tr.text("web_live"))}</span></div>
                     </div>
@@ -238,7 +244,10 @@ object WebPageBuilder {
                 $clipboardPanel
 
                 <section class="toolbar">
-                  <input id="search" class="control" type="search" placeholder="${escapeHtml(tr.text("web_search"))}" oninput="applyFilters()">
+                  <div class="searchBox">
+                    <input id="search" class="control" type="search" placeholder="${escapeHtml(tr.text("web_search"))}" oninput="applyFilters()">
+                    <button id="clearSearch" class="clearSearch hidden" type="button" onclick="clearSearchNow()" aria-label="${escapeHtml(tr.text("web_clear_search"))}">×</button>
+                  </div>
                   <select id="sort" class="control" onchange="applyFilters()">
                     <option value="name">${escapeHtml(tr.text("web_sort_name"))}</option>
                     <option value="time-desc">${escapeHtml(tr.text("web_sort_newest"))}</option>
@@ -257,6 +266,7 @@ object WebPageBuilder {
                 <section id="items" class="items grid">
                   $itemsHtml
                 </section>
+                <div id="emptySearch" class="empty hidden">${escapeHtml(tr.text("web_no_search_results"))}</div>
               </main>
 
               <div id="connectionBanner" class="connectionBanner">${escapeHtml(tr.text("web_connecting"))}</div>
@@ -273,6 +283,16 @@ object WebPageBuilder {
                     <button id="dialogCancel" class="secondary" type="button">${escapeHtml(tr.text("web_cancel"))}</button>
                     <button id="dialogOk" class="primary" type="button">${escapeHtml(tr.text("web_ok"))}</button>
                   </div>
+                </div>
+              </div>
+
+              <div id="managerModal" class="managerModal" onclick="managerBackdrop(event)">
+                <div class="managerPanel">
+                  <div class="managerHeader">
+                    <div id="managerTitle" class="modalTitle">${escapeHtml(tr.text("web_file_management"))}</div>
+                    <button class="iconBtn" type="button" onclick="closeManagerModal()">${escapeHtml(tr.text("web_close"))}</button>
+                  </div>
+                  <div id="managerBody" class="managerBody"></div>
                 </div>
               </div>
 
@@ -304,14 +324,47 @@ object WebPageBuilder {
                 const DIRECTORY_MODE = ${directoryMode};
                 const REMOTE_MANAGEMENT = ${remoteManagementEnabled};
                 const CLIPBOARD_SYNC = ${clipboardSyncEnabled};
-                const DELETE_TO_TRASH_DEFAULT = ${deleteToTrashByDefault};
                 let liveEvents = null;
                 let livePollTimer = null;
                 let clipboardPollTimer = null;
                 let consecutiveFailures = 0;
                 let wasDisconnected = false;
                 let bannerTimer = null;
+                let hasActiveTransfers = false;
                 let selectedUploadEntries = [];
+                const DEFAULT_WEB_SETTINGS = {
+                  uploadParallel: 3,
+                  smallDownloadBytes: 16 * 1024 * 1024,
+                  downloadParallel: 3
+                };
+                let webSettings = loadWebSettings();
+
+                function loadWebSettings(){
+                  try{
+                    const stored = JSON.parse(localStorage.getItem('speedshare-web-settings') || '{}');
+                    return {
+                      uploadParallel: boundedSetting(stored.uploadParallel,DEFAULT_WEB_SETTINGS.uploadParallel,1,6),
+                      smallDownloadBytes: boundedSetting(stored.smallDownloadBytes,DEFAULT_WEB_SETTINGS.smallDownloadBytes,0,64 * 1024 * 1024),
+                      downloadParallel: boundedSetting(stored.downloadParallel,DEFAULT_WEB_SETTINGS.downloadParallel,1,6)
+                    };
+                  }catch(_){
+                    return Object.assign({},DEFAULT_WEB_SETTINGS);
+                  }
+                }
+
+                function boundedSetting(value,fallback,min,max){
+                  const parsed = Number(value);
+                  return Number.isFinite(parsed) ? Math.min(max,Math.max(min,parsed)) : fallback;
+                }
+
+                function saveWebSettings(next){
+                  webSettings = {
+                    uploadParallel: boundedSetting(next.uploadParallel,DEFAULT_WEB_SETTINGS.uploadParallel,1,6),
+                    smallDownloadBytes: boundedSetting(next.smallDownloadBytes,DEFAULT_WEB_SETTINGS.smallDownloadBytes,0,64 * 1024 * 1024),
+                    downloadParallel: boundedSetting(next.downloadParallel,DEFAULT_WEB_SETTINGS.downloadParallel,1,6)
+                  };
+                  localStorage.setItem('speedshare-web-settings',JSON.stringify(webSettings));
+                }
 
                 function applyTheme(mode){
                   const selected = ['light','dark','auto'].includes(mode) ? mode : 'auto';
@@ -372,6 +425,7 @@ object WebPageBuilder {
                   document.getElementById('liveDownload').textContent = formatSpeed(data.downloadBytesPerSecond || 0);
                   document.getElementById('liveUpload').textContent = formatSpeed(data.uploadBytesPerSecond || 0);
                   const transfers = Array.isArray(data.activeTransfers) ? data.activeTransfers : [];
+                  hasActiveTransfers = transfers.length > 0;
                   document.getElementById('liveTaskCount').textContent = String(transfers.length);
                   const panel = document.getElementById('liveTransfers');
                   panel.classList.toggle('active',transfers.length > 0);
@@ -392,10 +446,35 @@ object WebPageBuilder {
                 }
 
                 let dialogResolve = null;
+                let dialogReturnFocus = null;
+                let modalReturnFocus = null;
+                let managerReturnFocus = null;
+
+                function syncBodyLock(){
+                  const locked=['dialogModal','modal','managerModal'].some(function(id){
+                    const element=document.getElementById(id);return element && element.classList.contains('open');
+                  });
+                  document.body.style.overflow=locked?'hidden':'';
+                }
+
+                function restoreFocus(element){
+                  if(element && element.isConnected && typeof element.focus==='function')setTimeout(function(){element.focus();},0);
+                }
+
+                function trapFocus(event,root){
+                  if(event.key!=='Tab' || !root)return;
+                  const focusable=Array.from(root.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')).filter(function(item){return item.offsetParent!==null;});
+                  if(focusable.length===0)return;
+                  const first=focusable[0],last=focusable[focusable.length-1];
+                  if(event.shiftKey && document.activeElement===first){event.preventDefault();last.focus();}
+                  else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first.focus();}
+                }
+
                 function closeDialog(result){
                   const modal = document.getElementById('dialogModal');
                   if(modal) modal.classList.remove('open');
-                  document.body.style.overflow = '';
+                  syncBodyLock();
+                  restoreFocus(dialogReturnFocus);dialogReturnFocus=null;
                   if(dialogResolve){
                     const resolve = dialogResolve;
                     dialogResolve = null;
@@ -409,6 +488,7 @@ object WebPageBuilder {
 
                 function openDialog(options){
                   return new Promise(function(resolve){
+                    dialogReturnFocus=document.activeElement;
                     dialogResolve = resolve;
                     const modal = document.getElementById('dialogModal');
                     const title = document.getElementById('dialogTitle');
@@ -438,7 +518,7 @@ object WebPageBuilder {
                       closeDialog(options.choices ? select.value : (options.input ? input.value : true));
                     };
                     modal.classList.add('open');
-                    document.body.style.overflow = 'hidden';
+                    syncBodyLock();
                     setTimeout(function(){(options.input ? input : (options.choices ? select : ok)).focus();},30);
                   });
                 }
@@ -462,17 +542,21 @@ object WebPageBuilder {
                       showConnectionBanner(t('web_wait_server'),'error',true);
                     }
                   }finally{
-                    livePollTimer = setTimeout(pollLiveStatus,700);
+                    const nextPollDelay = document.hidden ? 5000 : (hasActiveTransfers ? 700 : 2000);
+                    livePollTimer = setTimeout(pollLiveStatus,nextPollDelay);
                   }
                 }
 
                 const container = document.getElementById('items');
                 let previewItems = [];
                 let previewIndex = -1;
-                let droppedUploadFiles = [];
-                let currentUploadXhr = null;
+                let lastSelectedCard = null;
+                let currentUploadXhrs = new Set();
                 let uploadCancelled = false;
+                let uploadInProgress = false;
                 let failedUploadEntries = [];
+                let lastUploadEntries = [];
+                let lastUploadQueueRenderAt = 0;
 
                 function setView(mode){
                   const chosen = mode === 'list' ? 'list' : 'grid';
@@ -484,8 +568,13 @@ object WebPageBuilder {
                 }
 
                 function applyFilters(){
-                  const query = (document.getElementById('search').value || '').trim().toLocaleLowerCase();
-                  const sort = document.getElementById('sort').value;
+                  const search = document.getElementById('search');
+                  const sortSelect = document.getElementById('sort');
+                  const query = (search.value || '').trim().toLocaleLowerCase();
+                  const sort = sortSelect.value;
+                  localStorage.setItem('speedshare-sort',sort);
+                  const clearButton = document.getElementById('clearSearch');
+                  if(clearButton) clearButton.classList.toggle('hidden',query.length === 0);
                   const children = Array.from(container.querySelectorAll('.item'));
 
                   children.sort(function(a,b){
@@ -500,14 +589,26 @@ object WebPageBuilder {
                   });
 
                   let visible = 0;
+                  const fragment = document.createDocumentFragment();
                   children.forEach(function(item){
-                    container.appendChild(item);
+                    fragment.appendChild(item);
                     const match = String(item.dataset.name || '').toLocaleLowerCase().includes(query);
                     item.classList.toggle('hidden',!match);
                     if(match) visible++;
                   });
+                  container.appendChild(fragment);
                   document.getElementById('visibleCount').textContent = t('web_visible',visible);
+                  const emptySearch = document.getElementById('emptySearch');
+                  if(emptySearch) emptySearch.classList.toggle('hidden',visible > 0 || query.length === 0);
                   refreshPreviewItems();
+                }
+
+                function clearSearchNow(){
+                  const search = document.getElementById('search');
+                  if(!search) return;
+                  search.value = '';
+                  applyFilters();
+                  search.focus();
                 }
 
                 function refreshPreviewItems(){
@@ -516,7 +617,32 @@ object WebPageBuilder {
                   });
                 }
 
-                function handleFile(element){
+                function selectWithModifier(event,card){
+                  if(!event || !(event.ctrlKey || event.metaKey || event.shiftKey))return false;
+                  event.preventDefault();event.stopPropagation();
+                  const check=card.querySelector('.itemCheck');
+                  if(!check)return true;
+                  if(event.shiftKey && lastSelectedCard){
+                    const visible=Array.from(container.querySelectorAll('.item:not(.hidden)'));
+                    const start=visible.indexOf(lastSelectedCard),end=visible.indexOf(card);
+                    if(start>=0 && end>=0){
+                      if(!(event.ctrlKey || event.metaKey))clearSelection(true);
+                      const from=Math.min(start,end),to=Math.max(start,end);
+                      visible.slice(from,to+1).forEach(function(item){const itemCheck=item.querySelector('.itemCheck');if(itemCheck)itemCheck.checked=true;});
+                    }else check.checked=true;
+                  }else{
+                    check.checked=!check.checked;
+                  }
+                  lastSelectedCard=card;selectionChanged();
+                  return true;
+                }
+
+                function handleFolderClick(event,element){
+                  selectWithModifier(event,element);
+                }
+
+                function handleFile(element,event){
+                  if(selectWithModifier(event,element))return;
                   if(element.dataset.kind === 'download'){
                     location.href = element.dataset.downloadUrl;
                     return;
@@ -562,7 +688,19 @@ object WebPageBuilder {
                       media.addEventListener('error',function(){
                         const message=document.createElement('div');
                         message.className='empty';
-                        message.textContent=t('web_media_load_failed');
+                        const title=document.createElement('div');
+                        title.textContent=t('web_media_load_failed');
+                        const help=document.createElement('div');
+                        help.className='managerMeta';
+                        help.textContent=t('web_media_load_help');
+                        const link=document.createElement('a');
+                        link.className='emptyAction';
+                        link.href=item.dataset.downloadUrl;
+                        link.download=item.dataset.name || 'download';
+                        link.textContent=t('web_download_original');
+                        message.appendChild(title);
+                        message.appendChild(help);
+                        message.appendChild(link);
                         viewer.replaceChildren(message);
                       });
                     }
@@ -574,8 +712,10 @@ object WebPageBuilder {
                   const download = document.getElementById('modalDownload');
                   download.href = item.dataset.downloadUrl;
                   download.setAttribute('download',item.dataset.name || 'download');
-                  document.getElementById('modal').classList.add('open');
-                  document.body.style.overflow = 'hidden';
+                  const previewModal=document.getElementById('modal');
+                  if(!previewModal.classList.contains('open'))modalReturnFocus=document.activeElement;
+                  previewModal.classList.add('open');
+                  syncBodyLock();
                 }
 
                 function movePreview(delta){
@@ -589,7 +729,8 @@ object WebPageBuilder {
                 function closeModal(){
                   document.getElementById('modal').classList.remove('open');
                   document.getElementById('viewer').replaceChildren();
-                  document.body.style.overflow = '';
+                  syncBodyLock();
+                  restoreFocus(modalReturnFocus);modalReturnFocus=null;
                 }
 
                 function modalBackdrop(event){
@@ -600,6 +741,21 @@ object WebPageBuilder {
                   const dialogOpen = document.getElementById('dialogModal').classList.contains('open');
                   if(dialogOpen){
                     if(event.key === 'Escape') closeDialog(null);
+                    trapFocus(event,document.getElementById('dialogModal'));
+                    return;
+                  }
+                  const contextMenu=document.getElementById('contextMenu');
+                  if(contextMenu && contextMenu.classList.contains('open')){
+                    if(event.key==='Escape'){closeContextMenu();restoreFocus(contextMenuCard);}
+                    if(event.key==='ArrowDown'){event.preventDefault();moveContextMenuFocus(1);}
+                    if(event.key==='ArrowUp'){event.preventDefault();moveContextMenuFocus(-1);}
+                    trapFocus(event,contextMenu);
+                    return;
+                  }
+                  const managerModal=document.getElementById('managerModal');
+                  if(managerModal && managerModal.classList.contains('open')){
+                    if(event.key==='Escape')closeManagerModal();
+                    trapFocus(event,managerModal);
                     return;
                   }
                   const modalOpen = document.getElementById('modal').classList.contains('open');
@@ -607,6 +763,7 @@ object WebPageBuilder {
                   if(event.key === 'Escape') closeModal();
                   if(event.key === 'ArrowLeft') movePreview(-1);
                   if(event.key === 'ArrowRight') movePreview(1);
+                  trapFocus(event,document.getElementById('modal'));
                 });
 
                 function humanBytes(value){
@@ -700,17 +857,14 @@ object WebPageBuilder {
                     const status = document.getElementById('uploadStatus');
                     if(status) status.textContent = t('web_loading');
                     selectedUploadEntries = await readDroppedUploadEntries(event.dataTransfer);
-                    droppedUploadFiles = selectedUploadEntries.map(function(entry){return entry.file;});
                     updateUploadSelection();
                   });
                   input.addEventListener('change',function(){
-                    droppedUploadFiles = [];
                     selectedUploadEntries = Array.from(input.files || []).map(function(file){return {file:file,path:file.name};});
                     updateUploadSelection();
                   });
                   if(folderInput){
                     folderInput.addEventListener('change',function(){
-                      droppedUploadFiles = [];
                       selectedUploadEntries = Array.from(folderInput.files || []).map(function(file){return {file:file,path:file.webkitRelativePath || file.name};});
                       updateUploadSelection();
                     });
@@ -724,16 +878,19 @@ object WebPageBuilder {
                 }
 
                 function getUploadEntries(){
-                  if(selectedUploadEntries.length > 0) return selectedUploadEntries.map(function(entry){
+                  return selectedUploadEntries.map(function(entry){
                     return {file:entry.file,path:safeUploadPath(entry.path || entry.file.name)};
                   }).filter(function(entry){return entry.path;});
-                  return getUploadFiles().map(function(file){return {file:file,path:file.name};});
                 }
 
-                function getUploadFiles(){
-                  const input = document.getElementById('uploadFiles');
-                  if(droppedUploadFiles.length > 0) return droppedUploadFiles;
-                  return input ? Array.from(input.files || []) : [];
+                function removeUploadEntry(index){
+                  if(uploadInProgress || index < 0 || index >= selectedUploadEntries.length)return;
+                  selectedUploadEntries.splice(index,1);
+                  const fileInput=document.getElementById('uploadFiles');
+                  const folderInput=document.getElementById('uploadFolder');
+                  if(fileInput)fileInput.value='';
+                  if(folderInput)folderInput.value='';
+                  updateUploadSelection();
                 }
 
                 function updateUploadSelection(){
@@ -741,7 +898,7 @@ object WebPageBuilder {
                   const entries = getUploadEntries();
                   if(status){
                     status.className = 'uploadStatus';
-                    status.textContent = t('web_selected_count',entries.length);
+                    status.textContent = entries.length > 0 ? t('web_selected_count',entries.length) : t('web_no_files_selected');
                   }
                   renderUploadQueue(entries,entries.map(function(){return 'waiting';}));
                   setUploadProgress(0);
@@ -758,7 +915,7 @@ object WebPageBuilder {
                   return t('web_queue_' + state);
                 }
 
-                function renderUploadQueue(entries,states){
+                function renderUploadQueue(entries,states,percents){
                   const queue = document.getElementById('uploadQueue');
                   if(!queue) return;
                   queue.replaceChildren();
@@ -771,94 +928,81 @@ object WebPageBuilder {
                     name.textContent = entry.path || entry.file.name;
                     const status = document.createElement('div');
                     status.className = 'uploadQueueState';
-                    status.textContent = queueLabel(state);
+                    const percent = Math.max(0,Math.min(100,Number((percents || [])[index] || 0)));
+                    status.textContent = queueLabel(state) + (state === 'uploading' ? ' ' + Math.round(percent) + '%' : '');
+                    if(state === 'failed'){
+                      const retry = document.createElement('button');
+                      retry.className = 'uploadQueueRetry';
+                      retry.type = 'button';
+                      retry.textContent = t('web_retry_failed');
+                      retry.addEventListener('click',function(){retryUploadItem(index);});
+                      status.appendChild(retry);
+                    }else if(state === 'waiting' && !uploadInProgress){
+                      const remove = document.createElement('button');
+                      remove.className = 'uploadQueueRetry';
+                      remove.type = 'button';
+                      remove.textContent = t('web_remove_file');
+                      remove.addEventListener('click',function(){removeUploadEntry(index);});
+                      status.appendChild(remove);
+                    }
                     item.appendChild(name);
                     item.appendChild(status);
                     queue.appendChild(item);
                   });
                 }
 
+                function retryUploadItem(index){
+                  const entry = lastUploadEntries[index];
+                  if(!entry) return;
+                  failedUploadEntries = [entry];
+                  uploadFilesNow(true);
+                }
+
                 function cancelUploadQueue(){
                   uploadCancelled = true;
-                  if(currentUploadXhr) currentUploadXhr.abort();
+                  currentUploadXhrs.forEach(function(xhr){xhr.abort();});
                 }
 
-                function ensureUploadId(entry){
-                  if(!entry.uploadId){
-                    entry.uploadId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
-                  }
-                  return entry.uploadId;
-                }
-
-                async function getUploadOffset(entry){
-                  const uploadId = ensureUploadId(entry);
-                  const response = await fetch('/api/upload-status?id=' + encodeURIComponent(uploadId),{cache:'no-store'});
-                  if(!response.ok) return 0;
-                  const data = await response.json();
-                  return Math.max(0,Number(data.offset || 0));
-                }
-
-                function uploadChunk(entry,index,total,chunk,offset,fileSize,finalChunk,onProgress){
+                function uploadOne(entry,index,total,onProgress){
                   return new Promise(function(resolve,reject){
                     const file = entry.file;
                     const xhr = new XMLHttpRequest();
-                    currentUploadXhr = xhr;
+                    currentUploadXhrs.add(xhr);
                     const directory = document.getElementById('uploadDirectory').value;
                     const uploadName = entry.path || file.name;
-                    const url = '/upload?path=' + encodeURIComponent(directory) +
-                      '&name=' + encodeURIComponent(uploadName) +
-                      '&uploadId=' + encodeURIComponent(ensureUploadId(entry)) +
-                      '&offset=' + encodeURIComponent(offset) +
-                      '&total=' + encodeURIComponent(fileSize) +
-                      '&final=' + (finalChunk ? '1' : '0');
+                    const url = '/upload?path=' + encodeURIComponent(directory) + '&name=' + encodeURIComponent(uploadName);
                     const started = performance.now();
+                    let lastStatusRenderAt = 0;
                     xhr.open('POST',url);
                     xhr.setRequestHeader('Content-Type','application/octet-stream');
                     xhr.upload.onprogress = function(event){
                       if(!event.lengthComputable) return;
                       const seconds = Math.max((performance.now() - started) / 1000,0.001);
                       const speed = event.loaded / seconds;
-                      const absoluteLoaded = Math.min(fileSize,offset + event.loaded);
-                      const percent = fileSize > 0 ? Math.round(absoluteLoaded * 100 / fileSize) : 100;
-                      if(onProgress) onProgress(absoluteLoaded,fileSize);
-                      document.getElementById('uploadStatus').textContent =
-                        t('web_upload_file_progress',index+1,total,uploadName,percent,humanBytes(speed));
+                      const percent = Math.round(event.loaded * 100 / event.total);
+                      if(onProgress) onProgress(event.loaded,event.total);
+                      const now = performance.now();
+                      if(now - lastStatusRenderAt >= 120 || event.loaded >= event.total){
+                        lastStatusRenderAt = now;
+                        document.getElementById('uploadStatus').textContent =
+                          t('web_upload_file_progress',index+1,total,uploadName,percent,humanBytes(speed));
+                      }
                     };
                     xhr.onload = function(){
-                      currentUploadXhr = null;
+                      currentUploadXhrs.delete(xhr);
                       if(xhr.status >= 200 && xhr.status < 300) resolve();
                       else reject(new Error(xhr.responseText || ('HTTP ' + xhr.status)));
                     };
                     xhr.onerror = function(){
-                      currentUploadXhr = null;
+                      currentUploadXhrs.delete(xhr);
                       reject(new Error(t('web_network_failed')));
                     };
                     xhr.onabort = function(){
-                      currentUploadXhr = null;
+                      currentUploadXhrs.delete(xhr);
                       reject(new Error(t('web_upload_cancelled')));
                     };
-                    xhr.send(chunk);
+                    xhr.send(file);
                   });
-                }
-
-                async function uploadOne(entry,index,total,onProgress){
-                  const file = entry.file;
-                  const chunkSize = 256 * 1024 * 1024;
-                  let offset = await getUploadOffset(entry);
-                  if(offset > file.size) offset = 0;
-                  if(onProgress) onProgress(offset,file.size);
-                  if(offset === file.size){
-                    await uploadChunk(entry,index,total,file.slice(file.size,file.size),offset,file.size,true,onProgress);
-                    return;
-                  }
-                  while(offset < file.size){
-                    if(uploadCancelled) throw new Error(t('web_upload_cancelled'));
-                    const end = Math.min(offset + chunkSize,file.size);
-                    const finalChunk = end >= file.size;
-                    await uploadChunk(entry,index,total,file.slice(offset,end),offset,file.size,finalChunk,onProgress);
-                    offset = end;
-                    if(onProgress) onProgress(offset,file.size);
-                  }
                 }
 
                 async function uploadFilesNow(retryFailed){
@@ -873,41 +1017,65 @@ object WebPageBuilder {
                   }
                   const cancelButton = document.getElementById('cancelUpload');
                   const retryButton = document.getElementById('retryUpload');
+                  const startButton = document.getElementById('uploadStartButton');
                   const states = entries.map(function(){return 'waiting';});
+                  const percents = entries.map(function(){return 0;});
                   const totalBytes = entries.reduce(function(sum,entry){return sum + (entry.file.size || 0);},0);
-                  let completedBytes = 0;
+                  const loadedBytes = entries.map(function(){return 0;});
+                  const maxParallelUploads = Math.min(webSettings.uploadParallel,entries.length);
+                  let nextUploadIndex = 0;
                   uploadCancelled = false;
+                  uploadInProgress = true;
                   failedUploadEntries = [];
+                  lastUploadEntries = entries.slice();
                   if(cancelButton) cancelButton.style.display = '';
                   if(retryButton) retryButton.style.display = 'none';
-                  renderUploadQueue(entries,states);
+                  if(startButton){startButton.disabled = true;startButton.textContent = t('web_uploading');}
+                  renderUploadQueue(entries,states,percents);
                   setUploadProgress(0);
                   try{
                     status.className = 'uploadStatus';
-                    for(let i = 0;i < entries.length;i++){
-                      if(uploadCancelled){
-                        states[i] = 'cancelled';
-                        failedUploadEntries.push(entries[i]);
-                        continue;
+                    async function runUploadWorker(){
+                      while(!uploadCancelled){
+                        const i = nextUploadIndex++;
+                        if(i >= entries.length) return;
+                        states[i] = 'uploading';
+                        renderUploadQueue(entries,states,percents);
+                        try{
+                          await uploadOne(entries[i],i,entries.length,function(loaded,total){
+                            loadedBytes[i] = loaded;
+                            percents[i] = total > 0 ? loaded * 100 / total : 0;
+                            const loadedTotal = loadedBytes.reduce(function(sum,value){return sum + value;},0);
+                            setUploadProgress(totalBytes > 0 ? (loadedTotal * 100 / totalBytes) : 0);
+                            const now = performance.now();
+                            if(now - lastUploadQueueRenderAt >= 120){
+                              lastUploadQueueRenderAt = now;
+                              renderUploadQueue(entries,states,percents);
+                            }
+                          });
+                          loadedBytes[i] = entries[i].file.size || loadedBytes[i];
+                          percents[i] = 100;
+                          states[i] = 'done';
+                          renderUploadQueue(entries,states,percents);
+                          const loadedTotal = loadedBytes.reduce(function(sum,value){return sum + value;},0);
+                          setUploadProgress(totalBytes > 0 ? (loadedTotal * 100 / totalBytes) : 100);
+                        }catch(error){
+                          states[i] = uploadCancelled ? 'cancelled' : 'failed';
+                          failedUploadEntries.push(entries[i]);
+                          renderUploadQueue(entries,states,percents);
+                        }
                       }
-                      states[i] = 'uploading';
-                      renderUploadQueue(entries,states);
-                      let currentLoaded = 0;
-                      try{
-                        await uploadOne(entries[i],i,entries.length,function(loaded,total){
-                          currentLoaded = loaded;
-                          setUploadProgress(totalBytes > 0 ? ((completedBytes + loaded) * 100 / totalBytes) : 0);
-                        });
-                        completedBytes += entries[i].file.size || currentLoaded;
-                        states[i] = 'done';
-                        renderUploadQueue(entries,states);
-                        setUploadProgress(totalBytes > 0 ? (completedBytes * 100 / totalBytes) : ((i + 1) * 100 / entries.length));
-                      }catch(error){
-                        states[i] = uploadCancelled ? 'cancelled' : 'failed';
-                        failedUploadEntries.push(entries[i]);
-                        renderUploadQueue(entries,states);
-                        if(!uploadCancelled) continue;
-                      }
+                    }
+                    const workers = Array.from({length:maxParallelUploads},function(){return runUploadWorker();});
+                    await Promise.all(workers);
+                    if(uploadCancelled){
+                      entries.forEach(function(entry,index){
+                        if(states[index] === 'waiting'){
+                          states[index] = 'cancelled';
+                          failedUploadEntries.push(entry);
+                        }
+                      });
+                      renderUploadQueue(entries,states,percents);
                     }
                     if(failedUploadEntries.length > 0){
                       status.textContent = uploadCancelled ? t('web_upload_cancelled') : t('web_upload_failed_count',failedUploadEntries.length);
@@ -918,13 +1086,15 @@ object WebPageBuilder {
                     status.textContent = t('web_upload_done');
                     status.className = 'uploadStatus success';
                     setUploadProgress(100);
-                    setTimeout(function(){ location.reload(); },2200);
+                    status.innerHTML = escapeText(t('web_upload_done')) + ' <button class="uploadQueueRetry" type="button" onclick="location.reload()">' + escapeText(t('web_refresh_now')) + '</button>';
                   }catch(error){
                     status.textContent = t('web_upload_failed',error.message);
                     status.className = 'uploadStatus error';
                   }finally{
-                    currentUploadXhr = null;
+                    uploadInProgress = false;
+                    currentUploadXhrs.clear();
                     if(cancelButton) cancelButton.style.display = 'none';
+                    if(startButton){startButton.disabled = false;startButton.textContent = t('web_start_upload');}
                   }
                 }
 
@@ -936,7 +1106,8 @@ object WebPageBuilder {
                   return selectedCards().map(function(card){return card.dataset.path || '';}).filter(Boolean);
                 }
 
-                function selectionChanged(){
+                function selectionChanged(anchor){
+                  if(anchor)lastSelectedCard=anchor;
                   const cards = Array.from(document.querySelectorAll('.item'));
                   cards.forEach(function(card){
                     const check = card.querySelector('.itemCheck');
@@ -949,8 +1120,9 @@ object WebPageBuilder {
                   if(bar) bar.classList.toggle('hidden',count === 0);
                 }
 
-                function clearSelection(){
+                function clearSelection(keepAnchor){
                   document.querySelectorAll('.itemCheck').forEach(function(check){check.checked=false;});
+                  if(!keepAnchor)lastSelectedCard=null;
                   selectionChanged();
                 }
 
@@ -961,6 +1133,10 @@ object WebPageBuilder {
                   selectionChanged();
                 }
 
+                container.addEventListener('click',function(event){
+                  if(event.target===container)clearSelection();
+                });
+
                 async function apiPost(url, lines){
                   const body = (lines || []).map(function(value){return encodeURIComponent(value);}).join('\n');
                   const response = await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body});
@@ -968,6 +1144,35 @@ object WebPageBuilder {
                   if(!response.ok) throw new Error(text || ('HTTP ' + response.status));
                   if(!text) return {};
                   try{return JSON.parse(text);}catch(_){return {text:text};}
+                }
+
+                function openWebSettings(){
+                  openManagerModal(t('web_settings'));
+                  const body=document.getElementById('managerBody');
+                  body.innerHTML =
+                    '<div class="managerRow"><div class="managerRowMain"><div class="managerName">'+escapeText(t('web_settings_upload_parallel'))+'</div><div class="managerMeta">'+escapeText(t('web_settings_upload_parallel_hint'))+'</div></div><select id="settingUploadParallel" class="control"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select></div>' +
+                    '<div class="managerRow"><div class="managerRowMain"><div class="managerName">'+escapeText(t('web_settings_download_threshold'))+'</div><div class="managerMeta">'+escapeText(t('web_settings_download_threshold_hint'))+'</div></div><select id="settingDownloadThreshold" class="control"><option value="1048576">1 MB</option><option value="8388608">8 MB</option><option value="16777216">16 MB</option><option value="67108864">64 MB</option><option value="0">'+escapeText(t('web_settings_disable_parallel_download'))+'</option></select></div>' +
+                    '<div class="managerRow"><div class="managerRowMain"><div class="managerName">'+escapeText(t('web_settings_download_parallel'))+'</div><div class="managerMeta">'+escapeText(t('web_settings_download_parallel_hint'))+'</div></div><select id="settingDownloadParallel" class="control"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="6">6</option></select></div>' +
+                    '<div class="managerActions" style="justify-content:flex-end;margin-top:12px"><button onclick="resetWebSettings()">'+escapeText(t('web_reset_settings'))+'</button><button onclick="saveWebSettingsFromPanel()">'+escapeText(t('web_save_settings'))+'</button></div>';
+                  document.getElementById('settingUploadParallel').value=String(webSettings.uploadParallel);
+                  document.getElementById('settingDownloadThreshold').value=String(webSettings.smallDownloadBytes);
+                  document.getElementById('settingDownloadParallel').value=String(webSettings.downloadParallel);
+                }
+
+                function saveWebSettingsFromPanel(){
+                  saveWebSettings({
+                    uploadParallel: document.getElementById('settingUploadParallel').value,
+                    smallDownloadBytes: document.getElementById('settingDownloadThreshold').value,
+                    downloadParallel: document.getElementById('settingDownloadParallel').value
+                  });
+                  closeManagerModal();
+                  showConnectionBanner(t('web_settings_saved'),'ok',false);
+                }
+
+                function resetWebSettings(){
+                  saveWebSettings(Object.assign({},DEFAULT_WEB_SETTINGS));
+                  openWebSettings();
+                  showConnectionBanner(t('web_settings_reset'),'ok',false);
                 }
 
                 async function sendClipboardToPhone(){
@@ -1004,14 +1209,20 @@ object WebPageBuilder {
                 function downloadSelectedSeparately(){
                   const cards = selectedCards().filter(function(card){return card.dataset.dir !== '1';});
                   if(cards.length === 0){alert(t('web_select_file_zip_folder'));return;}
+                  const smallThreshold = Number(webSettings.smallDownloadBytes || 0);
+                  const parallel = Math.max(1,Number(webSettings.downloadParallel || 3));
                   cards.forEach(function(card,index){
+                    const size = Number(card.dataset.size || 0);
+                    const fastLane = smallThreshold > 0 && size > 0 && size <= smallThreshold;
+                    const delay = fastLane ? Math.floor(index / parallel) * 180 : index * 500;
                     setTimeout(function(){
                       const link=document.createElement('a');
                       link.href=card.dataset.downloadUrl || '';
                       link.download=card.dataset.name || '';
                       document.body.appendChild(link);link.click();link.remove();
-                    },index*350);
+                    },delay);
                   });
+                  showConnectionBanner(t('web_downloads_started',cards.length),'ok',false);
                 }
 
                 async function downloadSelectedZip(compress){
@@ -1037,38 +1248,170 @@ object WebPageBuilder {
                     .catch(function(error){alert(t('web_create_failed',error.message));});
                 }
 
-                async function manageOne(card){
+                let contextMenuCard = null;
+                let contextMenuX = 8;
+                let contextMenuY = 8;
+
+                function positionContextMenu(){
+                  const menu=document.getElementById('contextMenu');
+                  if(!menu || !menu.classList.contains('open'))return;
+                  menu.style.left='0px';menu.style.top='0px';
+                  const rect=menu.getBoundingClientRect();
+                  menu.style.left=Math.max(8,Math.min(contextMenuX,window.innerWidth-rect.width-8))+'px';
+                  menu.style.top=Math.max(8,Math.min(contextMenuY,window.innerHeight-rect.height-8))+'px';
+                }
+
+                function openContextMenuAt(card,x,y){
                   if(!REMOTE_MANAGEMENT || !card)return;
-                  const path=card.dataset.path || '';
+                  const menu=document.getElementById('contextMenu');
+                  if(!menu)return;
+                  contextMenuCard=card;
+                  contextMenuX=x;contextMenuY=y;
+                  const isFolder=card.dataset.dir==='1';
+                  menu.querySelectorAll('.contextFileOnly').forEach(function(item){item.classList.toggle('hidden',isFolder);});
+                  menu.querySelectorAll('.contextFolderOnly').forEach(function(item){item.classList.toggle('hidden',!isFolder);});
+                  document.getElementById('contextOpenLabel').textContent=t(isFolder?'web_open':'web_preview');
+                  const more=document.getElementById('contextMore');
+                  if(more)more.classList.add('hidden');
+                  const moreButton=menu.querySelector('[aria-expanded]');
+                  if(moreButton)moreButton.setAttribute('aria-expanded','false');
+                  menu.classList.add('open');
+                  positionContextMenu();
+                  const firstButton=menu.querySelector('button:not(.hidden)');
+                  if(firstButton)firstButton.focus();
+                }
+
+                function openContextMenu(event,card){
+                  event.preventDefault();event.stopPropagation();
+                  openContextMenuAt(card,event.clientX,event.clientY);
+                }
+
+                function openContextMenuFromButton(event,card){
+                  event.preventDefault();event.stopPropagation();
+                  const rect=event.currentTarget.getBoundingClientRect();
+                  openContextMenuAt(card,rect.right-225,rect.bottom+5);
+                }
+
+                function closeContextMenu(){
+                  const menu=document.getElementById('contextMenu');
+                  if(menu)menu.classList.remove('open');
+                }
+
+                function toggleContextMore(button){
+                  const more=document.getElementById('contextMore');
+                  if(!more)return;
+                  const expanded=more.classList.toggle('hidden')===false;
+                  button.setAttribute('aria-expanded',String(expanded));
+                  positionContextMenu();
+                }
+
+                function moveContextMenuFocus(delta){
+                  const menu=document.getElementById('contextMenu');
+                  if(!menu)return;
+                  const buttons=Array.from(menu.querySelectorAll('button')).filter(function(item){return item.offsetParent!==null;});
+                  if(buttons.length===0)return;
+                  const current=buttons.indexOf(document.activeElement);
+                  const base=current>=0?current:(delta>0?-1:0);
+                  const next=(base+delta+buttons.length)%buttons.length;
+                  buttons[next].focus();
+                }
+
+                function selectOnlyCard(card){
+                  const check=card ? card.querySelector('.itemCheck') : null;
+                  if(!check)return false;
+                  clearSelection();check.checked=true;selectionChanged();
+                  return true;
+                }
+
+                async function copyTextValue(value){
+                  try{
+                    if(navigator.clipboard && window.isSecureContext){
+                      await navigator.clipboard.writeText(value);
+                      return;
+                    }
+                    const field=document.createElement('textarea');
+                    field.value=value;field.setAttribute('readonly','');
+                    field.style.position='fixed';field.style.opacity='0';
+                    document.body.appendChild(field);field.select();
+                    const copied=document.execCommand('copy');field.remove();
+                    if(!copied)throw new Error('Clipboard unavailable');
+                  }catch(error){throw error;}
+                }
+
+                async function renameItem(card){
+                  if(!card)return;
                   const name=card.dataset.name || '';
-                  const action=await openDialog({
-                    title:t('web_manage_title'),
-                    message:name,
-                    choices:[
-                      {value:'rename',label:t('web_action_rename')},
-                      {value:'copy',label:t('web_action_copy')},
-                      {value:'move',label:t('web_action_move')},
-                      {value:'trash',label:t('web_action_trash')},
-                      {value:'delete',label:t('web_action_delete')}
-                    ],
-                    choice:DELETE_TO_TRASH_DEFAULT?'trash':'rename'
-                  });
-                  if(!action)return;
-                  const normalized=action.toLowerCase().trim();
-                  if(normalized==='rename'){
-                    const newName=await openDialog({title:t('web_action_rename'),message:t('web_new_name'),input:true,value:name});
-                    if(!newName || newName===name)return;
-                    apiPost('/api/rename?path='+encodeURIComponent(path)+'&name='+encodeURIComponent(newName),[])
-                      .then(function(){location.reload();}).catch(function(error){alert(t('web_rename_failed',error.message));});
+                  const newName=await openDialog({title:t('web_action_rename'),message:t('web_new_name'),input:true,value:name});
+                  if(!newName || newName===name)return;
+                  apiPost('/api/rename?path='+encodeURIComponent(card.dataset.path || '')+'&name='+encodeURIComponent(newName),[])
+                    .then(function(){location.reload();}).catch(function(error){alert(t('web_rename_failed',error.message));});
+                }
+
+                function showItemDetails(card){
+                  if(!card)return;
+                  const isFolder=card.dataset.dir==='1';
+                  const rows=[
+                    [t('web_detail_name'),card.dataset.name || ''],
+                    [t('web_detail_path'),'/' + (card.dataset.path || '')],
+                    [t('web_detail_size'),isFolder?'—':humanBytes(card.dataset.size || 0)],
+                    [t('web_detail_type'),isFolder?t('web_folder'):(card.dataset.type || '')],
+                    [t('web_detail_modified'),new Date(Number(card.dataset.time || 0)).toLocaleString()]
+                  ];
+                  openManagerModal(t('web_details'));
+                  document.getElementById('managerBody').innerHTML=rows.map(function(row){
+                    return '<div class="managerRow"><div class="managerRowMain"><div class="managerMeta">'+escapeText(row[0])+'</div><div class="managerName">'+escapeText(row[1])+'</div></div></div>';
+                  }).join('');
+                }
+
+                async function runContextAction(action){
+                  const card=contextMenuCard;
+                  closeContextMenu();
+                  if(!card)return;
+                  if(action==='open'){
+                    if(card.dataset.dir==='1')location.href=card.href;
+                    else handleFile(card);
                     return;
                   }
-                  const check=card.querySelector('.itemCheck');
-                  if(check){clearSelection();check.checked=true;selectionChanged();}
-                  if(normalized==='copy' || normalized==='move'){startTransferOperation(normalized);return;}
-                  if(normalized==='trash'){deleteSelected(false);return;}
-                  if(normalized==='delete'){deleteSelected(true);return;}
-                  alert(t('web_unsupported_action'));
+                  if(action==='download'){
+                    const link=document.createElement('a');link.href=card.dataset.downloadUrl || '';
+                    link.download=card.dataset.name || '';document.body.appendChild(link);link.click();link.remove();return;
+                  }
+                  if(action==='copy-link'){
+                    try{await copyTextValue(new URL(card.dataset.downloadUrl || '',location.href).href);showConnectionBanner(t('web_link_copied'),'ok',false);}
+                    catch(error){alert(t('web_copy_failed',error.message));}
+                    return;
+                  }
+                  if(action==='copy-name'){
+                    try{await copyTextValue(card.dataset.name || '');showConnectionBanner(t('web_name_copied'),'ok',false);}
+                    catch(error){alert(t('web_copy_failed',error.message));}
+                    return;
+                  }
+                  if(action==='details'){showItemDetails(card);return;}
+                  if(action==='rename'){renameItem(card);return;}
+                  if(!selectOnlyCard(card))return;
+                  if(action==='copy' || action==='move'){startTransferOperation(action);return;}
+                  if(action==='zip'){downloadSelectedZip(false);return;}
+                  if(action==='trash'){deleteSelected(false);return;}
                 }
+
+                function handleCardKey(event,card){
+                  if(REMOTE_MANAGEMENT && (event.key==='ContextMenu' || (event.shiftKey && event.key==='F10'))){
+                    event.preventDefault();
+                    const rect=card.getBoundingClientRect();
+                    openContextMenuAt(card,rect.left+Math.min(36,rect.width/2),rect.top+Math.min(36,rect.height/2));
+                    return;
+                  }
+                  if(card.dataset.dir!=='1' && event.target===card && (event.key==='Enter' || event.key===' ')){
+                    event.preventDefault();handleFile(card);
+                  }
+                }
+
+                document.addEventListener('click',function(event){
+                  const menu=document.getElementById('contextMenu');
+                  if(menu && menu.classList.contains('open') && !menu.contains(event.target))closeContextMenu();
+                });
+                window.addEventListener('resize',closeContextMenu);
+                window.addEventListener('scroll',closeContextMenu,true);
 
                 let pendingTransferKind=null;
                 let destinationPath='';
@@ -1082,10 +1425,19 @@ object WebPageBuilder {
                 }
 
                 function openManagerModal(title){
+                  const modal=document.getElementById('managerModal');
+                  if(!modal)return;
+                  if(!modal.classList.contains('open'))managerReturnFocus=document.activeElement;
                   document.getElementById('managerTitle').textContent=title;
-                  document.getElementById('managerModal').classList.add('open');
+                  modal.classList.add('open');syncBodyLock();
+                  setTimeout(function(){const close=modal.querySelector('.iconBtn');if(close)close.focus();},30);
                 }
-                function closeManagerModal(){document.getElementById('managerModal').classList.remove('open');if(operationPollTimer){clearTimeout(operationPollTimer);operationPollTimer=null;}}
+                function closeManagerModal(){
+                  const modal=document.getElementById('managerModal');if(modal)modal.classList.remove('open');
+                  if(operationPollTimer){clearTimeout(operationPollTimer);operationPollTimer=null;}
+                  syncBodyLock();restoreFocus(managerReturnFocus);managerReturnFocus=null;
+                }
+                function managerBackdrop(event){if(event.target.id==='managerModal')closeManagerModal();}
 
                 async function loadDestination(path){
                   const body=document.getElementById('managerBody');
@@ -1235,6 +1587,8 @@ object WebPageBuilder {
 
                 applyTheme(localStorage.getItem('speedshare-theme') || 'auto');
                 setView(localStorage.getItem('speedshare-view') || 'grid');
+                const savedSort = localStorage.getItem('speedshare-sort');
+                if(savedSort && document.getElementById('sort')) document.getElementById('sort').value = savedSort;
                 applyFilters();
                 installUpload();
                 pollPhoneClipboard();
@@ -1263,20 +1617,25 @@ object WebPageBuilder {
         val details = escapeHtml(
             "${item.displayPath} · ${formatBytes(item.size)} · ${formatDate(item.modifiedAt)} · ${item.mimeType}"
         )
+        val contextMenuAction = if (remoteManagementEnabled) {
+            " oncontextmenu=\"openContextMenu(event,this)\""
+        } else {
+            ""
+        }
         val selector = if (allowSelection) {
-            "<label class=\"selectBox\" onclick=\"event.stopPropagation()\"><input type=\"checkbox\" class=\"itemCheck\" onclick=\"event.stopPropagation()\" onchange=\"selectionChanged()\"><span>✓</span></label>"
+            "<label class=\"selectBox\" onclick=\"event.stopPropagation()\"><input type=\"checkbox\" class=\"itemCheck\" onclick=\"event.stopPropagation()\" onchange=\"selectionChanged(this.closest('.item'))\"><span>✓</span></label>"
         } else {
             ""
         }
 
         if (item.isDirectory) {
             val manageButton = if (remoteManagementEnabled) {
-                "<button class=\"miniManage\" type=\"button\" onclick=\"event.preventDefault();event.stopPropagation();manageOne(this.closest('.item'))\">${escapeHtml(tr.text("web_manage"))}</button>"
+                "<button class=\"miniManage\" type=\"button\" onclick=\"openContextMenuFromButton(event,this.closest('.item'))\">${escapeHtml(tr.text("web_manage"))}</button>"
             } else {
                 ""
             }
             return """
-                <a class="card item folder-card" data-dir="1" data-name="$escapedName" data-path="$escapedPath" data-size="0" data-time="${item.modifiedAt}" data-type="folder" href="${escapeHtml(item.openUrl)}">
+                <a class="card item folder-card" data-dir="1" data-name="$escapedName" data-path="$escapedPath" data-size="0" data-time="${item.modifiedAt}" data-type="folder" data-kind="folder" href="${escapeHtml(item.openUrl)}"$contextMenuAction onclick="handleFolderClick(event,this)" onkeydown="handleCardKey(event,this)">
                   $selector
                   <div class="folderIcon">📁</div>
                   <div class="folderInfo">
@@ -1291,12 +1650,13 @@ object WebPageBuilder {
 
         val thumbnail = if (item.thumbnailUrl != null) {
             """
-                <img loading="lazy" src="${escapeHtml(item.thumbnailUrl)}" alt="$escapedName" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <img loading="lazy" src="${escapeHtml(item.thumbnailUrl)}" alt="$escapedName" onload="this.parentElement.classList.remove('loading')" onerror="this.parentElement.classList.remove('loading');this.style.display='none';this.nextElementSibling.style.display='flex'">
                 <div class="fallback" style="display:none">${iconForName(item.name, item.mimeType)}</div>
             """.trimIndent()
         } else {
             "<div class=\"fallback\">${iconForName(item.name, item.mimeType)}</div>"
         }
+        val thumbnailClass = if (item.thumbnailUrl != null) "thumb loading" else "thumb"
 
         val badge = when (item.previewKind) {
             PreviewKind.VIDEO -> "<div class=\"mediaBadge\">${escapeHtml(tr.text("web_video"))}</div>"
@@ -1311,13 +1671,16 @@ object WebPageBuilder {
             "<button type=\"button\" onclick=\"event.stopPropagation();handleFile(this.closest('.file-card'))\">${escapeHtml(tr.text("web_preview"))}</button>"
         }
         val manageAction = if (remoteManagementEnabled) {
-            "<button type=\"button\" onclick=\"event.stopPropagation();manageOne(this.closest('.file-card'))\">${escapeHtml(tr.text("web_manage"))}</button>"
+            "<button type=\"button\" onclick=\"openContextMenuFromButton(event,this.closest('.file-card'))\">${escapeHtml(tr.text("web_manage"))}</button>"
         } else {
             ""
         }
 
         return """
             <article class="card item file-card"
+                     role="button"
+                     tabindex="0"
+                     aria-label="$escapedName"
                      data-dir="0"
                      data-name="$escapedName"
                      data-path="$escapedPath"
@@ -1328,9 +1691,11 @@ object WebPageBuilder {
                      data-preview-url="${escapeHtml(item.previewUrl.orEmpty())}"
                      data-download-url="${escapeHtml(item.downloadUrl.orEmpty())}"
                      data-details="$details"
-                     onclick="handleFile(this)">
+                     $contextMenuAction
+                     onkeydown="handleCardKey(event,this)"
+                     onclick="handleFile(this,event)">
               $selector
-              <div class="thumb">
+              <div class="$thumbnailClass">
                 $thumbnail
                 $badge
               </div>
@@ -1400,6 +1765,29 @@ object WebPageBuilder {
         } else {
             ""
         }
+        val contextMenu = if (remoteManagementEnabled) {
+            """
+              <div id="contextMenu" class="contextMenu" role="menu" aria-label="${escapeHtml(tr.text("web_manage_title"))}">
+                <button type="button" role="menuitem" onclick="runContextAction('open')"><span class="contextIcon">${svgIcon("open")}</span><span id="contextOpenLabel">${escapeHtml(tr.text("web_open"))}</span></button>
+                <button class="contextFileOnly" type="button" role="menuitem" onclick="runContextAction('download')"><span class="contextIcon">${svgIcon("download")}</span><span>${escapeHtml(tr.text("web_download"))}</span></button>
+                <button class="contextFileOnly" type="button" role="menuitem" onclick="runContextAction('copy-link')"><span class="contextIcon">${svgIcon("link")}</span><span>${escapeHtml(tr.text("web_copy_link"))}</span></button>
+                <button type="button" role="menuitem" onclick="runContextAction('rename')"><span class="contextIcon">${svgIcon("edit")}</span><span>${escapeHtml(tr.text("web_action_rename"))}</span></button>
+                <button type="button" role="menuitem" onclick="runContextAction('move')"><span class="contextIcon">${svgIcon("move")}</span><span>${escapeHtml(tr.text("web_action_move"))}</span></button>
+                <button type="button" role="menuitem" aria-expanded="false" onclick="toggleContextMore(this)"><span class="contextIcon">${svgIcon("more")}</span><span>${escapeHtml(tr.text("web_context_more"))}</span></button>
+                <div id="contextMore" class="contextMore hidden">
+                  <div class="contextSeparator"></div>
+                  <button type="button" role="menuitem" onclick="runContextAction('copy')"><span class="contextIcon">${svgIcon("copy")}</span><span>${escapeHtml(tr.text("web_action_copy"))}</span></button>
+                  <button type="button" role="menuitem" onclick="runContextAction('copy-name')"><span class="contextIcon">${svgIcon("text")}</span><span>${escapeHtml(tr.text("web_copy_name"))}</span></button>
+                  <button class="contextFolderOnly" type="button" role="menuitem" onclick="runContextAction('zip')"><span class="contextIcon">${svgIcon("archive")}</span><span>${escapeHtml(tr.text("web_zip_fast"))}</span></button>
+                  <button type="button" role="menuitem" onclick="runContextAction('details')"><span class="contextIcon">${svgIcon("info")}</span><span>${escapeHtml(tr.text("web_details"))}</span></button>
+                  <div class="contextSeparator"></div>
+                  <button class="danger" type="button" role="menuitem" onclick="runContextAction('trash')"><span class="contextIcon">${svgIcon("trash")}</span><span>${escapeHtml(tr.text("web_action_trash"))}</span></button>
+                </div>
+              </div>
+            """.trimIndent()
+        } else {
+            ""
+        }
 
         return """
           <section class="managementBox">
@@ -1423,15 +1811,7 @@ object WebPageBuilder {
             </div>
           </section>
 
-          <div id="managerModal" class="managerModal">
-            <div class="managerPanel">
-              <div class="managerHeader">
-                <div id="managerTitle" class="modalTitle">${escapeHtml(tr.text("web_file_management"))}</div>
-                <button class="iconBtn" type="button" onclick="closeManagerModal()">${escapeHtml(tr.text("web_close"))}</button>
-              </div>
-              <div id="managerBody" class="managerBody"></div>
-            </div>
-          </div>
+          $contextMenu
         """.trimIndent()
     }
 
@@ -1466,7 +1846,7 @@ object WebPageBuilder {
                     ${escapeHtml(tr.text("web_choose_folder"))}
                     <input id="uploadFolder" type="file" multiple webkitdirectory directory style="display:none">
                   </label>
-                  <button class="primary" type="button" style="flex:1" onclick="uploadFilesNow()">${escapeHtml(tr.text("web_start_upload"))}</button>
+                  <button id="uploadStartButton" class="primary" type="button" style="flex:1" onclick="uploadFilesNow()">${escapeHtml(tr.text("web_start_upload"))}</button>
                 </div>
                 <input id="uploadDirectory" type="hidden" value="${escapeHtml(relativePath)}">
                 <div id="uploadProgress" class="uploadProgress" aria-hidden="true"><span></span></div>
@@ -1502,5 +1882,24 @@ object WebPageBuilder {
         .replace("\"", "\\\"")
         .replace("\n", "\\n")
         .replace("\r", "\\r")
+
+    private fun svgIcon(name: String): String {
+        val body = when (name) {
+            "settings" -> "<circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z\"/>"
+            "open" -> "<path d=\"M14 3h7v7M10 14 21 3M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6\"/>"
+            "download" -> "<path d=\"M12 3v12m0 0 5-5m-5 5-5-5M5 21h14\"/>"
+            "link" -> "<path d=\"M10 13a5 5 0 0 0 7.1.1l2-2a5 5 0 0 0-7.1-7.1l-1.1 1.1M14 11a5 5 0 0 0-7.1-.1l-2 2A5 5 0 0 0 12 20l1.1-1.1\"/>"
+            "edit" -> "<path d=\"M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z\"/>"
+            "move" -> "<path d=\"M5 12h14m-6-6 6 6-6 6\"/>"
+            "more" -> "<circle cx=\"5\" cy=\"12\" r=\"1\"/><circle cx=\"12\" cy=\"12\" r=\"1\"/><circle cx=\"19\" cy=\"12\" r=\"1\"/>"
+            "copy" -> "<rect x=\"8\" y=\"8\" width=\"12\" height=\"12\" rx=\"2\"/><path d=\"M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2\"/>"
+            "text" -> "<path d=\"M4 7V4h16v3M9 20h6M12 4v16\"/>"
+            "archive" -> "<path d=\"M4 7h16v13H4zM3 3h18v4H3zM9 11h6\"/>"
+            "info" -> "<circle cx=\"12\" cy=\"12\" r=\"9\"/><path d=\"M12 11v5m0-8h.01\"/>"
+            "trash" -> "<path d=\"M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6M10 10v6m4-6v6\"/>"
+            else -> ""
+        }
+        return "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">$body</svg>"
+    }
 
 }

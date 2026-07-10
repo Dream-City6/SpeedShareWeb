@@ -4,11 +4,30 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.3.2] - 2026-07-10
+
+### Added
+
+- Add a compact desktop right-click and mobile long-press menu for common file and folder actions, with less-used and destructive actions grouped under More
+- Add file details, copy-name, copy-download-link, keyboard activation, focus restoration, Escape handling, and settings reset controls to the browser interface
+- Add removable pre-upload queue entries and Ctrl/Command/Shift range selection for desktop file management
+- Add regression tests covering managed and read-only context-menu behavior and settings availability on selected-download pages
+
+### Changed
+
+- Keep large upload queues inside a scrollable area and throttle progress rendering to reduce browser work during parallel transfers
+- Reduce status polling while idle or in the background while preserving fast updates during active transfers
+- Keep the browser's native context menu available when remote management is disabled
+- Use consistent SVG action icons, show long-press actions as a mobile bottom sheet, and keep permanent deletion out of the quick menu
+- Improve large-directory rendering with batched DOM updates, off-screen content deferral, and thumbnail loading placeholders
+
 ## [1.3.1] - 2026-07-10
 
 ### Changed
 
-- Tune resumable browser uploads to use larger 256 MB chunks, reduce intermediate disk syncs, and keep transfer progress aligned with the full file offset
+- Replace resumable chunk uploads with direct uploads for better local-network throughput
+- Allow the browser upload queue to send up to three files at the same time
+- Add browser-side settings for upload/download parallelism, clearer upload progress, direct failed-item retry, search clearing, empty search feedback, and more helpful media playback failure guidance
 
 ## [1.3.0] - 2026-07-09
 
