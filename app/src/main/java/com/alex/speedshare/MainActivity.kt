@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -1233,6 +1234,7 @@ private fun SettingsScreen(
         Localization.translator(context, draft.language)
     }
     var portText by remember(initialSettings) { mutableStateOf(initialSettings.preferredPort.toString()) }
+    var passwordText by remember(initialSettings) { mutableStateOf("") }
     var statusText by remember { mutableStateOf("") }
 
     fun saveDraft(updated: SpeedShareSettings) {
@@ -1381,6 +1383,60 @@ private fun SettingsScreen(
                     }
                     CompactSwitchRow(tr.text("copy_after_start"), tr.text("copy_after_start_sub"), draft.copyAddressAfterStart) {
                         saveDraft(draft.copy(copyAddressAfterStart = it))
+                    }
+                }
+
+                SettingsSection(tr.text("access_protection")) {
+                    CompactSwitchRow(
+                        tr.text("access_password"),
+                        tr.text("access_password_sub"),
+                        draft.accessPasswordEnabled
+                    ) { enabled ->
+                        if (!enabled) {
+                            saveDraft(draft.copy(accessPasswordEnabled = false))
+                        } else if (draft.accessPasswordHash.isNotBlank()) {
+                            saveDraft(draft.copy(accessPasswordEnabled = true))
+                        } else {
+                            statusText = tr.text("password_required_first")
+                        }
+                    }
+                    OutlinedTextField(
+                        value = passwordText,
+                        onValueChange = { passwordText = it.take(64) },
+                        label = { Text(tr.text("new_access_password")) },
+                        supportingText = { Text(tr.text("password_plain_http_warning")) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(13.dp)
+                    )
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = {
+                                if (passwordText.length < 4) {
+                                    statusText = tr.text("password_too_short")
+                                } else {
+                                    saveDraft(
+                                        draft.copy(
+                                            accessPasswordEnabled = true,
+                                            accessPasswordHash = AccessPassword.hash(passwordText)
+                                        )
+                                    )
+                                    passwordText = ""
+                                    statusText = tr.text("password_set")
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(tr.text("set_password")) }
+                        OutlinedButton(
+                            onClick = {
+                                passwordText = ""
+                                saveDraft(draft.copy(accessPasswordEnabled = false, accessPasswordHash = ""))
+                                statusText = tr.text("password_removed")
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = draft.accessPasswordHash.isNotBlank()
+                        ) { Text(tr.text("remove_password")) }
                     }
                 }
 

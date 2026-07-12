@@ -19,6 +19,9 @@ import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
 import java.net.StandardSocketOptions
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.UUID
 import java.util.zip.Deflater
@@ -36,6 +39,7 @@ class SpeedShareServer(
     private val remoteManagementEnabled: Boolean,
     private val clipboardSyncEnabled: Boolean,
     private val deleteToTrashByDefault: Boolean,
+    private val accessPasswordHash: String,
     private val language: ResolvedLanguage,
     private val port: Int,
     private val onMetrics: (TransferSnapshot) -> Unit = {},
@@ -64,6 +68,15 @@ class SpeedShareServer(
     )
     private val zipSelections = ConcurrentHashMap<String, ZipSelection>()
     private val selectedZipSelections = ConcurrentHashMap<String, SelectedZipSelection>()
+    private val clientExecutor = ThreadPoolExecutor(
+        4,
+        MAX_CLIENTS,
+        30L,
+        TimeUnit.SECONDS,
+        SynchronousQueue(),
+        { runnable -> Thread(runnable, "SpeedShareWeb-Client").apply { isDaemon = true } },
+        ThreadPoolExecutor.AbortPolicy()
+    )
 
     // 每次服务器实例都会生成新的版本号。浏览器看到新的查询参数后，
     // 会重新请求缩略图和预览文件，而不是继续使用上一轮分享的缓存。
@@ -104,16 +117,20 @@ class SpeedShareServer(
             while (running) {
                 try {
                     val client = channel.accept()
-                    clients.add(client)
-                    transferTracker.setConnectionCount(clients.size)
-                    thread(name = "SpeedShareWeb-Client", isDaemon = true) {
-                        try {
-                            handleClient(client)
-                        } finally {
-                            clients.remove(client)
+                    try {
+                        clientExecutor.execute {
+                            clients.add(client)
                             transferTracker.setConnectionCount(clients.size)
-                            runCatching { client.close() }
+                            try {
+                                handleClient(client)
+                            } finally {
+                                clients.remove(client)
+                                transferTracker.setConnectionCount(clients.size)
+                                runCatching { client.close() }
+                            }
                         }
+                    } catch (_: java.util.concurrent.RejectedExecutionException) {
+                        runCatching { client.close() }
                     }
                 } catch (_: ClosedChannelException) {
                     // stop() 正常关闭监听端口时会进入这里。
@@ -141,6 +158,7 @@ class SpeedShareServer(
             runCatching { client.close() }
         }
         clients.clear()
+        clientExecutor.shutdownNow()
         transferTracker.setConnectionCount(0)
         transferTracker.close()
         fileOperationManager.close()
@@ -162,11 +180,17 @@ class SpeedShareServer(
                     socket.socket().sendBufferSize = 1024 * 1024
                     socket.socket().receiveBufferSize = 1024 * 1024
                     socket.socket().tcpNoDelay = true
+                    socket.socket().soTimeout = HEADER_READ_TIMEOUT_MS
                 } catch (_: Exception) {
                 }
 
                 val input = socket.socket().getInputStream()
                 val request = readHttpRequest(input) ?: return
+                socket.socket().soTimeout = 0
+                if (!isAuthorized(request)) {
+                    sendUnauthorized(socket)
+                    return
+                }
                 val target = parseTarget(request.target)
                 val isGetOrHead = request.method == "GET" || request.method == "HEAD"
 
@@ -417,9 +441,11 @@ class SpeedShareServer(
                     }
 
                     request.method == "POST" && target.path == "/api/operations/cancel" -> {
-                        val id = target.query["id"]?.toLongOrNull()
-                        val ok = id != null && fileOperationManager.requestCancel(id)
-                        sendJsonResponse(socket, request.method, "{\"ok\":$ok}")
+                        requireManagement(socket) {
+                            val id = target.query["id"]?.toLongOrNull()
+                            val ok = id != null && fileOperationManager.requestCancel(id)
+                            sendJsonResponse(socket, request.method, "{\"ok\":$ok}")
+                        }
                     }
 
                     request.method == "POST" && target.path == "/api/zip/prepare" -> {
@@ -950,7 +976,7 @@ class SpeedShareServer(
     }
 
     private fun sendPreparedZip(socket: SocketChannel, method: String, id: String) {
-        val selection = zipSelections[id]
+        val selection = if (method == "HEAD") zipSelections[id] else zipSelections.remove(id)
         if (selection == null) {
             sendTextResponse(socket, "404 Not Found", "ZIP request expired")
             return
@@ -1038,7 +1064,7 @@ class SpeedShareServer(
     }
 
     private fun sendPreparedSelectedZip(socket: SocketChannel, method: String, id: String) {
-        val selection = selectedZipSelections[id]
+        val selection = if (method == "HEAD") selectedZipSelections[id] else selectedZipSelections.remove(id)
         if (selection == null) {
             sendTextResponse(socket, "404 Not Found", "ZIP request expired")
             return
@@ -1644,7 +1670,7 @@ class SpeedShareServer(
                     '\n' -> append("\\n")
                     '\r' -> append("\\r")
                     '\t' -> append("\\t")
-                    else -> append(char)
+                    else -> if (char.code < 0x20) append("\\u%04x".format(char.code)) else append(char)
                 }
             }
         }
@@ -1662,6 +1688,7 @@ class SpeedShareServer(
             append("Content-Type: application/json; charset=utf-8\r\n")
             append("Content-Length: ${body.size}\r\n")
             append("Cache-Control: no-store\r\n")
+            append("X-Content-Type-Options: nosniff\r\n")
             append("Connection: close\r\n")
             append("\r\n")
         }
@@ -1676,6 +1703,9 @@ class SpeedShareServer(
             append("Content-Type: text/html; charset=utf-8\r\n")
             append("Content-Length: ${body.size}\r\n")
             append("Cache-Control: no-store\r\n")
+            append("X-Content-Type-Options: nosniff\r\n")
+            append("Content-Security-Policy: default-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'\r\n")
+            append("Referrer-Policy: no-referrer\r\n")
             append("Connection: close\r\n")
             append("\r\n")
         }
@@ -1696,6 +1726,32 @@ class SpeedShareServer(
 
         writeAll(socket, header.toByteArray(StandardCharsets.US_ASCII))
         writeAll(socket, body)
+    }
+
+    private fun isAuthorized(request: HttpRequest): Boolean {
+        if (accessPasswordHash.isBlank()) return true
+        val password = AccessPassword.passwordFromBasicAuthorization(request.headers["authorization"])
+            ?: return false
+        return AccessPassword.matches(password, accessPasswordHash)
+    }
+
+    private fun sendUnauthorized(socket: SocketChannel) {
+        val body = "Password required".toByteArray(StandardCharsets.UTF_8)
+        val header = buildString {
+            append("HTTP/1.1 401 Unauthorized\r\n")
+            append("WWW-Authenticate: Basic realm=\"SpeedShareWeb\", charset=\"UTF-8\"\r\n")
+            append("Content-Type: text/plain; charset=utf-8\r\n")
+            append("Content-Length: ${body.size}\r\n")
+            append("Cache-Control: no-store\r\n")
+            append("Connection: close\r\n\r\n")
+        }
+        writeAll(socket, header.toByteArray(StandardCharsets.US_ASCII))
+        writeAll(socket, body)
+    }
+
+    private companion object {
+        const val MAX_CLIENTS = 32
+        const val HEADER_READ_TIMEOUT_MS = 15_000
     }
 
     private fun sendEmptyResponse(socket: SocketChannel, status: String) {

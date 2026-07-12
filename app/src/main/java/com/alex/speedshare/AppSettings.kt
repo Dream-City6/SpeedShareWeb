@@ -14,7 +14,9 @@ data class SpeedShareSettings(
     val autoStopMinutes: Int = 0,
     val preferredPort: Int = 9999,
     val autoPortFallback: Boolean = true,
-    val copyAddressAfterStart: Boolean = true
+    val copyAddressAfterStart: Boolean = true,
+    val accessPasswordEnabled: Boolean = false,
+    val accessPasswordHash: String = ""
 )
 
 object AppSettings {
@@ -31,6 +33,8 @@ object AppSettings {
     private const val KEY_PREFERRED_PORT = "preferred_port"
     private const val KEY_AUTO_PORT_FALLBACK = "auto_port_fallback"
     private const val KEY_COPY_ADDRESS_AFTER_START = "copy_address_after_start"
+    private const val KEY_ACCESS_PASSWORD_ENABLED = "access_password_enabled"
+    private const val KEY_ACCESS_PASSWORD_HASH = "access_password_hash"
 
     fun load(context: Context): SpeedShareSettings {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -40,6 +44,7 @@ object AppSettings {
                     ?: ShareMode.WHOLE_STORAGE.name
             )
         }.getOrDefault(ShareMode.WHOLE_STORAGE)
+        val accessPasswordHash = prefs.getString(KEY_ACCESS_PASSWORD_HASH, "").orEmpty()
 
         return SpeedShareSettings(
             language = AppLanguage.fromStored(prefs.getString(KEY_LANGUAGE, AppLanguage.SYSTEM.storedValue)),
@@ -55,7 +60,9 @@ object AppSettings {
             preferredPort = prefs.getInt(KEY_PREFERRED_PORT, 9999)
                 .coerceIn(1024, 65535),
             autoPortFallback = prefs.getBoolean(KEY_AUTO_PORT_FALLBACK, true),
-            copyAddressAfterStart = prefs.getBoolean(KEY_COPY_ADDRESS_AFTER_START, true)
+            copyAddressAfterStart = prefs.getBoolean(KEY_COPY_ADDRESS_AFTER_START, true),
+            accessPasswordEnabled = prefs.getBoolean(KEY_ACCESS_PASSWORD_ENABLED, false) && accessPasswordHash.isNotBlank(),
+            accessPasswordHash = accessPasswordHash
         )
     }
 
@@ -74,6 +81,8 @@ object AppSettings {
             .putInt(KEY_PREFERRED_PORT, settings.preferredPort.coerceIn(1024, 65535))
             .putBoolean(KEY_AUTO_PORT_FALLBACK, settings.autoPortFallback)
             .putBoolean(KEY_COPY_ADDRESS_AFTER_START, settings.copyAddressAfterStart)
+            .putBoolean(KEY_ACCESS_PASSWORD_ENABLED, settings.accessPasswordEnabled && settings.accessPasswordHash.isNotBlank())
+            .putString(KEY_ACCESS_PASSWORD_HASH, settings.accessPasswordHash)
             .apply()
     }
 }

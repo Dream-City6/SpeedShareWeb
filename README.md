@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.2/SpeedShareWeb-v1.3.2.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.3.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.3.2 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.3/SpeedShareWeb-v1.3.3.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.3.3%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.3.3 APK">
 </a>
 
 <br><br>
 
-v1.3.2 adds a polished desktop right-click and mobile long-press workflow, safer quick actions, removable upload entries, better multi-selection, and smoother large-directory browsing.
+v1.3.3 adds optional password protection and server hardening, prevents parallel uploads from being interrupted by live refreshes, and makes cross-storage trash and restore operations safer.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -99,6 +99,7 @@ Use SpeedShareWeb only with files and devices that you are authorized to access 
 
 ## Update History
 
+- v1.3.3: Added optional password protection and connection hardening, fixed parallel-upload refresh interruption, and protected complete copies during cross-storage trash and restore failures.
 - v1.3.2: Added compact right-click and mobile bottom-sheet actions, consistent SVG icons, safer deletion access, removable upload entries, desktop range selection, accessibility improvements, and large-directory rendering optimizations.
 - v1.3.0: Improved the browser file manager with direct local-network uploads, limited parallel uploads/downloads, clearer queue progress, retry/cancel controls, search feedback, browser-side settings, and clearer guidance for videos the browser cannot play.
 - v1.2.0: Added transfer history, folder uploads with preserved directory structure, drag-and-drop support, and a redesigned browser interface.

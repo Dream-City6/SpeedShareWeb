@@ -5,6 +5,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WebPageBuilderTest {
+    @Test
+    fun liveRefreshDoesNotInterruptAnActiveUploadQueue() {
+        val html = directoryPage(remoteManagementEnabled = true)
+
+        assertTrue(html.contains("if(uploadInProgress){contentChangePending=true;return;}"))
+        assertTrue(html.contains("failedUploadEntries.length === 0"))
+    }
+
     private val file = WebItem(
         name = "example.txt",
         isDirectory = false,

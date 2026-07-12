@@ -80,13 +80,16 @@ class TrashManager(
         }
 
         var moved = false
+        var copiedSafely = false
         try {
             moved = source.renameTo(dataFile)
             if (!moved) {
                 copyRecursivelyControlled(source, dataFile, onBytes, isCancelled, translator)
                 if (isCancelled()) throw InterruptedException(translator.text("op_cancelled_exception"))
+                copiedSafely = true
                 if (!deleteRecursivelyControlled(source, isCancelled)) {
-                    throw IllegalStateException(translator.text("trash_source_delete_failed"))
+                    // Keep the complete trash copy. The source may already be partially deleted,
+                    // so removing this copy here could cause permanent data loss.
                 }
             }
 
@@ -94,8 +97,8 @@ class TrashManager(
                 metadata.store(output, "SpeedShareWeb Trash Entry")
             }
         } catch (error: Throwable) {
-            if (!moved) runCatching { dataFile.deleteRecursively() }
-            runCatching { entryDirectory.deleteRecursively() }
+            if (!moved && !copiedSafely) runCatching { dataFile.deleteRecursively() }
+            if (!moved && !copiedSafely) runCatching { entryDirectory.deleteRecursively() }
             throw error
         }
 
@@ -132,19 +135,22 @@ class TrashManager(
             ?: return requested
 
         var moved = false
+        var copiedSafely = false
         try {
             moved = dataFile.renameTo(destination)
             if (!moved) {
                 copyRecursivelyControlled(dataFile, destination, onBytes, isCancelled, translator)
                 if (isCancelled()) throw InterruptedException(translator.text("op_cancelled_exception"))
+                copiedSafely = true
                 if (!deleteRecursivelyControlled(dataFile, isCancelled)) {
-                    throw IllegalStateException(translator.text("trash_source_remove_failed"))
+                    // The restored destination is complete. Preserve it even if cleanup of the
+                    // trash copy was interrupted; stale trash data is safer than lost user data.
                 }
             }
             entryDirectory.deleteRecursively()
             return destination
         } catch (error: Throwable) {
-            if (!moved && destination.exists()) runCatching { destination.deleteRecursively() }
+            if (!moved && !copiedSafely && destination.exists()) runCatching { destination.deleteRecursively() }
             throw error
         }
     }

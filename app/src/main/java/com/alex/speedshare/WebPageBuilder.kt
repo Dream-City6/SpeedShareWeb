@@ -410,6 +410,7 @@ object WebPageBuilder {
                     setSyncState(t('web_live_connected'),true);
                   });
                   liveEvents.addEventListener('content-changed',function(){
+                    if(uploadInProgress){contentChangePending=true;return;}
                     location.reload();
                   });
                   liveEvents.onerror = function(){
@@ -554,6 +555,7 @@ object WebPageBuilder {
                 let currentUploadXhrs = new Set();
                 let uploadCancelled = false;
                 let uploadInProgress = false;
+                let contentChangePending = false;
                 let failedUploadEntries = [];
                 let lastUploadEntries = [];
                 let lastUploadQueueRenderAt = 0;
@@ -1087,6 +1089,7 @@ object WebPageBuilder {
                     status.className = 'uploadStatus success';
                     setUploadProgress(100);
                     status.innerHTML = escapeText(t('web_upload_done')) + ' <button class="uploadQueueRetry" type="button" onclick="location.reload()">' + escapeText(t('web_refresh_now')) + '</button>';
+                    contentChangePending = true;
                   }catch(error){
                     status.textContent = t('web_upload_failed',error.message);
                     status.className = 'uploadStatus error';
@@ -1095,6 +1098,10 @@ object WebPageBuilder {
                     currentUploadXhrs.clear();
                     if(cancelButton) cancelButton.style.display = 'none';
                     if(startButton){startButton.disabled = false;startButton.textContent = t('web_start_upload');}
+                    if(contentChangePending && failedUploadEntries.length === 0 && !uploadCancelled){
+                      contentChangePending=false;
+                      setTimeout(function(){location.reload();},800);
+                    }
                   }
                 }
 

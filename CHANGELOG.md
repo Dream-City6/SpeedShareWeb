@@ -4,6 +4,19 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.3.3] - 2026-07-12
+
+### Added
+
+- Add optional password protection for the browser and all server requests, disabled by default and stored as a salted PBKDF2 verifier
+- Add connection limits, request-header timeouts, stricter browser security headers, and regression tests for authentication and upload refresh behavior
+
+### Fixed
+
+- Prevent live page refresh events from interrupting other files in a parallel upload queue
+- Preserve the complete copied file when cross-storage trash or restore cleanup is cancelled or fails
+- Restrict external shortcut invocation, require remote-management permission for task cancellation, consume ZIP request tokens after use, and correctly escape JSON control characters
+
 ## [1.3.2] - 2026-07-10
 
 ### Added

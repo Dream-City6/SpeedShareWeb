@@ -27,7 +27,7 @@
         <activity
             android:name=".ShortcutActionActivity"
             android:excludeFromRecents="true"
-            android:exported="true"
+            android:exported="false"
             android:noHistory="true"
             android:theme="@style/Theme.SpeedShare.Transparent" />
 
