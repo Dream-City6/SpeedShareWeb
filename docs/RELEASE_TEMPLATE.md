@@ -19,6 +19,7 @@ SpeedShareWeb turns an Android phone into a local file server that can be access
 - Limits concurrent clients and request-header time to improve server resilience
 - Prevents live refresh events from interrupting parallel uploads
 - Preserves complete copies when cross-storage trash or restore cleanup fails
+- Uses transactional replacement for overwrite operations and reports skipped restores accurately
 - Tightens task cancellation, shortcut access, ZIP tokens, JSON escaping, browser security headers, and settings backup behavior
 
 ## Installation

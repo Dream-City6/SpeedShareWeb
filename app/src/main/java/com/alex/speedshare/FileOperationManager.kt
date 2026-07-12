@@ -110,29 +110,37 @@ class FileOperationManager(
                     totalBytes = totalBytes,
                     totalItems = totalItems
                 )
+                val restored = mutableListOf<TrashEntry>()
 
                 selected.forEach { entry ->
                     ensureNotCancelled(handle)
                     tracker.setMessage(handle, translator.text("op_restoring", entry.name))
-                    trashManager.restore(
+                    val destination = trashManager.restore(
                         id = entry.id,
                         conflictPolicy = policy,
                         onBytes = { tracker.addBytes(handle, it) },
                         isCancelled = { handle.isCancelled() }
                     )
-                    tracker.itemFinished(handle)
+                    if (destination == null) {
+                        tracker.itemFinished(handle, translator.text("op_skipped", entry.name))
+                    } else {
+                        restored += entry
+                        tracker.itemFinished(handle)
+                    }
                 }
 
                 tracker.complete(handle)
-                historyTracker.add(
-                    kind = TransferHistoryKind.RESTORE,
-                    name = summarizeNames(selected.map { it.name }),
-                    path = selected.joinToString(", ") { it.originalRelativePath }.take(240),
-                    clientAddress = clientAddress,
-                    bytes = totalBytes,
-                    itemCount = totalItems
-                )
-                onContentChanged()
+                if (restored.isNotEmpty()) {
+                    historyTracker.add(
+                        kind = TransferHistoryKind.RESTORE,
+                        name = summarizeNames(restored.map { it.name }),
+                        path = restored.joinToString(", ") { it.originalRelativePath }.take(240),
+                        clientAddress = clientAddress,
+                        bytes = restored.sumOf { it.size },
+                        itemCount = restored.size
+                    )
+                    onContentChanged()
+                }
             } catch (_: InterruptedException) {
                 tracker.cancelled(handle)
             } catch (error: Throwable) {
@@ -191,6 +199,7 @@ class FileOperationManager(
                         return@forEach
                     }
                     val requested = File(destinationDirectory, source.name)
+                    val transactionalOverwrite = policy == ConflictPolicy.OVERWRITE && requested.exists()
                     val destination = resolveConflict(requested, policy, translator)
                     if (destination == null) {
                         tracker.itemFinished(handle, translator.text("op_skipped", source.name))
@@ -198,6 +207,20 @@ class FileOperationManager(
                     }
 
                     tracker.setMessage(handle, translator.text("op_working", operationKindText(kind, translator), source.name))
+                    if (transactionalOverwrite) {
+                        replaceWithCopiedSource(
+                            source = source,
+                            destination = destination,
+                            onBytes = { tracker.addBytes(handle, it) },
+                            isCancelled = { handle.isCancelled() },
+                            translator = translator
+                        )
+                        if (move && !deleteRecursivelyControlled(source) { handle.isCancelled() }) {
+                            throw IllegalStateException(translator.text("op_copy_delete_failed", source.name))
+                        }
+                        tracker.itemFinished(handle)
+                        return@forEach
+                    }
                     var renamed = false
                     if (move) {
                         renamed = source.renameTo(destination)

@@ -15,6 +15,8 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 
 - Prevent live page refresh events from interrupting other files in a parallel upload queue
 - Preserve the complete copied file when cross-storage trash or restore cleanup is cancelled or fails
+- Replace existing files transactionally so failed or cancelled overwrite operations keep the original destination intact
+- Report skipped recycle-bin restores accurately and exclude them from completed restore history
 - Restrict external shortcut invocation, require remote-management permission for task cancellation, consume ZIP request tokens after use, and correctly escape JSON control characters
 
 ## [1.3.2] - 2026-07-10

@@ -120,7 +120,7 @@ class TrashManager(
         conflictPolicy: ConflictPolicy,
         onBytes: (Long) -> Unit = {},
         isCancelled: () -> Boolean = { false }
-    ): File {
+    ): File? {
         val entryDirectory = safeEntryDirectory(id)
             ?: throw IllegalArgumentException(translator.text("trash_entry_missing"))
         val entry = readEntry(entryDirectory)
@@ -132,7 +132,23 @@ class TrashManager(
             ?: throw IllegalStateException(translator.text("trash_original_invalid"))
         requested.parentFile?.mkdirs()
         val destination = resolveConflict(requested, conflictPolicy, translator)
-            ?: return requested
+            ?: return null
+
+        if (conflictPolicy == ConflictPolicy.OVERWRITE && requested.exists()) {
+            replaceWithCopiedSource(
+                source = dataFile,
+                destination = destination,
+                onBytes = onBytes,
+                isCancelled = isCancelled,
+                translator = translator
+            )
+            if (!deleteRecursivelyControlled(dataFile, isCancelled)) {
+                // The restored destination is already complete. Keep it and leave any stale
+                // trash data for later cleanup instead of risking the restored copy.
+            }
+            entryDirectory.deleteRecursively()
+            return destination
+        }
 
         var moved = false
         var copiedSafely = false
@@ -195,13 +211,49 @@ fun resolveConflict(requested: File, policy: ConflictPolicy, translator: Transla
     if (!requested.exists()) return requested
     return when (policy) {
         ConflictPolicy.SKIP -> null
-        ConflictPolicy.OVERWRITE -> {
-            if (!requested.deleteRecursively()) {
-                throw IllegalStateException(translator.text("trash_overwrite_failed", requested.name))
-            }
-            requested
-        }
+        ConflictPolicy.OVERWRITE -> requested
         ConflictPolicy.AUTO_RENAME -> createUniquePath(requested)
+    }
+}
+
+fun replaceWithCopiedSource(
+    source: File,
+    destination: File,
+    onBytes: (Long) -> Unit = {},
+    isCancelled: () -> Boolean = { false },
+    translator: Translator
+) {
+    require(destination.exists()) { translator.text("trash_file_missing") }
+    val parent = destination.parentFile
+        ?: throw IllegalStateException(translator.text("trash_overwrite_failed", destination.name))
+    val token = UUID.randomUUID().toString().replace("-", "")
+    val staging = File(parent, ".SpeedShareWebReplace-$token.tmp")
+    val backup = File(parent, ".SpeedShareWebReplace-$token.backup")
+
+    try {
+        copyRecursivelyControlled(source, staging, onBytes, isCancelled, translator)
+        if (isCancelled()) throw InterruptedException(translator.text("op_cancelled_exception"))
+
+        if (!destination.renameTo(backup)) {
+            throw IllegalStateException(translator.text("trash_overwrite_failed", destination.name))
+        }
+        if (!staging.renameTo(destination)) {
+            val restored = backup.renameTo(destination)
+            if (!restored) {
+                throw IllegalStateException(translator.text("trash_overwrite_failed", destination.name))
+            }
+            throw IllegalStateException(translator.text("trash_overwrite_failed", destination.name))
+        }
+
+        // Failure to remove the hidden backup is not a failed replacement: both the new file
+        // and the old complete copy are still safe. A later cleanup can remove the stale backup.
+        runCatching { backup.deleteRecursively() }
+    } catch (error: Throwable) {
+        runCatching { staging.deleteRecursively() }
+        if (!destination.exists() && backup.exists()) {
+            runCatching { backup.renameTo(destination) }
+        }
+        throw error
     }
 }
 
