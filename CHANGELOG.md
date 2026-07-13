@@ -4,6 +4,21 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.3.4] - 2026-07-14
+
+### Added
+
+- Show available and total phone storage in the Android status card and browser live-status header
+- Show the combined size of selected upload files before transfer
+- Check upload capacity in both the browser and server while reserving 256 MB for the Android system
+- Add a browser-friendly password-only sign-in page with temporary sessions and a sign-out action
+
+### Changed
+
+- Track only the unwritten portion of concurrent uploads as reserved capacity, preventing false low-space rejections while keeping parallel transfers safe
+- Return a clear `507 Insufficient Storage` response when an upload cannot fit safely
+- Keep HTTP Basic authentication available for explicitly configured clients without showing its confusing username prompt during normal browser access
+
 ## [1.3.3] - 2026-07-12
 
 ### Added

@@ -548,6 +548,9 @@ private fun SpeedShareApp(
                     downloadSpeed = serverState.downloadBytesPerSecond,
                     uploadSpeed = serverState.uploadBytesPerSecond,
                     taskCount = serverState.activeTransfers.size,
+                    storageText = readStorageSpace(Environment.getExternalStorageDirectory()).let { storage ->
+                        tr.text("storage_available_summary", formatBytes(storage.availableBytes), formatBytes(storage.totalBytes))
+                    },
                     activeTransferText = serverState.activeTransfers.firstOrNull()?.let { transfer ->
                         val direction = if (transfer.direction == TransferDirection.UPLOAD) tr.text("speed_upload") else tr.text("speed_download")
                         val percent = if (transfer.totalBytes > 0L) {
@@ -1529,6 +1532,7 @@ private fun ServerStatusCard(
     downloadSpeed: Long,
     uploadSpeed: Long,
     taskCount: Int,
+    storageText: String,
     activeTransferText: String?,
     onCopy: () -> Unit,
     onToggleQr: () -> Unit,
@@ -1592,6 +1596,15 @@ private fun ServerStatusCard(
                 color = secondaryText,
                 style = MaterialTheme.typography.bodySmall,
                 maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Text(
+                "${tr.text("web_storage")} · $storageText",
+                modifier = Modifier.fillMaxWidth(),
+                color = secondaryText,
+                style = MaterialTheme.typography.bodySmall,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
 

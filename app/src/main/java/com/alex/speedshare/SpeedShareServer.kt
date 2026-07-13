@@ -54,6 +54,8 @@ class SpeedShareServer(
     private val translator = Localization.translator(language)
     private val thumbnailManager = ThumbnailManager(context)
     private val contentRevision = AtomicLong(1L)
+    private val reservedUploadBytes = AtomicLong(0L)
+    private val accessSessions = AccessSessionManager()
     private val transferTracker = TransferTracker(onMetrics)
     private val historyTracker = TransferHistoryTracker(onHistory)
     private val trashManager = TrashManager(rootDirectory, translator)
@@ -164,6 +166,7 @@ class SpeedShareServer(
         fileOperationManager.close()
         zipSelections.clear()
         selectedZipSelections.clear()
+        accessSessions.clear()
 
         val threadToJoin = acceptThread
         acceptThread = null
@@ -187,11 +190,36 @@ class SpeedShareServer(
                 val input = socket.socket().getInputStream()
                 val request = readHttpRequest(input) ?: return
                 socket.socket().soTimeout = 0
-                if (!isAuthorized(request)) {
-                    sendUnauthorized(socket)
-                    return
-                }
                 val target = parseTarget(request.target)
+                if (accessPasswordHash.isNotBlank()) {
+                    when {
+                        (request.method == "GET" || request.method == "HEAD") && target.path == "/login" -> {
+                            val next = safeNextTarget(target.query["next"])
+                            if (isAuthorized(request)) {
+                                sendRedirect(socket, next)
+                            } else {
+                                sendLoginPage(socket, request.method, next, invalidPassword = false)
+                            }
+                            return
+                        }
+
+                        request.method == "POST" && target.path == "/login" -> {
+                            handleLogin(socket, input, request, safeNextTarget(target.query["next"]))
+                            return
+                        }
+
+                        request.method == "POST" && target.path == "/logout" -> {
+                            accessSessions.revoke(request.headers["cookie"])
+                            sendRedirect(socket, "/login", clearSessionCookie = true)
+                            return
+                        }
+
+                        !isAuthorized(request) -> {
+                            sendAuthenticationRequired(socket, request, target)
+                            return
+                        }
+                    }
+                }
                 val isGetOrHead = request.method == "GET" || request.method == "HEAD"
 
                 when {
@@ -581,7 +609,8 @@ class SpeedShareServer(
             items = items,
             language = language,
             clipboardSyncEnabled = clipboardSyncEnabled,
-            pageVersion = contentVersion
+            pageVersion = contentVersion,
+            accessProtected = accessPasswordHash.isNotBlank()
         )
         sendHtmlResponse(socket, method, html)
     }
@@ -672,7 +701,8 @@ class SpeedShareServer(
             clipboardSyncEnabled = clipboardSyncEnabled,
             deleteToTrashByDefault = deleteToTrashByDefault,
             language = language,
-            pageVersion = contentVersion
+            pageVersion = contentVersion,
+            accessProtected = accessPasswordHash.isNotBlank()
         )
 
         sendHtmlResponse(socket, method, html)
@@ -1245,7 +1275,23 @@ class SpeedShareServer(
             return
         }
 
+        if (!tryReserveUploadSpace(contentLength)) {
+            val storage = readStorageSpace(rootDirectory, reservedUploadBytes.get())
+            sendTextResponse(
+                socket,
+                "507 Insufficient Storage",
+                translator.text(
+                    "web_upload_space_insufficient",
+                    formatBytes(contentLength),
+                    formatBytes(storage.uploadAvailableBytes),
+                    formatBytes(UPLOAD_STORAGE_RESERVE_BYTES)
+                )
+            )
+            return
+        }
+
         val destination = createUniqueFile(destinationDirectory, relativeParts.last())
+        var reservedRemaining = contentLength
         var success = false
         val transferId = transferTracker.begin(
             direction = TransferDirection.UPLOAD,
@@ -1264,6 +1310,8 @@ class SpeedShareServer(
                     val read = input.read(buffer, 0, wanted)
                     if (read < 0) throw IllegalStateException("Upload ended early")
                     output.write(buffer, 0, read)
+                    reservedUploadBytes.addAndGet(-read.toLong())
+                    reservedRemaining -= read.toLong()
                     transferTracker.addBytes(transferId, read.toLong())
                     remaining -= read.toLong()
                 }
@@ -1294,6 +1342,7 @@ class SpeedShareServer(
                 "Uploaded: ${destination.name}"
             )
         } finally {
+            reservedUploadBytes.addAndGet(-reservedRemaining)
             transferTracker.finish(transferId)
             if (!success) {
                 try {
@@ -1301,6 +1350,16 @@ class SpeedShareServer(
                 } catch (_: Exception) {
                 }
             }
+        }
+    }
+
+    @Suppress("UsableSpace") // Upload admission must use bytes writable now, not reclaimable cache.
+    private fun tryReserveUploadSpace(contentLength: Long): Boolean {
+        while (true) {
+            val reserved = reservedUploadBytes.get()
+            val uploadAvailable = calculateUploadAvailableBytes(rootDirectory.usableSpace, reserved)
+            if (contentLength > uploadAvailable) return false
+            if (reservedUploadBytes.compareAndSet(reserved, reserved + contentLength)) return true
         }
     }
 
@@ -1610,6 +1669,7 @@ class SpeedShareServer(
 
     private fun sendStatusJson(socket: SocketChannel, method: String) {
         val snapshot = transferTracker.snapshot()
+        val storage = readStorageSpace(rootDirectory, reservedUploadBytes.get())
         val transfersJson = snapshot.activeTransfers.joinToString(",") { transfer ->
             buildString {
                 append("{")
@@ -1636,6 +1696,10 @@ class SpeedShareServer(
             append("\"uploadBytesPerSecond\":${snapshot.uploadBytesPerSecond},")
             append("\"totalDownloadedBytes\":${snapshot.totalDownloadedBytes},")
             append("\"totalUploadedBytes\":${snapshot.totalUploadedBytes},")
+            append("\"totalStorageBytes\":${storage.totalBytes},")
+            append("\"availableStorageBytes\":${storage.availableBytes},")
+            append("\"uploadAvailableBytes\":${storage.uploadAvailableBytes},")
+            append("\"uploadReserveBytes\":$UPLOAD_STORAGE_RESERVE_BYTES,")
             append("\"activeFileOperations\":$operationCount,")
             append("\"activeTransfers\":[$transfersJson]")
             append("}")
@@ -1730,12 +1794,93 @@ class SpeedShareServer(
 
     private fun isAuthorized(request: HttpRequest): Boolean {
         if (accessPasswordHash.isBlank()) return true
+        if (accessSessions.isValid(request.headers["cookie"])) return true
         val password = AccessPassword.passwordFromBasicAuthorization(request.headers["authorization"])
             ?: return false
         return AccessPassword.matches(password, accessPasswordHash)
     }
 
-    private fun sendUnauthorized(socket: SocketChannel) {
+    private fun handleLogin(
+        socket: SocketChannel,
+        input: InputStream,
+        request: HttpRequest,
+        next: String
+    ) {
+        val password = runCatching {
+            readTextBody(input, request, maxLength = 1024)
+                .split('&')
+                .mapNotNull { item ->
+                    val parts = item.split('=', limit = 2)
+                    if (parts.size == 2) urlDecode(parts[0]) to urlDecode(parts[1]) else null
+                }
+                .firstOrNull { (name, _) -> name == "password" }
+                ?.second
+        }.getOrNull()
+
+        if (password != null && AccessPassword.matches(password, accessPasswordHash)) {
+            sendRedirect(socket, next, sessionToken = accessSessions.create())
+        } else {
+            sendLoginPage(socket, request.method, next, invalidPassword = true)
+        }
+    }
+
+    private fun sendLoginPage(socket: SocketChannel, method: String, next: String, invalidPassword: Boolean) {
+        sendHtmlResponse(
+            socket = socket,
+            method = method,
+            html = WebPageBuilder.buildLoginPage(
+                language = language,
+                next = next,
+                invalidPassword = invalidPassword
+            )
+        )
+    }
+
+    private fun safeNextTarget(value: String?): String {
+        val target = value?.takeIf {
+            it.length <= 4096 && it.startsWith('/') && !it.startsWith("//") &&
+                '\\' !in it && it.none { char -> char.code < 0x20 || char.code == 0x7f }
+        } ?: return "/"
+        val path = parseTarget(target).path
+        return if (path == "/login" || path == "/logout") "/" else target
+    }
+
+    private fun sendAuthenticationRequired(
+        socket: SocketChannel,
+        request: HttpRequest,
+        target: ParsedTarget
+    ) {
+        if (target.query["basic"] == "1") {
+            sendBasicUnauthorized(socket)
+        } else if (request.method == "GET" || request.method == "HEAD") {
+            sendRedirect(socket, "/login?next=${urlEncode(request.target)}")
+        } else {
+            sendJsonResponse(socket, request.method, "{\"error\":\"authentication_required\"}", "401 Unauthorized")
+        }
+    }
+
+    private fun sendRedirect(
+        socket: SocketChannel,
+        location: String,
+        sessionToken: String? = null,
+        clearSessionCookie: Boolean = false
+    ) {
+        val header = buildString {
+            append("HTTP/1.1 303 See Other\r\n")
+            append("Location: $location\r\n")
+            if (sessionToken != null) {
+                append("Set-Cookie: ${AccessSessionManager.COOKIE_NAME}=$sessionToken; Path=/; HttpOnly; SameSite=Strict\r\n")
+            } else if (clearSessionCookie) {
+                append("Set-Cookie: ${AccessSessionManager.COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict\r\n")
+            }
+            append("Content-Length: 0\r\n")
+            append("Cache-Control: no-store\r\n")
+            append("Connection: close\r\n\r\n")
+        }
+        writeAll(socket, header.toByteArray(StandardCharsets.US_ASCII))
+    }
+
+    private fun sendBasicUnauthorized(socket: SocketChannel) {
         val body = "Password required".toByteArray(StandardCharsets.UTF_8)
         val header = buildString {
             append("HTTP/1.1 401 Unauthorized\r\n")

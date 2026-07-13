@@ -6,7 +6,8 @@ object WebPageBuilder {
         items: List<WebItem>,
         language: ResolvedLanguage,
         clipboardSyncEnabled: Boolean,
-        pageVersion: String
+        pageVersion: String,
+        accessProtected: Boolean = false
     ): String {
         val tr = Localization.translator(language)
         val subtitle = tr.text("web_selected_sub", items.size)
@@ -21,7 +22,8 @@ object WebPageBuilder {
             remoteManagementEnabled = false,
             clipboardSyncEnabled = clipboardSyncEnabled,
             language = language,
-            pageVersion = pageVersion
+            pageVersion = pageVersion,
+            accessProtected = accessProtected
         )
     }
 
@@ -34,7 +36,8 @@ object WebPageBuilder {
         clipboardSyncEnabled: Boolean,
         deleteToTrashByDefault: Boolean,
         language: ResolvedLanguage,
-        pageVersion: String
+        pageVersion: String,
+        accessProtected: Boolean = false
     ): String {
         val tr = Localization.translator(language)
         return buildPage(
@@ -48,8 +51,59 @@ object WebPageBuilder {
             remoteManagementEnabled = remoteManagementEnabled,
             clipboardSyncEnabled = clipboardSyncEnabled,
             language = language,
-            pageVersion = pageVersion
+            pageVersion = pageVersion,
+            accessProtected = accessProtected
         )
+    }
+
+    fun buildLoginPage(
+        language: ResolvedLanguage,
+        next: String,
+        invalidPassword: Boolean
+    ): String {
+        val tr = Localization.translator(language)
+        val error = if (invalidPassword) {
+            "<div class=\"error\" role=\"alert\">${escapeHtml(tr.text("web_login_invalid"))}</div>"
+        } else {
+            ""
+        }
+        return """
+            <!doctype html>
+            <html lang="${language.htmlLanguageTag}">
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+              <meta name="color-scheme" content="light dark">
+              <title>${escapeHtml(tr.text("web_login_title"))} - SpeedShareWeb</title>
+              <style>
+                :root{color-scheme:light dark;--bg:#edf2ff;--panel:rgba(255,255,255,.9);--text:#172033;--muted:#68728a;--line:rgba(74,91,132,.2);--brand:#2563eb;--brand2:#0f766e;--danger:#b42318;--dangerBg:rgba(180,35,24,.1)}
+                @media(prefers-color-scheme:dark){:root{--bg:#080c16;--panel:rgba(19,26,43,.94);--text:#edf3ff;--muted:#9da9c2;--line:rgba(154,169,204,.2);--danger:#ff9b91;--dangerBg:rgba(255,107,94,.12)}}
+                *{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 20% 10%,rgba(37,99,235,.18),transparent 36%),radial-gradient(circle at 90% 85%,rgba(15,118,110,.15),transparent 38%),var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+                .card{width:min(100%,410px);padding:26px;border:1px solid var(--line);border-radius:22px;background:var(--panel);box-shadow:0 24px 70px rgba(20,31,64,.18);backdrop-filter:blur(18px)}
+                .mark{width:46px;height:46px;display:grid;place-items:center;border-radius:14px;background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;font-weight:900;font-size:20px;box-shadow:0 10px 24px rgba(37,99,235,.24)}
+                h1{font-size:24px;line-height:1.2;margin:18px 0 7px}.subtitle,.note{color:var(--muted);line-height:1.6}.subtitle{font-size:14px;margin-bottom:19px}.note{font-size:12px;margin-top:14px}
+                label{display:block;font-size:13px;font-weight:750;margin-bottom:7px}.field{width:100%;height:48px;border:1px solid var(--line);border-radius:12px;background:rgba(127,140,170,.08);color:var(--text);padding:0 13px;font:inherit;outline:none}.field:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+                button{width:100%;height:47px;border:0;border-radius:12px;margin-top:12px;background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;font:inherit;font-weight:800;cursor:pointer;box-shadow:0 10px 24px rgba(37,99,235,.2)}button:active{transform:scale(.985)}
+                .error{margin:0 0 14px;padding:10px 12px;border-radius:11px;background:var(--dangerBg);color:var(--danger);font-size:13px;font-weight:700}
+                @media(max-width:480px){body{padding:13px}.card{padding:22px;border-radius:19px}}
+              </style>
+            </head>
+            <body>
+              <main class="card">
+                <div class="mark" aria-hidden="true">S</div>
+                <h1>${escapeHtml(tr.text("web_login_title"))}</h1>
+                <div class="subtitle">${escapeHtml(tr.text("web_login_subtitle"))}</div>
+                $error
+                <form method="post" action="/login?next=${urlEncode(next)}">
+                  <label for="password">${escapeHtml(tr.text("web_login_password"))}</label>
+                  <input id="password" class="field" name="password" type="password" minlength="4" maxlength="64" autocomplete="current-password" required autofocus>
+                  <button type="submit">${escapeHtml(tr.text("web_login_submit"))}</button>
+                </form>
+                <div class="note">${escapeHtml(tr.text("web_login_note"))}</div>
+              </main>
+            </body>
+            </html>
+        """.trimIndent()
     }
 
     private fun buildPage(
@@ -63,7 +117,8 @@ object WebPageBuilder {
         remoteManagementEnabled: Boolean,
         clipboardSyncEnabled: Boolean,
         language: ResolvedLanguage,
-        pageVersion: String
+        pageVersion: String,
+        accessProtected: Boolean
     ): String {
         val tr = Localization.translator(language)
         val itemsHtml = if (items.isEmpty()) {
@@ -82,6 +137,11 @@ object WebPageBuilder {
             ""
         }
         val clipboardPanel = if (clipboardSyncEnabled) buildClipboardPanel(tr) else ""
+        val logoutControl = if (accessProtected) {
+            "<form class=\"logoutForm\" method=\"post\" action=\"/logout\"><button class=\"themeToggle\" type=\"submit\">${escapeHtml(tr.text("web_logout"))}</button></form>"
+        } else {
+            ""
+        }
         val jsTranslations = Localization.table(language)
             .filterKeys { it.startsWith("web_") || it == "speed_upload" || it == "speed_download" }
             .entries
@@ -115,13 +175,13 @@ object WebPageBuilder {
                 h1{font-size:22px;line-height:1.15;margin:0 0 3px;font-weight:850;letter-spacing:0;background:linear-gradient(110deg,var(--brand),var(--brand2));-webkit-background-clip:text;background-clip:text;color:transparent}
                 .subtitle{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
                 .badge{flex:0 0 auto;padding:6px 9px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--muted);white-space:nowrap}
-                .headerActions{display:flex;align-items:center;gap:7px;flex:0 0 auto}.themeToggle{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:6px 9px;font-size:11px;cursor:pointer}.settingsToggle{display:flex;align-items:center;gap:5px}.settingsIcon{display:grid;place-items:center}.settingsIcon svg{width:14px;height:14px}
+                .headerActions{display:flex;align-items:center;gap:7px;flex:0 0 auto}.logoutForm{margin:0}.themeToggle{border:1px solid var(--line);background:var(--panel2);color:var(--text);border-radius:999px;padding:6px 9px;font-size:11px;cursor:pointer}.settingsToggle{display:flex;align-items:center;gap:5px}.settingsIcon{display:grid;place-items:center}.settingsIcon svg{width:14px;height:14px}
                 .syncDot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--success);margin-right:6px;box-shadow:0 0 0 4px rgba(11,159,110,.1)}
                 .breadcrumbs{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin:9px 0 0;font-size:12px}
                 .breadcrumbs a{text-decoration:none;color:var(--brand);background:var(--panel2);border:1px solid var(--line);padding:6px 9px;border-radius:9px;transition:.16s}
                 .breadcrumbs a:hover{transform:translateY(-1px);border-color:var(--brand)}
 
-                .livePanel{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+                .livePanel{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
                 .liveCard{background:var(--panel2);border:1px solid transparent;border-radius:9px;padding:6px 8px;min-width:0}
                 .liveLabel{font-size:10px;color:var(--muted);margin-bottom:2px}
                 .liveValue{font-size:14px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -208,7 +268,7 @@ object WebPageBuilder {
                 @keyframes contextMenuIn{from{opacity:0;transform:scale(.96) translateY(-3px)}to{opacity:1;transform:none}}
                 .hidden{display:none!important}
 
-                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:12px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}.contextMenu{left:8px!important;right:8px;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom));width:auto;max-height:min(76vh,620px);overflow:auto;border-radius:19px;padding:8px;transform-origin:bottom center}.contextMenu.open{animation:contextSheetIn .18s ease-out}.contextMenu button{min-height:43px;font-size:13px}}
+                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:11px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}.contextMenu{left:8px!important;right:8px;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom));width:auto;max-height:min(76vh,620px);overflow:auto;border-radius:19px;padding:8px;transform-origin:bottom center}.contextMenu.open{animation:contextSheetIn .18s ease-out}.contextMenu button{min-height:43px;font-size:13px}}
                 @keyframes contextSheetIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
                 @media(max-width:390px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info{padding:8px}.name{font-size:12px}.sub{font-size:10px}.actions a,.actions button{font-size:10px}.folderIcon{font-size:26px}.settingsText{display:none}.settingsToggle{padding-inline:8px}}
                 @media(hover:none){.card:hover{transform:none;box-shadow:var(--shadow)}}
@@ -224,6 +284,7 @@ object WebPageBuilder {
                       <div class="subtitle">${escapeHtml(subtitle)}</div>
                     </div>
                     <div class="headerActions">
+                      $logoutControl
                       <button class="themeToggle settingsToggle" type="button" onclick="openWebSettings()" aria-label="${escapeHtml(tr.text("web_settings"))}"><span class="settingsIcon">${svgIcon("settings")}</span><span class="settingsText">${escapeHtml(tr.text("web_settings"))}</span></button>
                       <button id="themeToggle" class="themeToggle" type="button" onclick="cycleTheme()">${escapeHtml(tr.text("web_theme_auto"))}</button>
                       <div class="badge"><span class="syncDot"></span><span id="syncState">${escapeHtml(tr.text("web_live"))}</span></div>
@@ -235,6 +296,7 @@ object WebPageBuilder {
                     <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_send_speed"))}</div><div id="liveDownload" class="liveValue">0 B/s</div></div>
                     <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_receive_speed"))}</div><div id="liveUpload" class="liveValue">0 B/s</div></div>
                     <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_active_tasks"))}</div><div id="liveTaskCount" class="liveValue">0</div></div>
+                    <div class="liveCard"><div class="liveLabel">${escapeHtml(tr.text("web_storage"))}</div><div id="liveStorage" class="liveValue">--</div></div>
                     <div id="liveTransfers" class="liveCard liveTransfers"></div>
                   </section>
                 </header>
@@ -428,6 +490,11 @@ object WebPageBuilder {
                   const transfers = Array.isArray(data.activeTransfers) ? data.activeTransfers : [];
                   hasActiveTransfers = transfers.length > 0;
                   document.getElementById('liveTaskCount').textContent = String(transfers.length);
+                  latestUploadAvailableBytes = Number(data.uploadAvailableBytes || 0);
+                  latestUploadReserveBytes = Number(data.uploadReserveBytes || 0);
+                  const available = Number(data.availableStorageBytes || 0);
+                  const totalStorage = Number(data.totalStorageBytes || 0);
+                  document.getElementById('liveStorage').textContent = totalStorage > 0 ? humanBytes(available) + ' / ' + humanBytes(totalStorage) : '--';
                   const panel = document.getElementById('liveTransfers');
                   panel.classList.toggle('active',transfers.length > 0);
                   if(transfers.length === 0){panel.textContent = '';return;}
@@ -555,6 +622,8 @@ object WebPageBuilder {
                 let currentUploadXhrs = new Set();
                 let uploadCancelled = false;
                 let uploadInProgress = false;
+                let latestUploadAvailableBytes = null;
+                let latestUploadReserveBytes = 0;
                 let contentChangePending = false;
                 let failedUploadEntries = [];
                 let lastUploadEntries = [];
@@ -900,7 +969,8 @@ object WebPageBuilder {
                   const entries = getUploadEntries();
                   if(status){
                     status.className = 'uploadStatus';
-                    status.textContent = entries.length > 0 ? t('web_selected_count',entries.length) : t('web_no_files_selected');
+                    const selectedBytes = entries.reduce(function(sum,entry){return sum + (entry.file.size || 0);},0);
+                    status.textContent = entries.length > 0 ? t('web_selected_count',entries.length) + ' · ' + humanBytes(selectedBytes) : t('web_no_files_selected');
                   }
                   renderUploadQueue(entries,entries.map(function(){return 'waiting';}));
                   setUploadProgress(0);
@@ -1023,6 +1093,18 @@ object WebPageBuilder {
                   const states = entries.map(function(){return 'waiting';});
                   const percents = entries.map(function(){return 0;});
                   const totalBytes = entries.reduce(function(sum,entry){return sum + (entry.file.size || 0);},0);
+                  try{
+                    const storageResponse = await fetch('/api/status?t=' + Date.now(),{cache:'no-store'});
+                    if(storageResponse.ok){
+                      const storageData = await storageResponse.json();
+                      renderLiveStatus(storageData);
+                    }
+                  }catch(_){ }
+                  if(latestUploadAvailableBytes !== null && totalBytes > latestUploadAvailableBytes){
+                    status.className = 'uploadStatus error';
+                    status.textContent = t('web_upload_space_insufficient',humanBytes(totalBytes),humanBytes(latestUploadAvailableBytes),humanBytes(latestUploadReserveBytes));
+                    return;
+                  }
                   const loadedBytes = entries.map(function(){return 0;});
                   const maxParallelUploads = Math.min(webSettings.uploadParallel,entries.length);
                   let nextUploadIndex = 0;

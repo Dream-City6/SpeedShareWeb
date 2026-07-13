@@ -6,6 +6,16 @@ import org.junit.Test
 
 class WebPageBuilderTest {
     @Test
+    fun directoryPageShowsStorageAndChecksCapacityBeforeUploading() {
+        val html = directoryPage(remoteManagementEnabled = true)
+
+        assertTrue(html.contains("id=\"liveStorage\""))
+        assertTrue(html.contains("data.uploadAvailableBytes"))
+        assertTrue(html.contains("totalBytes > latestUploadAvailableBytes"))
+        assertTrue(html.contains("web_upload_space_insufficient"))
+    }
+
+    @Test
     fun liveRefreshDoesNotInterruptAnActiveUploadQueue() {
         val html = directoryPage(remoteManagementEnabled = true)
 
@@ -76,6 +86,42 @@ class WebPageBuilderTest {
 
         assertTrue(html.contains("id=\"managerModal\""))
         assertTrue(html.contains("openWebSettings()"))
+    }
+
+    @Test
+    fun protectedPageShowsSignOutButUnprotectedPageDoesNot() {
+        val protectedHtml = WebPageBuilder.buildSelectedPage(
+            items = listOf(file),
+            language = ResolvedLanguage.ENGLISH,
+            clipboardSyncEnabled = false,
+            pageVersion = "test",
+            accessProtected = true
+        )
+        val unprotectedHtml = WebPageBuilder.buildSelectedPage(
+            items = listOf(file),
+            language = ResolvedLanguage.ENGLISH,
+            clipboardSyncEnabled = false,
+            pageVersion = "test"
+        )
+
+        assertTrue(protectedHtml.contains("action=\"/logout\""))
+        assertTrue(protectedHtml.contains("Sign out"))
+        assertFalse(unprotectedHtml.contains("action=\"/logout\""))
+    }
+
+    @Test
+    fun loginPageUsesOnlyAPasswordAndPreservesTheDestination() {
+        val html = WebPageBuilder.buildLoginPage(
+            language = ResolvedLanguage.ENGLISH,
+            next = "/download?path=My File.txt",
+            invalidPassword = true
+        )
+
+        assertTrue(html.contains("name=\"password\""))
+        assertFalse(html.contains("name=\"username\""))
+        assertTrue(html.contains("No username is required"))
+        assertTrue(html.contains("The password is incorrect"))
+        assertTrue(html.contains("/login?next=%2Fdownload%3Fpath%3DMy%20File.txt"))
     }
 
     private fun directoryPage(remoteManagementEnabled: Boolean): String =
