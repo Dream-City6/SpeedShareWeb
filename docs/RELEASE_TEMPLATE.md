@@ -1,4 +1,4 @@
-# SpeedShareWeb v1.3.4
+# SpeedShareWeb v1.4.0
 
 This is an official stable release of SpeedShareWeb.
 
@@ -13,14 +13,15 @@ SpeedShareWeb turns an Android phone into a local file server that can be access
 - English, Simplified Chinese and Japanese interfaces
 - No account, cloud storage or advertising
 
-## What changed in v1.3.4
+## What changed in v1.4.0
 
-- Shows available and total storage in the Android app and browser header
-- Shows the combined size of selected files before upload
-- Checks capacity in the browser and verifies it again on the server
-- Reserves 256 MB for Android so uploads cannot fill the device completely
-- Coordinates concurrent upload reservations and returns a clear low-space error
-- Replaces the browser username/password prompt with a password-only sign-in page, temporary sharing sessions and a sign-out action
+- Adds a new launcher icon, adaptive and round assets, branded launch screen and matching system shortcuts
+- Redesigns Android home, settings and recycle-bin screens with an aurora background, tonal panels and responsive phone/tablet layouts
+- Keeps content below status bars, notches and punch-hole cameras while preserving edge-to-edge background color
+- Shows live transfer progress and running status directly in the Android status card
+- Prewarms settings after the first home frame and uses a GPU-only slide transition for consistently smooth repeated navigation
+- Refreshes the browser palette, drag feedback, progress effects, dialogs and wide-screen utility layout
+- Preserves reduced-motion behavior and avoids expensive full-screen blur effects
 
 ## Installation
 
@@ -35,5 +36,5 @@ SpeedShareWeb uses plain HTTP. Optional password protection can restrict access 
 
 ## Files
 
-- `SpeedShareWeb-v1.3.4.apk`
-- Optional checksum file: `SpeedShareWeb-v1.3.4.apk.sha256`
+- `SpeedShareWeb-v1.4.0.apk`
+- Optional checksum file: `SpeedShareWeb-v1.4.0.apk.sha256`

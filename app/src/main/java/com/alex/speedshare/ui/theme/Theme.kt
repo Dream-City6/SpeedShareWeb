@@ -1,58 +1,70 @@
 package com.alex.speedshare.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = Color(0xFF8AB4FF),
+    onPrimary = Color(0xFF002B69),
+    primaryContainer = Color(0xFF123E7A),
+    onPrimaryContainer = Color(0xFFD9E7FF),
+    secondary = Color(0xFF43D4E7),
+    onSecondary = Color(0xFF00363D),
+    secondaryContainer = Color(0xFF074E59),
+    onSecondaryContainer = Color(0xFFB1F4FC),
+    tertiary = Color(0xFFBEA7FF),
+    background = Color(0xFF061426),
+    onBackground = Color(0xFFE8EEF8),
+    surface = Color(0xFF0D1B2E),
+    onSurface = Color(0xFFE8EEF8),
+    surfaceVariant = Color(0xFF17263B),
+    onSurfaceVariant = Color(0xFFBAC7DA),
+    outline = Color(0xFF3B4A61)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = Color(0xFF2563EB),
     onPrimary = Color.White,
+    primaryContainer = Color(0xFFDCE9FF),
+    onPrimaryContainer = Color(0xFF0A326F),
+    secondary = Color(0xFF087F96),
     onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    secondaryContainer = Color(0xFFC4F2F8),
+    onSecondaryContainer = Color(0xFF00363F),
+    tertiary = Color(0xFF7357C7),
+    background = Color(0xFFF5F8FC),
+    onBackground = Color(0xFF142033),
+    surface = Color.White,
+    onSurface = Color(0xFF142033),
+    surfaceVariant = Color(0xFFEBF1F8),
+    onSurfaceVariant = Color(0xFF526176),
+    outline = Color(0xFFCBD6E4)
+)
+
+private val SpeedShareShapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(16.dp),
+    large = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(28.dp)
 )
 
 @Composable
 fun SpeedShareTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
+        shapes = SpeedShareShapes,
         content = content
     )
 }

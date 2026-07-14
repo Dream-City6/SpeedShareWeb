@@ -28,7 +28,7 @@ fun requestPinnedWholeStorageShortcut(
     val shortcut = ShortcutInfo.Builder(context, "speedshare_whole_storage")
         .setShortLabel(tr.text("whole_phone"))
         .setLongLabel(tr.text("shortcut_whole_started"))
-        .setIcon(Icon.createWithResource(context, R.drawable.ic_speedshare_shortcut))
+        .setIcon(Icon.createWithResource(context, R.mipmap.ic_launcher_speedshare))
         .setIntent(shortcutIntent)
         .build()
 

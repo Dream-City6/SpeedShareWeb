@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.3.4/SpeedShareWeb-v1.3.4.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.3.4%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.3.4 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.0/SpeedShareWeb-v1.4.0.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.4.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.4.0 APK">
 </a>
 
 <br><br>
 
-v1.3.4 新增手机可用存储空间和待上传文件总大小显示，在网页与服务端双重检查容量并为 Android 固定预留 256 MB；开启访问保护后，浏览器改用只需填写密码的登录页。
+v1.4.0 带来全新品牌图标与启动画面，重新设计手机、平板和网页界面，适配系统安全区域，强化实时传输进度，并通过 GPU 页面切换提升设置页流畅度。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
@@ -92,6 +92,7 @@ SpeedShareWeb 主要在局域网内运行，不需要账号或云存储。
 
 ## 更新履历
 
+- v1.4.0：新增品牌图标与启动画面、响应式极光界面、系统安全区域适配、实时传输进度，以及更流畅的 GPU 设置页切换。
 - v1.3.4：新增紧凑的存储空间显示、待上传文件总大小、带 256 MB 系统预留的双重容量检查，以及只需填写密码的浏览器登录页。
 - v1.3.3：新增可选访问密码与连接保护，修复并行上传被刷新中断的问题，并在跨存储回收站和恢复失败时优先保留完整副本。
 - v1.3.2：新增电脑右键与手机底部操作面板，统一 SVG 图标，收紧危险操作入口，支持上传队列单项移除、桌面连续多选、无障碍操作和大目录渲染优化。

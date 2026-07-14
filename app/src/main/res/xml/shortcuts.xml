@@ -3,7 +3,7 @@
     <shortcut
         android:shortcutId="share_whole_storage"
         android:enabled="true"
-        android:icon="@drawable/ic_speedshare_shortcut"
+        android:icon="@mipmap/ic_launcher_speedshare"
         android:shortcutShortLabel="@string/speedshare_shortcut_whole_short"
         android:shortcutLongLabel="@string/speedshare_shortcut_whole_long">
         <intent
@@ -15,7 +15,7 @@
     <shortcut
         android:shortcutId="choose_files"
         android:enabled="true"
-        android:icon="@drawable/ic_speedshare_shortcut"
+        android:icon="@mipmap/ic_launcher_speedshare"
         android:shortcutShortLabel="@string/speedshare_shortcut_choose_short"
         android:shortcutLongLabel="@string/speedshare_shortcut_choose_long">
         <intent
@@ -27,7 +27,7 @@
     <shortcut
         android:shortcutId="stop_server"
         android:enabled="true"
-        android:icon="@drawable/ic_speedshare_shortcut"
+        android:icon="@mipmap/ic_launcher_speedshare"
         android:shortcutShortLabel="@string/speedshare_shortcut_stop_short"
         android:shortcutLongLabel="@string/speedshare_shortcut_stop_long">
         <intent

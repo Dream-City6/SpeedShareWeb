@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.SpeedShare" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.SpeedShare" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:navigationBarColor">#061426</item>
+        <item name="android:statusBarColor">#061426</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <style name="Theme.SpeedShare.Starting" parent="Theme.SpeedShare">
+        <item name="android:windowBackground">@drawable/speedshare_splash_background</item>
+    </style>
 </resources>

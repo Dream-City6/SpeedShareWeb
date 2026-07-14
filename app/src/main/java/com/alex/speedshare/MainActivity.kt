@@ -18,8 +18,19 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +38,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -36,8 +48,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +68,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -60,9 +76,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -72,15 +85,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -89,7 +109,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.alex.speedshare.ui.theme.SpeedShareTheme
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -202,6 +224,7 @@ private fun SpeedShareApp(
         Localization.translator(context, settings.language)
     }
     var showSettings by remember { mutableStateOf(false) }
+    var settingsPreloaded by remember { mutableStateOf(false) }
     var showTrashManager by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(settings.defaultMode) }
     var selectedFiles by remember { mutableStateOf<List<SharedFile>>(emptyList()) }
@@ -221,6 +244,16 @@ private fun SpeedShareApp(
     }
     var showAdvanced by remember { mutableStateOf(false) }
     var showQr by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        delay(320)
+        settingsPreloaded = true
+    }
+
+    LaunchedEffect(showSettings) {
+        if (showSettings) settingsPreloaded = true
+    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -297,6 +330,20 @@ private fun SpeedShareApp(
             targetKeepAwake = settings.keepAwakeDuringTransfer,
             successPrefix = successPrefix
         )
+    }
+
+    fun openTrashManager() {
+        if (!hasManageAllFilesAccess()) {
+            waitingForAllFilesAccess = true
+            autoStartWholeAfterPermission = false
+            openTrashAfterPermission = true
+            openAllFilesAccessSettings(context)
+            localStatusText = tr.text("trash_permission_prompt")
+        } else {
+            waitingForAllFilesAccess = false
+            openTrashAfterPermission = false
+            showTrashManager = true
+        }
     }
 
     fun syncCurrentClipboardToWeb(showStatus: Boolean = false) {
@@ -452,38 +499,6 @@ private fun SpeedShareApp(
         }
     }
 
-    if (showTrashManager) {
-        TrashScreen(
-            tr = tr,
-            onBack = { showTrashManager = false },
-            onOpenSystemManager = {
-                if (!openSpeedShareTrashInFileManager(context)) {
-                    localStatusText = tr.text("trash_open_failed")
-                }
-            }
-        )
-        return
-    }
-
-    if (showSettings) {
-        SettingsScreen(
-            initialSettings = settings,
-            onBack = { showSettings = false },
-            onSettingsChanged = { saved ->
-                AppSettings.save(context, saved)
-                settings = saved
-                if (!serverState.running && !serverState.starting) {
-                    mode = saved.defaultMode
-                    keepAwakeDuringTransfer = saved.keepAwakeDuringTransfer
-                    uploadEnabled = saved.defaultUploadEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
-                    remoteManagementEnabled = saved.remoteManagementEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
-                }
-                localStatusText = Localization.translator(context, saved.language).text("settings_saved")
-            }
-        )
-        return
-    }
-
     val isServerActive = serverState.running || serverState.starting
     val displayStatus = when {
         isServerActive -> serverState.statusText
@@ -495,48 +510,22 @@ private fun SpeedShareApp(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
-                            MaterialTheme.colorScheme.background
-                        )
-                    )
-                )
-        ) {
+        PremiumBackground {
             Column(
                 modifier = Modifier
+                    .widthIn(max = 1080.dp)
                     .fillMaxSize()
+                    .align(Alignment.TopCenter)
+                    .safeDrawingPadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "SpeedShareWeb",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Black
-                        )
-                        Text(
-                            text = "${getAppVersion(context, tr)} · ${tr.text("app_subtitle")}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = { showSettings = true },
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
-                    ) { Text(tr.text("settings")) }
-                }
+                BrandHeader(
+                    versionText = "${getAppVersion(context, tr)} · ${tr.text("app_subtitle")}",
+                    settingsText = tr.text("settings"),
+                    onSettings = { showSettings = true }
+                )
 
                 ServerStatusCard(
                     tr = tr,
@@ -557,6 +546,11 @@ private fun SpeedShareApp(
                             transfer.transferredBytes * 100.0 / transfer.totalBytes
                         } else 0.0
                         "$direction · ${transfer.fileName} · ${String.format(Locale.getDefault(), "%.1f%%", percent)} · ${formatBytes(transfer.bytesPerSecond)}/s"
+                    },
+                    activeTransferProgress = serverState.activeTransfers.firstOrNull()?.let { transfer ->
+                        if (transfer.totalBytes > 0L) {
+                            (transfer.transferredBytes.toFloat() / transfer.totalBytes.toFloat()).coerceIn(0f, 1f)
+                        } else null
                     },
                     onCopy = {
                         address?.let {
@@ -673,62 +667,66 @@ private fun SpeedShareApp(
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    ActionTile(
-                        iconRes = R.drawable.ic_add_24,
-                        title = tr.text("choose_files"),
-                        subtitle = tr.text("choose_files_sub"),
-                        modifier = Modifier.weight(1f),
-                        onClick = { filePicker.launch(arrayOf("*/*")) }
-                    )
-                    ActionTile(
-                        iconRes = R.drawable.ic_storage_24,
-                        title = tr.text("whole_phone"),
-                        subtitle = tr.text("whole_phone_sub"),
-                        modifier = Modifier.weight(1f),
-                        onClick = { startWholeStorageNow() }
-                    )
-                }
-
-                CompactCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (!hasManageAllFilesAccess()) {
-                                waitingForAllFilesAccess = true
-                                autoStartWholeAfterPermission = false
-                                openTrashAfterPermission = true
-                                openAllFilesAccessSettings(context)
-                                localStatusText = tr.text("trash_permission_prompt")
-                            } else {
-                                waitingForAllFilesAccess = false
-                                openTrashAfterPermission = false
-                                showTrashManager = true
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val wideActions = maxWidth >= 720.dp
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            ActionTile(
+                                iconRes = R.drawable.ic_add_24,
+                                title = tr.text("choose_files"),
+                                subtitle = tr.text("choose_files_sub"),
+                                modifier = Modifier.weight(1f),
+                                onClick = { filePicker.launch(arrayOf("*/*")) }
+                            )
+                            ActionTile(
+                                iconRes = R.drawable.ic_storage_24,
+                                title = tr.text("whole_phone"),
+                                subtitle = tr.text("whole_phone_sub"),
+                                modifier = Modifier.weight(1f),
+                                onClick = { startWholeStorageNow() }
+                            )
+                            if (wideActions) {
+                                ActionTile(
+                                    iconRes = R.drawable.ic_delete_24,
+                                    title = tr.text("open_trash"),
+                                    subtitle = tr.text("open_trash_sub"),
+                                    modifier = Modifier.weight(1f),
+                                    onClick = ::openTrashManager
+                                )
                             }
                         }
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        IconBubble(iconRes = R.drawable.ic_delete_24, size = 38.dp, corner = 12.dp)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(tr.text("open_trash"), fontWeight = FontWeight.Bold)
-                            Text(
-                                tr.text("open_trash_sub"),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+
+                        if (!wideActions) {
+                            CompactCard(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(onClick = ::openTrashManager)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    IconBubble(iconRes = R.drawable.ic_delete_24, size = 38.dp, corner = 12.dp)
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(tr.text("open_trash"), fontWeight = FontWeight.Bold)
+                                        Text(
+                                            tr.text("open_trash_sub"),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_chevron_right_24),
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
                         }
-                        Icon(
-                            painter = painterResource(R.drawable.ic_chevron_right_24),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
                     }
                 }
 
@@ -879,6 +877,69 @@ private fun SpeedShareApp(
             }
         }
     }
+
+    val density = LocalDensity.current
+    val hiddenSettingsOffsetPx = remember(configuration.screenWidthDp, density) {
+        with(density) { (configuration.screenWidthDp + 48).dp.toPx() }
+    }
+    val settingsTranslationX = animateFloatAsState(
+        targetValue = if (showSettings) 0f else hiddenSettingsOffsetPx,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "settingsPageTranslation"
+    )
+
+    if (settingsPreloaded || showSettings) {
+        // Preload after the home page has drawn; hidden content stays measured off-screen for smooth navigation.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    translationX = settingsTranslationX.value
+                }
+        ) {
+            SettingsScreen(
+                initialSettings = settings,
+                onBack = { showSettings = false },
+                onSettingsChanged = { saved ->
+                    AppSettings.save(context, saved)
+                    settings = saved
+                    if (!serverState.running && !serverState.starting) {
+                        mode = saved.defaultMode
+                        keepAwakeDuringTransfer = saved.keepAwakeDuringTransfer
+                        uploadEnabled = saved.defaultUploadEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
+                        remoteManagementEnabled = saved.remoteManagementEnabled && saved.defaultMode == ShareMode.WHOLE_STORAGE
+                    }
+                    localStatusText = Localization.translator(context, saved.language).text("settings_saved")
+                }
+            )
+        }
+    }
+
+    val pageEnter = slideInHorizontally(
+        animationSpec = tween(durationMillis = 230),
+        initialOffsetX = { it / 6 }
+    ) + fadeIn(animationSpec = tween(durationMillis = 160))
+    val pageExit = slideOutHorizontally(
+        animationSpec = tween(durationMillis = 210),
+        targetOffsetX = { it / 7 }
+    ) + fadeOut(animationSpec = tween(durationMillis = 150))
+
+    AnimatedVisibility(
+        visible = showTrashManager,
+        modifier = Modifier.fillMaxSize(),
+        enter = pageEnter,
+        exit = pageExit
+    ) {
+        TrashScreen(
+            tr = tr,
+            onBack = { showTrashManager = false },
+            onOpenSystemManager = {
+                if (!openSpeedShareTrashInFileManager(context)) {
+                    localStatusText = tr.text("trash_open_failed")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1014,25 +1075,16 @@ private fun TrashScreen(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.38f),
-                            MaterialTheme.colorScheme.background
-                        )
-                    )
-                )
-        ) {
+        PremiumBackground {
             Column(
                 modifier = Modifier
+                    .widthIn(max = 1080.dp)
                     .fillMaxSize()
+                    .align(Alignment.TopCenter)
+                    .safeDrawingPadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 CompactCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -1247,24 +1299,16 @@ private fun SettingsScreen(
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.background,
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
-                        )
-                    )
-                )
-        ) {
+        PremiumBackground {
             Column(
                 modifier = Modifier
+                    .widthIn(max = 1080.dp)
                     .fillMaxSize()
+                    .align(Alignment.TopCenter)
+                    .safeDrawingPadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 CompactCard(modifier = Modifier.fillMaxWidth()) {
                     Row(
@@ -1302,6 +1346,7 @@ private fun SettingsScreen(
                     )
                 }
 
+                AdaptiveSettingsGrid {
                 SettingsSection(tr.text("language")) {
                     Text(tr.text("language_sub"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     AdaptiveSegmentGrid(
@@ -1466,6 +1511,7 @@ private fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                }
 
                 if (statusText.isNotBlank()) {
                     Card(
@@ -1489,39 +1535,6 @@ private fun SettingsScreen(
     }
 }
 @Composable
-private fun SpeedShareTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val colorScheme = if (dark) {
-        darkColorScheme(
-            primary = Color(0xFF9EA8FF),
-            onPrimary = Color(0xFF111A53),
-            primaryContainer = Color(0xFF213B78),
-            onPrimaryContainer = Color(0xFFE0E3FF),
-            secondary = Color(0xFF5EEAD4),
-            secondaryContainer = Color(0xFF134E4A),
-            background = Color(0xFF07111F),
-            surface = Color(0xFF101827),
-            surfaceVariant = Color(0xFF172033),
-            outline = Color(0xFF34415B)
-        )
-    } else {
-        lightColorScheme(
-            primary = Color(0xFF2563EB),
-            onPrimary = Color.White,
-            primaryContainer = Color(0xFFDBEAFE),
-            onPrimaryContainer = Color(0xFF0F2D6B),
-            secondary = Color(0xFF0F766E),
-            secondaryContainer = Color(0xFFCCFBF1),
-            background = Color(0xFFF6F8FC),
-            surface = Color(0xFFFFFFFF),
-            surfaceVariant = Color(0xFFEEF3F8),
-            outline = Color(0xFFD5DEE8)
-        )
-    }
-    MaterialTheme(colorScheme = colorScheme, content = content)
-}
-
-@Composable
 private fun ServerStatusCard(
     tr: Translator,
     running: Boolean,
@@ -1534,33 +1547,53 @@ private fun ServerStatusCard(
     taskCount: Int,
     storageText: String,
     activeTransferText: String?,
+    activeTransferProgress: Float?,
     onCopy: () -> Unit,
     onToggleQr: () -> Unit,
     onStop: () -> Unit
 ) {
+    val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.35f
     val gradient = if (running) {
-        Brush.linearGradient(listOf(Color(0xFF4057D6), Color(0xFF7656B8)))
+        Brush.linearGradient(listOf(Color(0xFF103A8A), Color(0xFF2563EB), Color(0xFF07879B)))
     } else {
         Brush.linearGradient(
-            listOf(
-                MaterialTheme.colorScheme.surfaceVariant,
-                MaterialTheme.colorScheme.surface
-            )
+            if (darkSurface) {
+                listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface)
+            } else {
+                listOf(Color(0xFFE5EFFA), Color(0xFFEDF5FC))
+            }
         )
     }
     val foreground = if (running) Color.White else MaterialTheme.colorScheme.onSurface
     val secondaryText = if (running) Color.White.copy(alpha = 0.80f) else MaterialTheme.colorScheme.onSurfaceVariant
     val compactStatus = statusText.replace(Regex("(\\d)\\s+ms\\b", RegexOption.IGNORE_CASE)) { match -> "${match.groupValues[1]}\u00A0ms" }
+    val pulseTransition = rememberInfiniteTransition(label = "serverPulse")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.18f,
+        targetValue = 0.42f,
+        animationSpec = infiniteRepeatable(animation = tween(1100), repeatMode = RepeatMode.Reverse),
+        label = "serverPulseAlpha"
+    )
+    val animatedProgress by animateFloatAsState(
+        targetValue = activeTransferProgress ?: 0f,
+        animationSpec = tween(220),
+        label = "activeTransferProgress"
+    )
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        border = BorderStroke(
+            1.dp,
+            if (running) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = if (running) 9.dp else 2.dp)
     ) {
         Column(
             modifier = Modifier
                 .background(gradient)
+                .animateContentSize()
                 .padding(15.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -1569,12 +1602,23 @@ private fun ServerStatusCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(9.dp)
-                        .clip(CircleShape)
-                        .background(if (running) Color(0xFF78F2BA) else if (starting) Color(0xFFFFD166) else Color(0xFF9CA3AF))
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    if (running) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .alpha(pulseAlpha)
+                                .clip(CircleShape)
+                                .background(Color(0xFF78F2BA))
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(9.dp)
+                            .clip(CircleShape)
+                            .background(if (running) Color(0xFF78F2BA) else if (starting) Color(0xFFFFD166) else Color(0xFF9CA3AF))
+                    )
+                }
                 Text(
                     if (running) tr.text("running") else if (starting) tr.text("starting") else tr.text("stopped"),
                     modifier = Modifier.weight(1f),
@@ -1695,13 +1739,26 @@ private fun ServerStatusCard(
             }
 
             if (!activeTransferText.isNullOrBlank()) {
-                Text(
-                    activeTransferText,
-                    color = secondaryText,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        activeTransferText,
+                        color = secondaryText,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (activeTransferProgress != null) {
+                        LinearProgressIndicator(
+                            progress = { animatedProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(5.dp)
+                                .clip(CircleShape),
+                            color = Color(0xFF8EF4E6),
+                            trackColor = Color.White.copy(alpha = 0.18f)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1828,6 +1885,7 @@ private fun ActionTile(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.35f
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.975f else 1f, label = "actionScale")
@@ -1836,8 +1894,12 @@ private fun ActionTile(
             .scale(scale)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 0.dp)
+        colors = CardDefaults.cardColors(containerColor = premiumPanelColor(emphasized = true)),
+        border = BorderStroke(1.dp, premiumPanelBorderColor()),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (darkSurface) 4.dp else 0.dp,
+            pressedElevation = 0.dp
+        )
     ) {
         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             IconBubble(iconRes = iconRes, size = 38.dp, corner = 12.dp)
@@ -1858,13 +1920,165 @@ private fun CompactCard(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.35f
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = premiumPanelColor()),
+        border = BorderStroke(1.dp, premiumPanelBorderColor()),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (darkSurface) 3.dp else 0.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp), content = content)
+    }
+}
+
+@Composable
+private fun PremiumBackground(content: @Composable BoxScope.() -> Unit) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    if (dark) {
+                        listOf(Color(0xFF04101F), Color(0xFF07182D), Color(0xFF061426))
+                    } else {
+                        listOf(Color(0xFFDCEAFF), Color(0xFFF0F5FB), Color(0xFFE1F2EF))
+                    }
+                )
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .size(430.dp)
+                .offset(x = (-150).dp, y = (-205).dp)
+                .background(
+                    Brush.radialGradient(
+                        listOf(MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.25f else 0.20f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(380.dp)
+                .align(Alignment.TopEnd)
+                .offset(x = 155.dp, y = 95.dp)
+                .background(
+                    Brush.radialGradient(
+                        listOf(MaterialTheme.colorScheme.secondary.copy(alpha = if (dark) 0.18f else 0.14f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+        Box(
+            modifier = Modifier
+                .size(390.dp)
+                .align(Alignment.BottomStart)
+                .offset(x = (-145).dp, y = 165.dp)
+                .background(
+                    Brush.radialGradient(
+                        listOf(MaterialTheme.colorScheme.tertiary.copy(alpha = if (dark) 0.12f else 0.075f), Color.Transparent)
+                    ),
+                    CircleShape
+                )
+        )
+        content()
+    }
+}
+
+@Composable
+private fun BrandHeader(
+    versionText: String,
+    settingsText: String,
+    onSettings: () -> Unit
+) {
+    val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (darkSurface) premiumPanelColor() else Color.Transparent
+        ),
+        border = if (darkSurface) BorderStroke(1.dp, premiumPanelBorderColor()) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (darkSurface) 5.dp else 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 11.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF061426))
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                        RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher_speedshare_foreground),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .scale(1.62f)
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "SpeedShareWeb",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = versionText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            OutlinedButton(
+                onClick = onSettings,
+                shape = RoundedCornerShape(13.dp),
+                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_settings_24),
+                    contentDescription = null,
+                    modifier = Modifier.size(17.dp)
+                )
+                Spacer(Modifier.size(6.dp))
+                Text(settingsText)
+            }
+        }
+    }
+}
+
+@Composable
+private fun premiumPanelColor(emphasized: Boolean = false): Color {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    return if (dark) {
+        MaterialTheme.colorScheme.surface.copy(alpha = if (emphasized) 0.88f else 0.80f)
+    } else {
+        if (emphasized) Color(0xFFE5EFFA) else Color(0xFFEBF3FA)
+    }
+}
+
+@Composable
+private fun premiumPanelBorderColor(): Color {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.35f
+    return if (dark) {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+    } else {
+        Color(0xFFB9CFE4).copy(alpha = 0.42f)
     }
 }
 
@@ -1900,6 +2114,37 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
         Text(title, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
+    }
+}
+
+@Composable
+private fun AdaptiveSettingsGrid(content: @Composable () -> Unit) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val columns = if (maxWidth >= 760.dp) 2 else 1
+        val gap = 12.dp
+        Layout(content = content, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
+            val gapPx = gap.roundToPx()
+            val availableWidth = constraints.maxWidth - gapPx * (columns - 1)
+            val columnWidth = (availableWidth / columns).coerceAtLeast(0)
+            val childConstraints = constraints.copy(
+                minWidth = columnWidth,
+                maxWidth = columnWidth,
+                minHeight = 0
+            )
+            val placeables = measurables.map { it.measure(childConstraints) }
+            val columnHeights = IntArray(columns)
+            val placements = placeables.map { placeable ->
+                val column = columnHeights.indices.minByOrNull { columnHeights[it] } ?: 0
+                val x = column * (columnWidth + gapPx)
+                val y = columnHeights[column]
+                columnHeights[column] += placeable.height + gapPx
+                Triple(placeable, x, y)
+            }
+            val height = (columnHeights.maxOrNull() ?: 0).let { if (it > 0) it - gapPx else 0 }
+            layout(constraints.maxWidth, height) {
+                placements.forEach { (placeable, x, y) -> placeable.placeRelative(x, y) }
+            }
+        }
     }
 }
 

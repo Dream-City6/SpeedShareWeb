@@ -4,6 +4,28 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.4.0] - 2026-07-15
+
+### Added
+
+- Add a new SpeedShareWeb launcher icon across adaptive, round, shortcut, Quick Settings and store assets
+- Add a branded launch screen that uses the system adaptive-icon mask on current Android versions
+- Add live Android transfer progress with a compact progress bar and running-status pulse
+- Add restrained aurora backgrounds, tonal panels and motion feedback across the Android and browser interfaces
+
+### Changed
+
+- Redesign the Android home, settings and recycle-bin screens with clearer hierarchy, consistent typography and responsive phone/tablet layouts
+- Keep Android content inside status-bar, display-cutout and navigation-bar safe areas while allowing the background to extend edge to edge
+- Prewarm the settings screen after the home page's first frame and move it with a GPU layer for consistently smooth repeated navigation
+- Improve the browser's wide-screen utility layout, drag feedback, progress animation, dialogs and reduced-motion behavior
+
+### Fixed
+
+- Prevent the Android header from overlapping notches, punch-hole cameras and status-bar content on edge-to-edge devices
+- Remove repeated full-page measurement and alpha blending that could cause settings navigation to stutter
+- Use the complete adaptive or round icon on the launch screen to avoid square black corners and incorrect legacy artwork
+
 ## [1.3.4] - 2026-07-14
 
 ### Added
