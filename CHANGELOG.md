@@ -12,6 +12,8 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 - Add a branded launch screen that uses the system adaptive-icon mask on current Android versions
 - Add live Android transfer progress with a compact progress bar and running-status pulse
 - Add restrained aurora backgrounds, tonal panels and motion feedback across the Android and browser interfaces
+- Add persistent system, light and dark appearance modes with readable native dark palettes
+- Add clickable single-file transfer history with secure file opening and guided APK installation
 
 ### Changed
 
@@ -19,12 +21,17 @@ The format is based on Keep a Changelog. Version numbers follow Semantic Version
 - Keep Android content inside status-bar, display-cutout and navigation-bar safe areas while allowing the background to extend edge to edge
 - Prewarm the settings screen after the home page's first frame and move it with a GPU layer for consistently smooth repeated navigation
 - Improve the browser's wide-screen utility layout, drag feedback, progress animation, dialogs and reduced-motion behavior
+- Make the Android home screen state-aware: tap the stopped status card to start, then use focused running controls to copy, scan, replace or stop sharing
+- Collapse low-frequency settings into compact summaries that show their current values
+- Stop copying the server address automatically; copying now happens only after an explicit user action
 
 ### Fixed
 
 - Prevent the Android header from overlapping notches, punch-hole cameras and status-bar content on edge-to-edge devices
 - Remove repeated full-page measurement and alpha blending that could cause settings navigation to stutter
 - Use the complete adaptive or round icon on the launch screen to avoid square black corners and incorrect legacy artwork
+- Prevent OEM force-dark conversion from producing dark text on dark surfaces
+- Route APK history items through Android's unknown-source permission flow and continue installation after authorization
 
 ## [1.3.4] - 2026-07-14
 

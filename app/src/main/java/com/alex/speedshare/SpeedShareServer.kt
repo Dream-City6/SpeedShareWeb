@@ -1327,7 +1327,8 @@ class SpeedShareServer(
                 path = destination.relativeTo(rootDirectory).invariantSeparatorsPath,
                 clientAddress = clientAddress(socket),
                 bytes = contentLength,
-                itemCount = 1
+                itemCount = 1,
+                openTarget = destination.absolutePath
             )
             MediaScannerConnection.scanFile(
                 context,
@@ -1425,7 +1426,8 @@ class SpeedShareServer(
                             path = sharedFile.name,
                             clientAddress = clientAddress(socket),
                             bytes = length,
-                            itemCount = 1
+                            itemCount = 1,
+                            openTarget = sharedFile.uri.toString()
                         )
                     }
                 } finally {
@@ -1495,7 +1497,8 @@ class SpeedShareServer(
                         path = runCatching { file.relativeTo(rootDirectory).invariantSeparatorsPath }.getOrDefault(file.name),
                         clientAddress = clientAddress(socket),
                         bytes = length,
-                        itemCount = 1
+                        itemCount = 1,
+                        openTarget = file.absolutePath
                     )
                 }
             } finally {

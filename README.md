@@ -14,7 +14,7 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br><br>
 
-v1.4.0 introduces a new brand icon and launch screen, redesigned responsive Android and browser interfaces, safer system-bar spacing, clearer live transfer progress, and smoother GPU-accelerated navigation.
+v1.4.0 introduces a new brand icon and launch screen, responsive Android and browser interfaces, selectable appearance modes, a state-aware sharing dashboard, clickable transfer history, clearer live progress, and smoother navigation.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -99,7 +99,7 @@ Use SpeedShareWeb only with files and devices that you are authorized to access 
 
 ## Update History
 
-- v1.4.0: Added the new brand icon and launch screen, responsive aurora UI, safe system-bar layouts, live transfer progress, and smoother GPU-accelerated settings navigation.
+- v1.4.0: Added the new brand icon and launch screen, responsive aurora UI, safe system-bar layouts, appearance modes, focused sharing controls, clickable transfer history, and smoother navigation.
 - v1.3.4: Added compact storage-space visibility, selected-upload size feedback, browser/server capacity checks with a 256 MB system reserve, and a password-only browser sign-in page.
 - v1.3.3: Added optional password protection and connection hardening, fixed parallel-upload refresh interruption, and protected complete copies during cross-storage trash and restore failures.
 - v1.3.2: Added compact right-click and mobile bottom-sheet actions, consistent SVG icons, safer deletion access, removable upload entries, desktop range selection, accessibility improvements, and large-directory rendering optimizations.

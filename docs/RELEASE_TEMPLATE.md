@@ -19,6 +19,11 @@ SpeedShareWeb turns an Android phone into a local file server that can be access
 - Redesigns Android home, settings and recycle-bin screens with an aurora background, tonal panels and responsive phone/tablet layouts
 - Keeps content below status bars, notches and punch-hole cameras while preserving edge-to-edge background color
 - Shows live transfer progress and running status directly in the Android status card
+- Adds system, light and dark appearance modes while blocking broken OEM force-dark conversion
+- Uses a state-aware home screen: tap the stopped card to start sharing, then access focused copy, QR, replace and stop controls while running
+- Collapses low-frequency settings into concise summaries with their current values
+- Opens single-file transfer history directly with the appropriate Android app, including a guided APK installation flow
+- Stops automatically copying the server address and keeps clipboard changes user-initiated
 - Prewarms settings after the first home frame and uses a GPU-only slide transition for consistently smooth repeated navigation
 - Refreshes the browser palette, drag feedback, progress effects, dialogs and wide-screen utility layout
 - Preserves reduced-motion behavior and avoids expensive full-screen blur effects

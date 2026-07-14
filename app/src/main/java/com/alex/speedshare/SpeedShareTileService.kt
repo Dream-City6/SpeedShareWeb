@@ -56,7 +56,6 @@ class SpeedShareTileService : TileService() {
             autoStopMinutes = settings.autoStopMinutes,
             preferredPort = settings.preferredPort,
             autoPortFallback = settings.autoPortFallback,
-            copyAddressAfterStart = settings.copyAddressAfterStart,
             language = settings.language,
             successPrefix = tr.text("quick_tile_whole_started")
         )

@@ -40,7 +40,6 @@ class ShortcutActionActivity : Activity() {
                     autoStopMinutes = settings.autoStopMinutes,
                     preferredPort = settings.preferredPort,
                     autoPortFallback = settings.autoPortFallback,
-                    copyAddressAfterStart = settings.copyAddressAfterStart,
                     language = settings.language,
                     successPrefix = Localization.translator(this, settings.language).text("shortcut_whole_started")
                 )

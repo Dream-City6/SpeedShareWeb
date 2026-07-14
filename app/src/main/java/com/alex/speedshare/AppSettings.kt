@@ -2,8 +2,20 @@ package com.alex.speedshare
 
 import android.content.Context
 
+enum class AppThemeMode(val storedValue: String) {
+    SYSTEM("system"),
+    LIGHT("light"),
+    DARK("dark");
+
+    companion object {
+        fun fromStored(value: String?): AppThemeMode =
+            entries.firstOrNull { it.storedValue == value } ?: SYSTEM
+    }
+}
+
 data class SpeedShareSettings(
     val language: AppLanguage = AppLanguage.SYSTEM,
+    val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val defaultMode: ShareMode = ShareMode.WHOLE_STORAGE,
     val defaultUploadEnabled: Boolean = false,
     val remoteManagementEnabled: Boolean = false,
@@ -14,7 +26,6 @@ data class SpeedShareSettings(
     val autoStopMinutes: Int = 0,
     val preferredPort: Int = 9999,
     val autoPortFallback: Boolean = true,
-    val copyAddressAfterStart: Boolean = true,
     val accessPasswordEnabled: Boolean = false,
     val accessPasswordHash: String = ""
 )
@@ -22,6 +33,7 @@ data class SpeedShareSettings(
 object AppSettings {
     private const val PREFS_NAME = "speedshare_settings"
     private const val KEY_LANGUAGE = "language"
+    private const val KEY_THEME_MODE = "theme_mode"
     private const val KEY_DEFAULT_MODE = "default_mode"
     private const val KEY_DEFAULT_UPLOAD = "default_upload"
     private const val KEY_REMOTE_MANAGEMENT = "remote_management"
@@ -32,7 +44,6 @@ object AppSettings {
     private const val KEY_AUTO_STOP_MINUTES = "auto_stop_minutes"
     private const val KEY_PREFERRED_PORT = "preferred_port"
     private const val KEY_AUTO_PORT_FALLBACK = "auto_port_fallback"
-    private const val KEY_COPY_ADDRESS_AFTER_START = "copy_address_after_start"
     private const val KEY_ACCESS_PASSWORD_ENABLED = "access_password_enabled"
     private const val KEY_ACCESS_PASSWORD_HASH = "access_password_hash"
 
@@ -48,6 +59,9 @@ object AppSettings {
 
         return SpeedShareSettings(
             language = AppLanguage.fromStored(prefs.getString(KEY_LANGUAGE, AppLanguage.SYSTEM.storedValue)),
+            themeMode = AppThemeMode.fromStored(
+                prefs.getString(KEY_THEME_MODE, AppThemeMode.SYSTEM.storedValue)
+            ),
             defaultMode = mode,
             defaultUploadEnabled = prefs.getBoolean(KEY_DEFAULT_UPLOAD, false),
             remoteManagementEnabled = prefs.getBoolean(KEY_REMOTE_MANAGEMENT, false),
@@ -60,7 +74,6 @@ object AppSettings {
             preferredPort = prefs.getInt(KEY_PREFERRED_PORT, 9999)
                 .coerceIn(1024, 65535),
             autoPortFallback = prefs.getBoolean(KEY_AUTO_PORT_FALLBACK, true),
-            copyAddressAfterStart = prefs.getBoolean(KEY_COPY_ADDRESS_AFTER_START, true),
             accessPasswordEnabled = prefs.getBoolean(KEY_ACCESS_PASSWORD_ENABLED, false) && accessPasswordHash.isNotBlank(),
             accessPasswordHash = accessPasswordHash
         )
@@ -70,6 +83,7 @@ object AppSettings {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_LANGUAGE, settings.language.storedValue)
+            .putString(KEY_THEME_MODE, settings.themeMode.storedValue)
             .putString(KEY_DEFAULT_MODE, settings.defaultMode.name)
             .putBoolean(KEY_DEFAULT_UPLOAD, settings.defaultUploadEnabled)
             .putBoolean(KEY_REMOTE_MANAGEMENT, settings.remoteManagementEnabled)
@@ -80,7 +94,6 @@ object AppSettings {
             .putInt(KEY_AUTO_STOP_MINUTES, settings.autoStopMinutes)
             .putInt(KEY_PREFERRED_PORT, settings.preferredPort.coerceIn(1024, 65535))
             .putBoolean(KEY_AUTO_PORT_FALLBACK, settings.autoPortFallback)
-            .putBoolean(KEY_COPY_ADDRESS_AFTER_START, settings.copyAddressAfterStart)
             .putBoolean(KEY_ACCESS_PASSWORD_ENABLED, settings.accessPasswordEnabled && settings.accessPasswordHash.isNotBlank())
             .putString(KEY_ACCESS_PASSWORD_HASH, settings.accessPasswordHash)
             .apply()

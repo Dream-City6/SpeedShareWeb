@@ -10,7 +10,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.Settings
 import android.service.quicksettings.TileService
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -90,6 +92,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -136,10 +139,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Compose supplies its own complete palettes. Disallow OEM force-dark from
+            // transforming only parts of the view tree and producing dark text on dark cards.
+            window.decorView.isForceDarkAllowed = false
+        }
         deliverIntent(intent)
 
         setContent {
-            SpeedShareTheme {
+            var themeMode by remember { mutableStateOf(AppSettings.load(this).themeMode) }
+            SpeedShareTheme(themeMode = themeMode) {
                 SpeedShareApp(
                     incomingShareRequest = incomingShareState.value,
                     onIncomingShareConsumed = { requestId ->
@@ -152,7 +161,8 @@ class MainActivity : ComponentActivity() {
                         if (launchActionState.value?.requestId == requestId) {
                             launchActionState.value = null
                         }
-                    }
+                    },
+                    onThemeModeChanged = { themeMode = it }
                 )
             }
         }
@@ -212,7 +222,8 @@ private fun SpeedShareApp(
     incomingShareRequest: IncomingShareRequest?,
     onIncomingShareConsumed: (Long) -> Unit,
     launchActionRequest: LaunchActionRequest?,
-    onLaunchActionConsumed: (Long) -> Unit
+    onLaunchActionConsumed: (Long) -> Unit,
+    onThemeModeChanged: (AppThemeMode) -> Unit
 ) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
@@ -244,6 +255,9 @@ private fun SpeedShareApp(
     }
     var showAdvanced by remember { mutableStateOf(false) }
     var showQr by remember { mutableStateOf(false) }
+    var showChangeShareOptions by remember { mutableStateOf(false) }
+    var showStopConfirmation by remember { mutableStateOf(false) }
+    var pendingInstallHistoryItem by remember { mutableStateOf<TransferHistoryItem?>(null) }
 
     LaunchedEffect(Unit) {
         withFrameNanos { }
@@ -260,6 +274,34 @@ private fun SpeedShareApp(
     ) { granted ->
         if (!granted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             localStatusText = tr.text("notification_permission_denied")
+        }
+    }
+
+    fun showHistoryOpenResult(result: HistoryFileOpenResult) {
+        val message = when (result) {
+            HistoryFileOpenResult.OPENED -> null
+            HistoryFileOpenResult.MISSING -> tr.text("history_file_missing")
+            HistoryFileOpenResult.NO_APP -> tr.text("history_no_app")
+            HistoryFileOpenResult.NOT_OPENABLE -> tr.text("history_not_openable")
+            HistoryFileOpenResult.INSTALL_PERMISSION_REQUIRED -> tr.text("history_install_permission_denied")
+        }
+        if (message != null) Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    val installPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        val pendingItem = pendingInstallHistoryItem
+        pendingInstallHistoryItem = null
+        if (pendingItem != null) {
+            showHistoryOpenResult(
+                openHistoryFile(
+                    context = context,
+                    item = pendingItem,
+                    mode = serverState.mode,
+                    selectedFiles = selectedFiles
+                )
+            )
         }
     }
 
@@ -300,7 +342,6 @@ private fun SpeedShareApp(
             autoStopMinutes = settings.autoStopMinutes,
             preferredPort = settings.preferredPort,
             autoPortFallback = settings.autoPortFallback,
-            copyAddressAfterStart = settings.copyAddressAfterStart,
             language = settings.language,
             successPrefix = successPrefix
         )
@@ -382,6 +423,17 @@ private fun SpeedShareApp(
             uploadEnabled = false
             remoteManagementEnabled = false
             localStatusText = tr.text("selected_files_ready", files.size)
+            if (files.isNotEmpty() && (serverState.running || serverState.starting)) {
+                startOrReplaceServer(
+                    targetMode = ShareMode.SELECTED_FILES,
+                    targetFiles = files,
+                    targetUploadEnabled = false,
+                    targetRemoteManagementEnabled = false,
+                    targetKeepAwake = settings.keepAwakeDuringTransfer,
+                    successPrefix = tr.text("replaced_server")
+                )
+                showChangeShareOptions = false
+            }
         }
     }
 
@@ -552,6 +604,7 @@ private fun SpeedShareApp(
                             (transfer.transferredBytes.toFloat() / transfer.totalBytes.toFloat()).coerceIn(0f, 1f)
                         } else null
                     },
+                    onStart = { startWholeStorageNow(tr.text("server_started")) },
                     onCopy = {
                         address?.let {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -561,10 +614,40 @@ private fun SpeedShareApp(
                     },
                     onToggleQr = { showQr = !showQr },
                     onStop = {
-                        SpeedShareService.stopServer(context.applicationContext)
-                        localStatusText = tr.text("server_stopped")
+                        if (serverState.activeTransfers.isNotEmpty()) {
+                            showStopConfirmation = true
+                        } else {
+                            SpeedShareService.stopServer(context.applicationContext)
+                            localStatusText = tr.text("server_stopped")
+                        }
                     }
                 )
+
+                if (showStopConfirmation) {
+                    AlertDialog(
+                        onDismissRequest = { showStopConfirmation = false },
+                        title = { Text(tr.text("stop_confirm_title")) },
+                        text = { Text(tr.text("stop_confirm_body")) },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showStopConfirmation = false
+                                    SpeedShareService.stopServer(context.applicationContext)
+                                    localStatusText = tr.text("server_stopped")
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError
+                                )
+                            ) { Text(tr.text("stop")) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showStopConfirmation = false }) {
+                                Text(tr.text("cancel"))
+                            }
+                        }
+                    )
+                }
 
                 AnimatedVisibility(visible = showQr && serverState.running && address != null) {
                     address?.let { currentAddress ->
@@ -656,72 +739,52 @@ private fun SpeedShareApp(
                         Text(tr.text("transfer_history"), fontWeight = FontWeight.Bold)
                         Spacer(Modifier.height(6.dp))
                         serverState.history.take(4).forEach { item ->
-                            Text(
-                                formatHistoryLine(item, tr),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                    val wideActions = maxWidth >= 720.dp
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            ActionTile(
-                                iconRes = R.drawable.ic_add_24,
-                                title = tr.text("choose_files"),
-                                subtitle = tr.text("choose_files_sub"),
-                                modifier = Modifier.weight(1f),
-                                onClick = { filePicker.launch(arrayOf("*/*")) }
-                            )
-                            ActionTile(
-                                iconRes = R.drawable.ic_storage_24,
-                                title = tr.text("whole_phone"),
-                                subtitle = tr.text("whole_phone_sub"),
-                                modifier = Modifier.weight(1f),
-                                onClick = { startWholeStorageNow() }
-                            )
-                            if (wideActions) {
-                                ActionTile(
-                                    iconRes = R.drawable.ic_delete_24,
-                                    title = tr.text("open_trash"),
-                                    subtitle = tr.text("open_trash_sub"),
-                                    modifier = Modifier.weight(1f),
-                                    onClick = ::openTrashManager
-                                )
-                            }
-                        }
-
-                        if (!wideActions) {
-                            CompactCard(
+                            val openable = canOpenHistoryFile(item)
+                            Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(onClick = ::openTrashManager)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    IconBubble(iconRes = R.drawable.ic_delete_24, size = 38.dp, corner = 12.dp)
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(tr.text("open_trash"), fontWeight = FontWeight.Bold)
-                                        Text(
-                                            tr.text("open_trash_sub"),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(enabled = openable) {
+                                        val result = openHistoryFile(
+                                            context = context,
+                                            item = item,
+                                            mode = serverState.mode,
+                                            selectedFiles = selectedFiles
                                         )
+                                        if (result == HistoryFileOpenResult.INSTALL_PERMISSION_REQUIRED) {
+                                            pendingInstallHistoryItem = item
+                                            Toast.makeText(
+                                                context,
+                                                tr.text("history_install_permission_prompt"),
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                            installPermissionLauncher.launch(
+                                                Intent(
+                                                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                                    Uri.parse("package:${context.packageName}")
+                                                )
+                                            )
+                                        } else {
+                                            showHistoryOpenResult(result)
+                                        }
                                     }
+                                    .padding(horizontal = 6.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    formatHistoryLine(item, tr),
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (openable) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_chevron_right_24),
-                                        contentDescription = null,
+                                        contentDescription = tr.text("history_open_file"),
+                                        modifier = Modifier.size(18.dp),
                                         tint = MaterialTheme.colorScheme.primary
                                     )
                                 }
@@ -730,11 +793,34 @@ private fun SpeedShareApp(
                     }
                 }
 
-                CompactCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize()
-                ) {
+                AnimatedVisibility(visible = !isServerActive) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        ActionTile(
+                            iconRes = R.drawable.ic_add_24,
+                            title = tr.text("choose_files"),
+                            subtitle = tr.text("choose_files_sub"),
+                            modifier = Modifier.weight(1f),
+                            onClick = { filePicker.launch(arrayOf("*/*")) }
+                        )
+                        ActionTile(
+                            iconRes = R.drawable.ic_storage_24,
+                            title = tr.text("whole_phone"),
+                            subtitle = tr.text("whole_phone_sub"),
+                            modifier = Modifier.weight(1f),
+                            onClick = { startWholeStorageNow() }
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = !isServerActive) {
+                    CompactCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                    ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -863,6 +949,89 @@ private fun SpeedShareApp(
                             }
                         }
                     }
+                    }
+                }
+
+                AnimatedVisibility(visible = serverState.running) {
+                    CompactCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .clickable { showChangeShareOptions = !showChangeShareOptions }
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(11.dp)
+                        ) {
+                            IconBubble(iconRes = R.drawable.ic_add_24, size = 38.dp, corner = 12.dp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(tr.text("change_share_content"), fontWeight = FontWeight.Bold)
+                                Text(
+                                    tr.text("change_share_content_sub"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Icon(
+                                painter = painterResource(R.drawable.ic_chevron_right_24),
+                                contentDescription = if (showChangeShareOptions) tr.text("collapse") else tr.text("expand"),
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .rotate(if (showChangeShareOptions) 90f else 0f),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        AnimatedVisibility(visible = showChangeShareOptions) {
+                            Row(
+                                modifier = Modifier.padding(top = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { filePicker.launch(arrayOf("*/*")) },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text(tr.text("choose_files")) }
+                                OutlinedButton(
+                                    onClick = { startWholeStorageNow(tr.text("replaced_server")) },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text(tr.text("whole_phone")) }
+                            }
+                        }
+                    }
+                }
+
+                CompactCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = ::openTrashManager)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        IconBubble(iconRes = R.drawable.ic_delete_24, size = 38.dp, corner = 12.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tr.text("open_trash"), fontWeight = FontWeight.Bold)
+                            Text(
+                                tr.text("open_trash_sub"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            painter = painterResource(R.drawable.ic_chevron_right_24),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
 
                 if (!serverState.running && address == null) {
@@ -903,6 +1072,7 @@ private fun SpeedShareApp(
                 onSettingsChanged = { saved ->
                     AppSettings.save(context, saved)
                     settings = saved
+                    onThemeModeChanged(saved.themeMode)
                     if (!serverState.running && !serverState.starting) {
                         mode = saved.defaultMode
                         keepAwakeDuringTransfer = saved.keepAwakeDuringTransfer
@@ -1347,7 +1517,43 @@ private fun SettingsScreen(
                 }
 
                 AdaptiveSettingsGrid {
-                SettingsSection(tr.text("language")) {
+                CollapsibleSettingsSection(
+                    title = tr.text("appearance"),
+                    summary = when (draft.themeMode) {
+                        AppThemeMode.SYSTEM -> tr.text("theme_system")
+                        AppThemeMode.LIGHT -> tr.text("theme_light")
+                        AppThemeMode.DARK -> tr.text("theme_dark")
+                    },
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) {
+                    Text(
+                        tr.text("appearance_sub"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    AdaptiveSegmentGrid(
+                        options = listOf(
+                            AppThemeMode.SYSTEM to tr.text("theme_system"),
+                            AppThemeMode.LIGHT to tr.text("theme_light"),
+                            AppThemeMode.DARK to tr.text("theme_dark")
+                        ),
+                        selected = draft.themeMode,
+                        onSelect = { saveDraft(draft.copy(themeMode = it)) }
+                    )
+                }
+
+                CollapsibleSettingsSection(
+                    title = tr.text("language"),
+                    summary = when (draft.language) {
+                        AppLanguage.SYSTEM -> tr.text("language_system")
+                        AppLanguage.SIMPLIFIED_CHINESE -> tr.text("language_chinese")
+                        AppLanguage.JAPANESE -> tr.text("language_japanese")
+                        AppLanguage.ENGLISH -> tr.text("language_english")
+                    },
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) {
                     Text(tr.text("language_sub"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     AdaptiveSegmentGrid(
                         options = listOf(
@@ -1384,18 +1590,49 @@ private fun SettingsScreen(
                     CompactSwitchRow(tr.text("clipboard_sync"), tr.text("clipboard_sync_sub"), draft.clipboardSyncEnabled) {
                         saveDraft(draft.copy(clipboardSyncEnabled = it))
                     }
-                    CompactSwitchRow(tr.text("delete_to_trash"), tr.text("delete_to_trash_sub"), draft.deleteToTrashByDefault) {
-                        saveDraft(draft.copy(deleteToTrashByDefault = it))
-                    }
-                    CompactSwitchRow(tr.text("auto_start_share"), tr.text("auto_start_share_sub"), draft.autoStartIncomingShare) {
-                        saveDraft(draft.copy(autoStartIncomingShare = it))
-                    }
-                    CompactSwitchRow(tr.text("lockscreen_protection"), tr.text("lockscreen_protection_sub"), draft.keepAwakeDuringTransfer) {
-                        saveDraft(draft.copy(keepAwakeDuringTransfer = it))
-                    }
                 }
 
-                SettingsSection(tr.text("auto_stop")) {
+                CollapsibleToggleSetting(
+                    title = tr.text("auto_start_share"),
+                    description = tr.text("auto_start_share_sub"),
+                    checked = draft.autoStartIncomingShare,
+                    onSummary = tr.text("setting_on"),
+                    offSummary = tr.text("setting_off"),
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) { saveDraft(draft.copy(autoStartIncomingShare = it)) }
+
+                CollapsibleToggleSetting(
+                    title = tr.text("lockscreen_protection"),
+                    description = tr.text("lockscreen_protection_sub"),
+                    checked = draft.keepAwakeDuringTransfer,
+                    onSummary = tr.text("setting_on"),
+                    offSummary = tr.text("setting_off"),
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) { saveDraft(draft.copy(keepAwakeDuringTransfer = it)) }
+
+                CollapsibleToggleSetting(
+                    title = tr.text("delete_to_trash"),
+                    description = tr.text("delete_to_trash_sub"),
+                    checked = draft.deleteToTrashByDefault,
+                    onSummary = tr.text("setting_on"),
+                    offSummary = tr.text("setting_off"),
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) { saveDraft(draft.copy(deleteToTrashByDefault = it)) }
+
+                CollapsibleSettingsSection(
+                    title = tr.text("auto_stop"),
+                    summary = when (draft.autoStopMinutes) {
+                        10 -> tr.text("minutes_10")
+                        30 -> tr.text("minutes_30")
+                        60 -> tr.text("hour_1")
+                        else -> tr.text("never")
+                    },
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) {
                     AdaptiveSegmentGrid(
                         options = listOf(
                             0 to tr.text("never"),
@@ -1408,7 +1645,12 @@ private fun SettingsScreen(
                     )
                 }
 
-                SettingsSection(tr.text("network_port")) {
+                CollapsibleSettingsSection(
+                    title = tr.text("network_port"),
+                    summary = tr.text("preferred_port_summary", draft.preferredPort),
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) {
                     OutlinedTextField(
                         value = portText,
                         onValueChange = { value ->
@@ -1429,12 +1671,18 @@ private fun SettingsScreen(
                     CompactSwitchRow(tr.text("auto_find_port"), tr.text("auto_find_port_sub"), draft.autoPortFallback) {
                         saveDraft(draft.copy(autoPortFallback = it))
                     }
-                    CompactSwitchRow(tr.text("copy_after_start"), tr.text("copy_after_start_sub"), draft.copyAddressAfterStart) {
-                        saveDraft(draft.copy(copyAddressAfterStart = it))
-                    }
                 }
 
-                SettingsSection(tr.text("access_protection")) {
+                CollapsibleSettingsSection(
+                    title = tr.text("access_protection"),
+                    summary = if (draft.accessPasswordEnabled) {
+                        tr.text("password_enabled_summary")
+                    } else {
+                        tr.text("password_disabled_summary")
+                    },
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) {
                     CompactSwitchRow(
                         tr.text("access_password"),
                         tr.text("access_password_sub"),
@@ -1548,6 +1796,7 @@ private fun ServerStatusCard(
     storageText: String,
     activeTransferText: String?,
     activeTransferProgress: Float?,
+    onStart: () -> Unit,
     onCopy: () -> Unit,
     onToggleQr: () -> Unit,
     onStop: () -> Unit
@@ -1581,7 +1830,9 @@ private fun ServerStatusCard(
     )
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = !running && !starting, onClick = onStart),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         border = BorderStroke(
@@ -1620,22 +1871,18 @@ private fun ServerStatusCard(
                     )
                 }
                 Text(
-                    if (running) tr.text("running") else if (starting) tr.text("starting") else tr.text("stopped"),
+                    if (running) tr.text("running") else if (starting) tr.text("starting") else tr.text("start_sharing"),
                     modifier = Modifier.weight(1f),
                     color = foreground,
                     fontWeight = FontWeight.Bold
                 )
-                if (running) {
-                    OutlinedButton(
-                        onClick = onStop,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = foreground),
-                        contentPadding = PaddingValues(horizontal = 11.dp, vertical = 6.dp)
-                    ) { Text(tr.text("stop"), maxLines = 1) }
+                if (!running && !starting) {
+                    StatusChip(tr.text("tap_to_start"))
                 }
             }
 
             Text(
-                compactStatus,
+                if (!running && !starting) tr.text("start_sharing_hint") else compactStatus,
                 modifier = Modifier.fillMaxWidth(),
                 color = secondaryText,
                 style = MaterialTheme.typography.bodySmall,
@@ -1709,30 +1956,32 @@ private fun ServerStatusCard(
                 }
             }
 
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val connectionMetric = Triple(tr.text("connections"), connections.toString(), "")
-                val sendMetric = Triple(tr.text("send"), formatTransferRate(downloadSpeed).first, formatTransferRate(downloadSpeed).second)
-                val receiveMetric = Triple(tr.text("receive"), formatTransferRate(uploadSpeed).first, formatTransferRate(uploadSpeed).second)
-                val taskMetric = Triple(tr.text("tasks"), taskCount.toString(), "")
-                val metrics = listOf(connectionMetric, sendMetric, receiveMetric, taskMetric)
+            if (running || starting) {
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val connectionMetric = Triple(tr.text("connections"), connections.toString(), "")
+                    val sendMetric = Triple(tr.text("send"), formatTransferRate(downloadSpeed).first, formatTransferRate(downloadSpeed).second)
+                    val receiveMetric = Triple(tr.text("receive"), formatTransferRate(uploadSpeed).first, formatTransferRate(uploadSpeed).second)
+                    val taskMetric = Triple(tr.text("tasks"), taskCount.toString(), "")
+                    val metrics = listOf(connectionMetric, sendMetric, receiveMetric, taskMetric)
 
-                if (maxWidth < 520.dp) {
-                    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                        metrics.chunked(2).forEach { rowItems ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(7.dp)
-                            ) {
-                                rowItems.forEach { (label, value, unit) ->
-                                    MetricPill(label, value, unit, foreground, secondaryText, Modifier.weight(1f))
+                    if (maxWidth < 520.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            metrics.chunked(2).forEach { rowItems ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                                ) {
+                                    rowItems.forEach { (label, value, unit) ->
+                                        MetricPill(label, value, unit, foreground, secondaryText, Modifier.weight(1f))
+                                    }
                                 }
                             }
                         }
-                    }
-                } else {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        metrics.forEach { (label, value, unit) ->
-                            MetricPill(label, value, unit, foreground, secondaryText, Modifier.weight(1f))
+                    } else {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                            metrics.forEach { (label, value, unit) ->
+                                MetricPill(label, value, unit, foreground, secondaryText, Modifier.weight(1f))
+                            }
                         }
                     }
                 }
@@ -1758,6 +2007,21 @@ private fun ServerStatusCard(
                             trackColor = Color.White.copy(alpha = 0.18f)
                         )
                     }
+                }
+            }
+
+            if (running) {
+                Button(
+                    onClick = onStop,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    ),
+                    shape = RoundedCornerShape(13.dp),
+                    contentPadding = PaddingValues(vertical = 11.dp)
+                ) {
+                    Text(tr.text("stop"), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -1894,7 +2158,10 @@ private fun ActionTile(
             .scale(scale)
             .clickable(interactionSource = interactionSource, indication = null, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = premiumPanelColor(emphasized = true)),
+        colors = CardDefaults.cardColors(
+            containerColor = premiumPanelColor(emphasized = true),
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
         border = BorderStroke(1.dp, premiumPanelBorderColor()),
         elevation = CardDefaults.cardElevation(
             defaultElevation = if (darkSurface) 4.dp else 0.dp,
@@ -1924,7 +2191,10 @@ private fun CompactCard(
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = premiumPanelColor()),
+        colors = CardDefaults.cardColors(
+            containerColor = premiumPanelColor(),
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
         border = BorderStroke(1.dp, premiumPanelBorderColor()),
         elevation = CardDefaults.cardElevation(defaultElevation = if (darkSurface) 3.dp else 0.dp)
     ) {
@@ -1998,7 +2268,8 @@ private fun BrandHeader(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (darkSurface) premiumPanelColor() else Color.Transparent
+            containerColor = if (darkSurface) premiumPanelColor() else Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
         border = if (darkSurface) BorderStroke(1.dp, premiumPanelBorderColor()) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = if (darkSurface) 5.dp else 0.dp)
@@ -2114,6 +2385,95 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
         Text(title, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.height(8.dp))
         Column(verticalArrangement = Arrangement.spacedBy(6.dp), content = content)
+    }
+}
+
+@Composable
+private fun CollapsibleSettingsSection(
+    title: String,
+    summary: String,
+    expandDescription: String,
+    collapseDescription: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    CompactCard(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = title,
+                modifier = Modifier.weight(1f),
+                fontWeight = FontWeight.Black,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Icon(
+                painter = painterResource(R.drawable.ic_chevron_right_24),
+                contentDescription = if (expanded) collapseDescription else expandDescription,
+                modifier = Modifier
+                    .size(20.dp)
+                    .rotate(if (expanded) 90f else 0f),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Column(
+                modifier = Modifier.padding(top = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                content = content
+            )
+        }
+    }
+}
+
+@Composable
+private fun CollapsibleToggleSetting(
+    title: String,
+    description: String,
+    checked: Boolean,
+    onSummary: String,
+    offSummary: String,
+    expandDescription: String,
+    collapseDescription: String,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    CollapsibleSettingsSection(
+        title = title,
+        summary = if (checked) onSummary else offSummary,
+        expandDescription = expandDescription,
+        collapseDescription = collapseDescription
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f))
+                .clickable { onCheckedChange(!checked) }
+                .padding(horizontal = 11.dp, vertical = 9.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = description,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Switch(checked = checked, onCheckedChange = onCheckedChange)
+        }
     }
 }
 

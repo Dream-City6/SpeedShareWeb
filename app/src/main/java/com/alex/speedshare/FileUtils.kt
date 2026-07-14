@@ -3,11 +3,13 @@ package com.alex.speedshare
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
 import android.webkit.MimeTypeMap
-import android.os.Environment
+import androidx.core.content.FileProvider
 import java.io.File
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -20,6 +22,74 @@ import java.text.SimpleDateFormat
 import java.util.Collections
 import java.util.Date
 import java.util.Locale
+
+enum class HistoryFileOpenResult {
+    OPENED,
+    NOT_OPENABLE,
+    MISSING,
+    INSTALL_PERMISSION_REQUIRED,
+    NO_APP
+}
+
+fun canOpenHistoryFile(item: TransferHistoryItem): Boolean =
+    item.itemCount == 1 && item.kind in setOf(TransferHistoryKind.UPLOAD, TransferHistoryKind.DOWNLOAD)
+
+fun openHistoryFile(
+    context: Context,
+    item: TransferHistoryItem,
+    mode: ShareMode?,
+    selectedFiles: List<SharedFile>
+): HistoryFileOpenResult {
+    if (!canOpenHistoryFile(item)) return HistoryFileOpenResult.NOT_OPENABLE
+
+    val storedTarget = item.openTarget.orEmpty()
+    val uri: Uri
+    val mimeType: String
+    if (storedTarget.startsWith("content://")) {
+        uri = Uri.parse(storedTarget)
+        mimeType = context.contentResolver.getType(uri) ?: guessMimeType(item.name)
+    } else if (storedTarget.isNotBlank()) {
+        val file = File(storedTarget)
+            .takeIf { it.exists() && it.isFile && it.canRead() }
+            ?: return HistoryFileOpenResult.MISSING
+        uri = runCatching {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }.getOrElse { return HistoryFileOpenResult.MISSING }
+        mimeType = guessMimeType(file.name)
+    } else if (mode == ShareMode.SELECTED_FILES && item.kind == TransferHistoryKind.DOWNLOAD) {
+        val sharedFile = selectedFiles.firstOrNull { it.name == item.name }
+            ?: return HistoryFileOpenResult.MISSING
+        uri = sharedFile.uri
+        mimeType = sharedFile.mimeType
+    } else {
+        val root = Environment.getExternalStorageDirectory()
+        val file = safeResolve(root, item.path)
+            ?.takeIf { it.exists() && it.isFile && it.canRead() }
+            ?: return HistoryFileOpenResult.MISSING
+        uri = runCatching {
+            FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+        }.getOrElse { return HistoryFileOpenResult.MISSING }
+        mimeType = guessMimeType(file.name)
+    }
+
+    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, mimeType)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    val isApk = item.name.endsWith(".apk", ignoreCase = true) ||
+        mimeType == "application/vnd.android.package-archive"
+    if (
+        isApk &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        !context.packageManager.canRequestPackageInstalls()
+    ) {
+        return HistoryFileOpenResult.INSTALL_PERMISSION_REQUIRED
+    }
+    return runCatching {
+        context.startActivity(viewIntent)
+        HistoryFileOpenResult.OPENED
+    }.getOrDefault(HistoryFileOpenResult.NO_APP)
+}
 
 fun querySharedFile(context: Context, uri: Uri, mimeTypeHint: String? = null): SharedFile? {
     var queriedName: String? = null

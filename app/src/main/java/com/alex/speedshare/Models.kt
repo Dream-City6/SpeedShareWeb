@@ -97,7 +97,8 @@ data class TransferHistoryItem(
     val bytes: Long,
     val itemCount: Int,
     val timestampMs: Long,
-    val status: FileOperationState = FileOperationState.COMPLETED
+    val status: FileOperationState = FileOperationState.COMPLETED,
+    val openTarget: String? = null
 )
 
 enum class ConflictPolicy(val webValue: String) {

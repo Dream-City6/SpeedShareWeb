@@ -43,7 +43,6 @@ class SpeedShareService : Service() {
         val autoStopMinutes: Int,
         val preferredPort: Int,
         val autoPortFallback: Boolean,
-        val copyAddressAfterStart: Boolean,
         val language: AppLanguage,
         val successPrefix: String
     )
@@ -202,7 +201,6 @@ class SpeedShareService : Service() {
             preferredPort = intent.getIntExtra(EXTRA_PREFERRED_PORT, 9999)
                 .coerceIn(1024, 65535),
             autoPortFallback = intent.getBooleanExtra(EXTRA_AUTO_PORT_FALLBACK, true),
-            copyAddressAfterStart = intent.getBooleanExtra(EXTRA_COPY_ADDRESS_AFTER_START, true),
             language = AppLanguage.fromStored(intent.getStringExtra(EXTRA_LANGUAGE)),
             successPrefix = intent.getStringExtra(EXTRA_SUCCESS_PREFIX)
                 ?: Localization.translator(this, AppLanguage.fromStored(intent.getStringExtra(EXTRA_LANGUAGE))).text("server_started")
@@ -360,10 +358,6 @@ class SpeedShareService : Service() {
 
         updateState(state)
         notifyState(state)
-        if (config.copyAddressAfterStart && address != null) {
-            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            clipboard.setPrimaryClip(ClipData.newPlainText(tr.text("address_label"), address))
-        }
         scheduleIdleStop()
     }
 
@@ -749,7 +743,6 @@ class SpeedShareService : Service() {
         private const val EXTRA_AUTO_STOP_MINUTES = "auto_stop_minutes"
         private const val EXTRA_PREFERRED_PORT = "preferred_port"
         private const val EXTRA_AUTO_PORT_FALLBACK = "auto_port_fallback"
-        private const val EXTRA_COPY_ADDRESS_AFTER_START = "copy_address_after_start"
         private const val EXTRA_SUCCESS_PREFIX = "success_prefix"
         private const val EXTRA_LANGUAGE = "language"
         private const val EXTRA_ACCESS_PASSWORD_HASH = "access_password_hash"
@@ -766,7 +759,6 @@ class SpeedShareService : Service() {
             autoStopMinutes: Int = 0,
             preferredPort: Int = 9999,
             autoPortFallback: Boolean = true,
-            copyAddressAfterStart: Boolean = true,
             accessPasswordHash: String = AppSettings.load(context).let {
                 if (it.accessPasswordEnabled) it.accessPasswordHash else ""
             },
@@ -788,7 +780,6 @@ class SpeedShareService : Service() {
                 putExtra(EXTRA_AUTO_STOP_MINUTES, autoStopMinutes)
                 putExtra(EXTRA_PREFERRED_PORT, preferredPort.coerceIn(1024, 65535))
                 putExtra(EXTRA_AUTO_PORT_FALLBACK, autoPortFallback)
-                putExtra(EXTRA_COPY_ADDRESS_AFTER_START, copyAddressAfterStart)
                 putExtra(EXTRA_ACCESS_PASSWORD_HASH, accessPasswordHash)
                 putExtra(EXTRA_LANGUAGE, language.storedValue)
                 putExtra(EXTRA_SUCCESS_PREFIX, successPrefix)

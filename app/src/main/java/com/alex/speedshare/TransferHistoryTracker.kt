@@ -21,7 +21,8 @@ class TransferHistoryTracker(
         clientAddress: String,
         bytes: Long,
         itemCount: Int = 1,
-        status: FileOperationState = FileOperationState.COMPLETED
+        status: FileOperationState = FileOperationState.COMPLETED,
+        openTarget: String? = null
     ) {
         synchronized(this) {
             items.addFirst(
@@ -34,7 +35,8 @@ class TransferHistoryTracker(
                     bytes = bytes.coerceAtLeast(0L),
                     itemCount = itemCount.coerceAtLeast(0),
                     timestampMs = System.currentTimeMillis(),
-                    status = status
+                    status = status,
+                    openTarget = openTarget
                 )
             )
             while (items.size > maxItems) items.removeLast()
