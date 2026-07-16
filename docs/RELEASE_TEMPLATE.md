@@ -1,4 +1,4 @@
-# SpeedShareWeb v1.4.0
+# SpeedShareWeb v1.4.1
 
 This is an official stable release of SpeedShareWeb.
 
@@ -13,20 +13,13 @@ SpeedShareWeb turns an Android phone into a local file server that can be access
 - English, Simplified Chinese and Japanese interfaces
 - No account, cloud storage or advertising
 
-## What changed in v1.4.0
+## What changed in v1.4.1
 
-- Adds a new launcher icon, adaptive and round assets, branded launch screen and matching system shortcuts
-- Redesigns Android home, settings and recycle-bin screens with an aurora background, tonal panels and responsive phone/tablet layouts
-- Keeps content below status bars, notches and punch-hole cameras while preserving edge-to-edge background color
-- Shows live transfer progress and running status directly in the Android status card
-- Adds system, light and dark appearance modes while blocking broken OEM force-dark conversion
-- Uses a state-aware home screen: tap the stopped card to start sharing, then access focused copy, QR, replace and stop controls while running
-- Collapses low-frequency settings into concise summaries with their current values
-- Opens single-file transfer history directly with the appropriate Android app, including a guided APK installation flow
-- Stops automatically copying the server address and keeps clipboard changes user-initiated
-- Prewarms settings after the first home frame and uses a GPU-only slide transition for consistently smooth repeated navigation
-- Refreshes the browser palette, drag feedback, progress effects, dialogs and wide-screen utility layout
-- Preserves reduced-motion behavior and avoids expensive full-screen blur effects
+- Refines the Android home and settings layouts for clearer sharing controls
+- Improves Simplified Chinese, Japanese and English text wrapping on narrow screens
+- Fixes light/dark readability across more devices and OEM color settings
+- Makes repeated home/settings navigation and the Share settings card behave consistently
+- Refreshes the README and website showcase with the latest app and browser screenshots
 
 ## Installation
 
@@ -41,5 +34,5 @@ SpeedShareWeb uses plain HTTP. Optional password protection can restrict access 
 
 ## Files
 
-- `SpeedShareWeb-v1.4.0.apk`
-- Optional checksum file: `SpeedShareWeb-v1.4.0.apk.sha256`
+- `SpeedShareWeb-v1.4.1.apk`
+- Optional checksum file: `SpeedShareWeb-v1.4.1.apk.sha256`

@@ -4,6 +4,20 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.4.1] - 2026-07-16
+
+### Changed
+
+- Refine the Android home and settings layouts for clearer, more intuitive access to sharing controls
+- Improve Simplified Chinese, Japanese and English text sizing and wrapping on narrow screens
+- Refresh the README and website showcase with the latest Android and browser interface screenshots
+
+### Fixed
+
+- Keep text and controls readable when device light, dark or OEM forced-color settings change
+- Make the Share settings card open and close consistently when tapped repeatedly
+- Improve screen transitions and repeated navigation between the home and settings pages
+
 ## [1.4.0] - 2026-07-15
 
 ### Added

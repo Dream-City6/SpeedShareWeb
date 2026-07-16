@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.0/SpeedShareWeb-v1.4.0.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.4.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.4.0 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.1/SpeedShareWeb-v1.4.1.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.4.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.4.1 APK">
 </a>
 
 <br><br>
 
-v1.4.0 introduces a new brand icon and launch screen, responsive Android and browser interfaces, selectable appearance modes, a state-aware sharing dashboard, clickable transfer history, clearer live progress, and smoother navigation.
+v1.4.1 refines the Android home and settings experience, improves trilingual layouts and repeated navigation, and fixes light/dark appearance readability across more devices.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -37,6 +37,8 @@ The receiving device does not need to install an app. Simply open the local addr
 
 - Access from browsers on phones, tablets, and computers
 - No account or cloud storage required
+- Start whole-phone sharing from one clear, full-card action
+- Monitor connections, transfer speed, active tasks, and file progress in real time
 - Browse, upload, download, move, and delete files
 - Use common file actions from a compact desktop right-click or mobile long-press menu
 - Use Ctrl/Command/Shift multi-selection on desktop and remove individual files from the upload queue before transfer
@@ -44,30 +46,59 @@ The receiving device does not need to install an app. Simply open the local addr
 - Single-file, multi-file, and ZIP downloads
 - Review recent uploads, downloads, and file-management operations
 - Optional clipboard sync between the Android app and the browser page
-- Responsive list and grid views
+- Responsive list and grid views with drag-and-drop file or folder upload
 - Restore, permanently delete, or clear files from the recycle bin
-- English, Simplified Chinese, and Japanese interfaces
+- System, light, and dark appearance modes
+- English, Simplified Chinese, and Japanese app and browser interfaces
 - No advertising
 
 ## Screenshots
 
+### Android app
+
 <table>
   <tr>
     <td align="center">
-      <img src="docs/screenshots/app-home-en.jpg" width="300" alt="SpeedShareWeb English home screen">
+      <img src="docs/screenshots/app-home-zh-CN.jpg" width="220" alt="SpeedShareWeb Simplified Chinese light home screen">
       <br>
-      <sub>Android app home screen</sub>
+      <sub>Light home · Simplified Chinese</sub>
     </td>
     <td align="center">
-      <img src="docs/screenshots/app-home-ja.jpg" width="300" alt="SpeedShareWeb Japanese home screen">
+      <img src="docs/screenshots/app-home-ja.jpg" width="220" alt="SpeedShareWeb Japanese light home screen">
       <br>
-      <sub>Live transfer status</sub>
+      <sub>Light home · Japanese</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/app-home-en.jpg" width="220" alt="SpeedShareWeb English dark home screen">
+      <br>
+      <sub>Dark home and transfer history</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/app-running-en.jpg" width="220" alt="SpeedShareWeb live transfer dashboard">
+      <br>
+      <sub>Live speed, progress, and controls</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/settings-en-general.jpg" width="220" alt="SpeedShareWeb appearance and language settings">
+      <br>
+      <sub>Appearance, language, and defaults</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/settings-en-network.jpg" width="220" alt="SpeedShareWeb compact advanced settings">
+      <br>
+      <sub>Compact security and network settings</sub>
     </td>
   </tr>
 </table>
 
+### Browser file manager
+
 <p align="center">
-  <img src="docs/screenshots/web-file-manager.png" width="100%" alt="SpeedShareWeb browser file manager">
+  <img src="docs/screenshots/web-file-manager.png" width="900" alt="SpeedShareWeb responsive browser file manager">
+  <br>
+  <sub>Drag-and-drop upload, live status, file management, search, and clipboard sync</sub>
 </p>
 
 ## How to Use
@@ -99,7 +130,8 @@ Use SpeedShareWeb only with files and devices that you are authorized to access 
 
 ## Update History
 
-- v1.4.0: Added the new brand icon and launch screen, responsive aurora UI, safe system-bar layouts, appearance modes, focused sharing controls, clickable transfer history, and smoother navigation.
+- v1.4.1: Refined the home and settings experience, improved Chinese/Japanese/English layouts and repeated navigation, fixed light/dark readability, and refreshed the project screenshots and website showcase.
+- v1.4.0: Added the new brand icon and launch screen, responsive aurora UI, one-tap whole-phone sharing, live transfer controls, light/dark appearance modes, compact settings, clickable transfer history, and a refined browser file manager.
 - v1.3.4: Added compact storage-space visibility, selected-upload size feedback, browser/server capacity checks with a 256 MB system reserve, and a password-only browser sign-in page.
 - v1.3.3: Added optional password protection and connection hardening, fixed parallel-upload refresh interruption, and protected complete copies during cross-storage trash and restore failures.
 - v1.3.2: Added compact right-click and mobile bottom-sheet actions, consistent SVG icons, safer deletion access, removable upload entries, desktop range selection, accessibility improvements, and large-directory rendering optimizations.

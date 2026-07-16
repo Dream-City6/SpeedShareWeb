@@ -574,9 +574,7 @@ private fun SpeedShareApp(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 BrandHeader(
-                    versionText = "${getAppVersion(context, tr)} · ${tr.text("app_subtitle")}",
-                    settingsText = tr.text("settings"),
-                    onSettings = { showSettings = true }
+                    versionText = "${getAppVersion(context, tr)} · ${tr.text("app_subtitle")}"
                 )
 
                 ServerStatusCard(
@@ -801,16 +799,47 @@ private fun SpeedShareApp(
                         ActionTile(
                             iconRes = R.drawable.ic_add_24,
                             title = tr.text("choose_files"),
-                            subtitle = tr.text("choose_files_sub"),
+                            subtitle = if (selectedFiles.isEmpty()) {
+                                tr.text("choose_files_sub")
+                            } else {
+                                tr.text("selected_files_ready", selectedFiles.size)
+                            },
                             modifier = Modifier.weight(1f),
                             onClick = { filePicker.launch(arrayOf("*/*")) }
                         )
                         ActionTile(
-                            iconRes = R.drawable.ic_storage_24,
-                            title = tr.text("whole_phone"),
-                            subtitle = tr.text("whole_phone_sub"),
+                            iconRes = R.drawable.ic_settings_24,
+                            title = tr.text("share_settings"),
+                            subtitle = if (showAdvanced) {
+                                tr.text("tap_to_collapse")
+                            } else {
+                                tr.text("share_settings_sub")
+                            },
                             modifier = Modifier.weight(1f),
-                            onClick = { startWholeStorageNow() }
+                            onClick = { showAdvanced = !showAdvanced }
+                        )
+                    }
+                }
+
+                AnimatedVisibility(visible = selectedFiles.isNotEmpty() && !isServerActive) {
+                    Button(
+                        onClick = {
+                            startOrReplaceServer(
+                                targetMode = ShareMode.SELECTED_FILES,
+                                targetFiles = selectedFiles,
+                                targetUploadEnabled = false,
+                                targetRemoteManagementEnabled = false,
+                                targetKeepAwake = settings.keepAwakeDuringTransfer,
+                                successPrefix = tr.text("server_started")
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        contentPadding = PaddingValues(vertical = 12.dp)
+                    ) {
+                        Text(
+                            tr.text("start_selected_files", selectedFiles.size),
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -845,10 +874,13 @@ private fun SpeedShareApp(
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Text(
-                            if (showAdvanced) "︿" else "﹀",
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Black
+                        Icon(
+                            painter = painterResource(R.drawable.ic_chevron_right_24),
+                            contentDescription = if (showAdvanced) tr.text("collapse") else tr.text("expand"),
+                            modifier = Modifier
+                                .size(20.dp)
+                                .rotate(if (showAdvanced) 90f else 0f),
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
 
@@ -1029,6 +1061,35 @@ private fun SpeedShareApp(
                         Icon(
                             painter = painterResource(R.drawable.ic_chevron_right_24),
                             contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                CompactCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showSettings = true }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        IconBubble(iconRes = R.drawable.ic_settings_24, size = 38.dp, corner = 12.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(tr.text("settings"), fontWeight = FontWeight.Bold)
+                            Text(
+                                tr.text("settings_home_sub"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            painter = painterResource(R.drawable.ic_chevron_right_24),
+                            contentDescription = tr.text("settings"),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -1465,7 +1526,7 @@ private fun SettingsScreen(
     fun saveDraft(updated: SpeedShareSettings) {
         draft = updated
         onSettingsChanged(updated)
-        statusText = Localization.translator(context, updated.language).text("settings_saved")
+        statusText = ""
     }
 
     Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
@@ -1736,7 +1797,12 @@ private fun SettingsScreen(
                     }
                 }
 
-                SettingsSection(tr.text("system_shortcuts")) {
+                CollapsibleSettingsSection(
+                    title = tr.text("system_shortcuts"),
+                    summary = tr.text("system_shortcuts_summary"),
+                    expandDescription = tr.text("expand"),
+                    collapseDescription = tr.text("collapse")
+                ) {
                     OutlinedButton(
                         onClick = { requestQuickSettingsTile(context, draft.language) { statusText = it } },
                         modifier = Modifier.fillMaxWidth(),
@@ -1809,7 +1875,7 @@ private fun ServerStatusCard(
             if (darkSurface) {
                 listOf(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.surface)
             } else {
-                listOf(Color(0xFFE5EFFA), Color(0xFFEDF5FC))
+                listOf(Color(0xFFD5E7FF), Color(0xFFE5F2FF), Color(0xFFDDF2F0))
             }
         )
     }
@@ -1837,9 +1903,19 @@ private fun ServerStatusCard(
         colors = CardDefaults.cardColors(containerColor = Color.Transparent),
         border = BorderStroke(
             1.dp,
-            if (running) Color.White.copy(alpha = 0.16f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)
+            when {
+                running -> Color.White.copy(alpha = 0.16f)
+                !starting -> MaterialTheme.colorScheme.primary.copy(alpha = 0.32f)
+                else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.24f)
+            }
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (running) 9.dp else 2.dp)
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (darkSurface) {
+                if (running) 9.dp else 2.dp
+            } else {
+                0.dp
+            }
+        )
     ) {
         Column(
             modifier = Modifier
@@ -1877,7 +1953,7 @@ private fun ServerStatusCard(
                     fontWeight = FontWeight.Bold
                 )
                 if (!running && !starting) {
-                    StatusChip(tr.text("tap_to_start"))
+                    StartActionChip(tr.text("tap_to_start"))
                 }
             }
 
@@ -1895,7 +1971,7 @@ private fun ServerStatusCard(
                 modifier = Modifier.fillMaxWidth(),
                 color = secondaryText,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -2259,20 +2335,23 @@ private fun PremiumBackground(content: @Composable BoxScope.() -> Unit) {
 
 @Composable
 private fun BrandHeader(
-    versionText: String,
-    settingsText: String,
-    onSettings: () -> Unit
+    versionText: String
 ) {
     val darkSurface = MaterialTheme.colorScheme.background.luminance() < 0.35f
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (darkSurface) premiumPanelColor() else Color.Transparent,
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        border = if (darkSurface) BorderStroke(1.dp, premiumPanelBorderColor()) else null,
-        elevation = CardDefaults.cardElevation(defaultElevation = if (darkSurface) 5.dp else 0.dp)
+    val headerShape = RoundedCornerShape(22.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (darkSurface) {
+                    Modifier
+                        .clip(headerShape)
+                        .background(premiumPanelColor())
+                        .border(1.dp, premiumPanelBorderColor(), headerShape)
+                } else {
+                    Modifier
+                }
+            )
     ) {
         Row(
             modifier = Modifier
@@ -2305,31 +2384,47 @@ private fun BrandHeader(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = "SpeedShareWeb",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = versionText,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            OutlinedButton(
-                onClick = onSettings,
-                shape = RoundedCornerShape(13.dp),
-                contentPadding = PaddingValues(horizontal = 13.dp, vertical = 8.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_settings_24),
-                    contentDescription = null,
-                    modifier = Modifier.size(17.dp)
-                )
-                Spacer(Modifier.size(6.dp))
-                Text(settingsText)
-            }
         }
+    }
+}
+
+@Composable
+private fun StartActionChip(text: String) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(horizontal = 11.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onPrimary,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
+        )
+        Icon(
+            painter = painterResource(R.drawable.ic_chevron_right_24),
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onPrimary
+        )
     }
 }
 
@@ -2398,36 +2493,72 @@ private fun CollapsibleSettingsSection(
 ) {
     var expanded by remember { mutableStateOf(false) }
     CompactCard(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable { expanded = !expanded }
-                .padding(vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                fontWeight = FontWeight.Black,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Icon(
-                painter = painterResource(R.drawable.ic_chevron_right_24),
-                contentDescription = if (expanded) collapseDescription else expandDescription,
-                modifier = Modifier
-                    .size(20.dp)
-                    .rotate(if (expanded) 90f else 0f),
-                tint = MaterialTheme.colorScheme.primary
-            )
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val compactHeader = maxWidth < 430.dp
+            if (compactHeader) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { expanded = !expanded }
+                        .padding(vertical = 2.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = title,
+                            modifier = Modifier.weight(1f),
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        CollapsibleChevron(
+                            expanded = expanded,
+                            expandDescription = expandDescription,
+                            collapseDescription = collapseDescription
+                        )
+                    }
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { expanded = !expanded }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = summary,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    CollapsibleChevron(
+                        expanded = expanded,
+                        expandDescription = expandDescription,
+                        collapseDescription = collapseDescription
+                    )
+                }
+            }
         }
         AnimatedVisibility(visible = expanded) {
             Column(
@@ -2437,6 +2568,22 @@ private fun CollapsibleSettingsSection(
             )
         }
     }
+}
+
+@Composable
+private fun CollapsibleChevron(
+    expanded: Boolean,
+    expandDescription: String,
+    collapseDescription: String
+) {
+    Icon(
+        painter = painterResource(R.drawable.ic_chevron_right_24),
+        contentDescription = if (expanded) collapseDescription else expandDescription,
+        modifier = Modifier
+            .size(20.dp)
+            .rotate(if (expanded) 90f else 0f),
+        tint = MaterialTheme.colorScheme.primary
+    )
 }
 
 @Composable
