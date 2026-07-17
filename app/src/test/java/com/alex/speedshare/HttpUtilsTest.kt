@@ -1,6 +1,7 @@
 package com.alex.speedshare
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -54,6 +55,43 @@ class HttpUtilsTest {
                     "Host: phone\r\n" +
                     "Content-Length: 10\r\n" +
                     "Content-Length: 20\r\n\r\n"
+            )
+        )
+    }
+
+    @Test
+    fun trustedMutationHeaderIsRequiredOnlyForNonAuthPosts() {
+        val trusted = readRequest(
+            "POST /api/delete HTTP/1.1\r\n" +
+                "Host: phone\r\n" +
+                "Content-Length: 0\r\n" +
+                "X-SpeedShare-Request: 1\r\n\r\n"
+        )!!
+        val untrusted = readRequest(
+            "POST /api/delete HTTP/1.1\r\n" +
+                "Host: phone\r\n" +
+                "Content-Length: 0\r\n\r\n"
+        )!!
+        val login = readRequest(
+            "POST /login HTTP/1.1\r\n" +
+                "Host: phone\r\n" +
+                "Content-Length: 0\r\n\r\n"
+        )!!
+
+        assertTrue(isTrustedMutationRequest(trusted, "/api/delete"))
+        assertFalse(isTrustedMutationRequest(untrusted, "/api/delete"))
+        assertTrue(isTrustedMutationRequest(login, "/login"))
+    }
+
+    @Test
+    fun rejectsDuplicateTrustedMutationHeaders() {
+        assertNull(
+            readRequest(
+                "POST /api/delete HTTP/1.1\r\n" +
+                    "Host: phone\r\n" +
+                    "Content-Length: 0\r\n" +
+                    "X-SpeedShare-Request: 1\r\n" +
+                    "X-SpeedShare-Request: 1\r\n\r\n"
             )
         )
     }

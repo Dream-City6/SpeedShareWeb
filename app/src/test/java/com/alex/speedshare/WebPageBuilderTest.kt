@@ -16,6 +16,14 @@ class WebPageBuilderTest {
     }
 
     @Test
+    fun browserMutationsCarryTheTrustedRequestHeader() {
+        val html = directoryPage(remoteManagementEnabled = true)
+
+        assertTrue(html.contains("xhr.setRequestHeader('X-SpeedShare-Request','1')"))
+        assertTrue(html.contains("'X-SpeedShare-Request':'1'"))
+    }
+
+    @Test
     fun liveRefreshDoesNotInterruptAnActiveUploadQueue() {
         val html = directoryPage(remoteManagementEnabled = true)
 

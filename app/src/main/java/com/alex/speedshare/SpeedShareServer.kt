@@ -19,6 +19,7 @@ import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
 import java.net.StandardSocketOptions
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Semaphore
 import java.util.concurrent.SynchronousQueue
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -56,6 +57,7 @@ class SpeedShareServer(
     private val contentRevision = AtomicLong(1L)
     private val reservedUploadBytes = AtomicLong(0L)
     private val accessSessions = AccessSessionManager()
+    private val accessAttemptLimiter = AccessAttemptLimiter()
     private val transferTracker = TransferTracker(onMetrics)
     private val historyTracker = TransferHistoryTracker(onHistory)
     private val trashManager = TrashManager(rootDirectory, translator)
@@ -70,6 +72,7 @@ class SpeedShareServer(
     )
     private val zipSelections = ConcurrentHashMap<String, ZipSelection>()
     private val selectedZipSelections = ConcurrentHashMap<String, SelectedZipSelection>()
+    private val eventStreamSlots = Semaphore(MAX_EVENT_STREAMS, true)
     private val clientExecutor = ThreadPoolExecutor(
         4,
         MAX_CLIENTS,
@@ -189,22 +192,31 @@ class SpeedShareServer(
 
                 val input = socket.socket().getInputStream()
                 val request = readHttpRequest(input) ?: return
-                socket.socket().soTimeout = 0
+                socket.socket().soTimeout = BODY_READ_TIMEOUT_MS
                 val target = parseTarget(request.target)
+                val clientKey = clientAddress(socket)
                 if (accessPasswordHash.isNotBlank()) {
                     when {
                         (request.method == "GET" || request.method == "HEAD") && target.path == "/login" -> {
                             val next = safeNextTarget(target.query["next"])
-                            if (isAuthorized(request)) {
-                                sendRedirect(socket, next)
-                            } else {
-                                sendLoginPage(socket, request.method, next, invalidPassword = false)
+                            when (authorizationResult(request, clientKey)) {
+                                AuthorizationResult.AUTHORIZED -> sendRedirect(socket, next)
+                                AuthorizationResult.RATE_LIMITED -> sendRateLimited(socket)
+                                AuthorizationResult.REQUIRED -> {
+                                    sendLoginPage(socket, request.method, next, invalidPassword = false)
+                                }
                             }
                             return
                         }
 
                         request.method == "POST" && target.path == "/login" -> {
-                            handleLogin(socket, input, request, safeNextTarget(target.query["next"]))
+                            handleLogin(
+                                socket,
+                                input,
+                                request,
+                                safeNextTarget(target.query["next"]),
+                                clientKey
+                            )
                             return
                         }
 
@@ -214,11 +226,29 @@ class SpeedShareServer(
                             return
                         }
 
-                        !isAuthorized(request) -> {
-                            sendAuthenticationRequired(socket, request, target)
-                            return
+                        else -> {
+                            when (authorizationResult(request, clientKey)) {
+                                AuthorizationResult.AUTHORIZED -> Unit
+                                AuthorizationResult.RATE_LIMITED -> {
+                                    sendRateLimited(socket)
+                                    return
+                                }
+                                AuthorizationResult.REQUIRED -> {
+                                    sendAuthenticationRequired(socket, request, target)
+                                    return
+                                }
+                            }
                         }
                     }
+                }
+                if (!isTrustedMutationRequest(request, target.path)) {
+                    sendJsonResponse(
+                        socket,
+                        request.method,
+                        "{\"error\":\"trusted_request_required\"}",
+                        "403 Forbidden"
+                    )
+                    return
                 }
                 val isGetOrHead = request.method == "GET" || request.method == "HEAD"
 
@@ -523,7 +553,15 @@ class SpeedShareServer(
                     }
 
                     isGetOrHead && target.path == "/events" -> {
-                        handleEventStream(socket)
+                        if (!eventStreamSlots.tryAcquire()) {
+                            sendTextResponse(socket, "503 Service Unavailable", "Too many event streams")
+                        } else {
+                            try {
+                                handleEventStream(socket)
+                            } finally {
+                                eventStreamSlots.release()
+                            }
+                        }
                     }
 
                     isGetOrHead && target.path == "/api/status" -> {
@@ -993,16 +1031,36 @@ class SpeedShareServer(
             sendTextResponse(socket, "400 Bad Request", "No valid files")
             return
         }
-        zipSelections.entries.removeIf { System.currentTimeMillis() - it.value.createdAtMs > 15 * 60_000L }
-        val id = UUID.randomUUID().toString().replace("-", "")
         val requestedName = validateSimpleName(target.query["name"].orEmpty()) ?: "SpeedShareWeb.zip"
         val fileName = if (requestedName.endsWith(".zip", true)) requestedName else "$requestedName.zip"
-        zipSelections[id] = ZipSelection(
-            paths = paths,
-            compress = target.query["mode"] == "compress",
-            fileName = fileName
+        val id = storeZipSelection(
+            selections = zipSelections,
+            value = ZipSelection(
+                paths = paths,
+                compress = target.query["mode"] == "compress",
+                fileName = fileName
+            ),
+            createdAt = ZipSelection::createdAtMs
         )
         sendJsonResponse(socket, request.method, "{\"url\":\"/zip?id=$id\"}", "201 Created")
+    }
+
+    private fun <T> storeZipSelection(
+        selections: ConcurrentHashMap<String, T>,
+        value: T,
+        createdAt: (T) -> Long
+    ): String {
+        synchronized(selections) {
+            val now = System.currentTimeMillis()
+            selections.entries.removeIf { now - createdAt(it.value) > ZIP_SELECTION_TTL_MS }
+            while (selections.size >= MAX_PENDING_ZIP_SELECTIONS) {
+                val oldest = selections.entries.minByOrNull { createdAt(it.value) } ?: break
+                selections.remove(oldest.key, oldest.value)
+            }
+            val id = UUID.randomUUID().toString().replace("-", "")
+            selections[id] = value
+            return id
+        }
     }
 
     private fun sendPreparedZip(socket: SocketChannel, method: String, id: String) {
@@ -1079,16 +1137,16 @@ class SpeedShareServer(
             return
         }
 
-        selectedZipSelections.entries.removeIf {
-            System.currentTimeMillis() - it.value.createdAtMs > 15 * 60_000L
-        }
-        val id = UUID.randomUUID().toString().replace("-", "")
         val requestedName = validateSimpleName(target.query["name"].orEmpty()) ?: "SpeedShareWeb.zip"
         val fileName = if (requestedName.endsWith(".zip", true)) requestedName else "$requestedName.zip"
-        selectedZipSelections[id] = SelectedZipSelection(
-            ids = ids,
-            compress = target.query["mode"] == "compress",
-            fileName = fileName
+        val id = storeZipSelection(
+            selections = selectedZipSelections,
+            value = SelectedZipSelection(
+                ids = ids,
+                compress = target.query["mode"] == "compress",
+                fileName = fileName
+            ),
+            createdAt = SelectedZipSelection::createdAtMs
         )
         sendJsonResponse(socket, request.method, "{\"url\":\"/selected-zip?id=$id\"}", "201 Created")
     }
@@ -1180,6 +1238,7 @@ class SpeedShareServer(
     }
 
     private fun addFileToZip(zip: ZipOutputStream, source: File, entryName: String) {
+        if (isSymbolicLink(source)) return
         val cleanName = entryName.trimStart('/').replace('\\', '/')
         if (source.isDirectory) {
             val directoryName = if (cleanName.endsWith('/')) cleanName else "$cleanName/"
@@ -1263,14 +1322,17 @@ class SpeedShareServer(
         }
 
         val relativeParts = uploadRelativePath.split('/')
-        val destinationDirectory = relativeParts
-            .dropLast(1)
-            .fold(directory) { current, part -> File(current, part) }
+        val uploadSubdirectory = relativeParts.dropLast(1).joinToString("/")
+        val destinationDirectory = safeResolve(directory, uploadSubdirectory)
+        if (destinationDirectory == null || trashManager.isTrashPath(destinationDirectory)) {
+            sendTextResponse(socket, "403 Forbidden", "Upload folder is outside the shared directory")
+            return
+        }
         if (!destinationDirectory.exists() && !destinationDirectory.mkdirs()) {
             sendTextResponse(socket, "500 Internal Server Error", "Could not create upload folder")
             return
         }
-        if (!destinationDirectory.isDirectory || !destinationDirectory.canWrite() || trashManager.isTrashPath(destinationDirectory)) {
+        if (!destinationDirectory.isDirectory || !destinationDirectory.canWrite()) {
             sendTextResponse(socket, "403 Forbidden", "Upload folder is not writable")
             return
         }
@@ -1290,18 +1352,24 @@ class SpeedShareServer(
             return
         }
 
-        val destination = createUniqueFile(destinationDirectory, relativeParts.last())
+        val staging = runCatching {
+            File.createTempFile(UPLOAD_STAGING_PREFIX, UPLOAD_STAGING_SUFFIX, destinationDirectory)
+        }.getOrElse {
+            reservedUploadBytes.addAndGet(-contentLength)
+            sendTextResponse(socket, "500 Internal Server Error", "Could not create upload staging file")
+            return
+        }
         var reservedRemaining = contentLength
-        var success = false
+        val requestedFileName = relativeParts.last()
         val transferId = transferTracker.begin(
             direction = TransferDirection.UPLOAD,
-            fileName = destination.name,
+            fileName = requestedFileName,
             clientAddress = clientAddress(socket),
             totalBytes = contentLength
         )
 
         try {
-            FileOutputStream(destination).use { output ->
+            FileOutputStream(staging).use { output ->
                 val buffer = ByteArray(1024 * 1024)
                 var remaining = contentLength
 
@@ -1318,21 +1386,28 @@ class SpeedShareServer(
 
                 output.fd.sync()
             }
+            if (staging.length() != contentLength) {
+                throw IllegalStateException("Uploaded size does not match Content-Length")
+            }
 
-            success = true
+            val committed = commitStagedUpload(
+                staging = staging,
+                destinationDirectory = destinationDirectory,
+                requestedName = requestedFileName
+            )
             contentRevision.incrementAndGet()
             historyTracker.add(
                 kind = TransferHistoryKind.UPLOAD,
-                name = destination.name,
-                path = destination.relativeTo(rootDirectory).invariantSeparatorsPath,
+                name = committed.name,
+                path = committed.relativeTo(rootDirectory).invariantSeparatorsPath,
                 clientAddress = clientAddress(socket),
                 bytes = contentLength,
                 itemCount = 1,
-                openTarget = destination.absolutePath
+                openTarget = committed.absolutePath
             )
             MediaScannerConnection.scanFile(
                 context,
-                arrayOf(destination.absolutePath),
+                arrayOf(committed.absolutePath),
                 null,
                 null
             )
@@ -1340,17 +1415,12 @@ class SpeedShareServer(
             sendTextResponse(
                 socket,
                 "201 Created",
-                "Uploaded: ${destination.name}"
+                "Uploaded: ${committed.name}"
             )
         } finally {
             reservedUploadBytes.addAndGet(-reservedRemaining)
             transferTracker.finish(transferId)
-            if (!success) {
-                try {
-                    destination.delete()
-                } catch (_: Exception) {
-                }
-            }
+            if (staging.exists()) runCatching { staging.delete() }
         }
     }
 
@@ -1795,19 +1865,33 @@ class SpeedShareServer(
         writeAll(socket, body)
     }
 
-    private fun isAuthorized(request: HttpRequest): Boolean {
-        if (accessPasswordHash.isBlank()) return true
-        if (accessSessions.isValid(request.headers["cookie"])) return true
+    private enum class AuthorizationResult {
+        AUTHORIZED,
+        REQUIRED,
+        RATE_LIMITED
+    }
+
+    private fun authorizationResult(request: HttpRequest, clientKey: String): AuthorizationResult {
+        if (accessPasswordHash.isBlank()) return AuthorizationResult.AUTHORIZED
+        if (accessSessions.isValid(request.headers["cookie"])) return AuthorizationResult.AUTHORIZED
         val password = AccessPassword.passwordFromBasicAuthorization(request.headers["authorization"])
-            ?: return false
-        return AccessPassword.matches(password, accessPasswordHash)
+            ?: return AuthorizationResult.REQUIRED
+        if (!accessAttemptLimiter.isAllowed(clientKey)) return AuthorizationResult.RATE_LIMITED
+        return if (AccessPassword.matches(password, accessPasswordHash)) {
+            accessAttemptLimiter.recordSuccess(clientKey)
+            AuthorizationResult.AUTHORIZED
+        } else {
+            accessAttemptLimiter.recordFailure(clientKey)
+            AuthorizationResult.REQUIRED
+        }
     }
 
     private fun handleLogin(
         socket: SocketChannel,
         input: InputStream,
         request: HttpRequest,
-        next: String
+        next: String,
+        clientKey: String
     ) {
         val password = runCatching {
             readTextBody(input, request, maxLength = 1024)
@@ -1820,11 +1904,31 @@ class SpeedShareServer(
                 ?.second
         }.getOrNull()
 
+        if (!accessAttemptLimiter.isAllowed(clientKey)) {
+            sendRateLimited(socket)
+            return
+        }
         if (password != null && AccessPassword.matches(password, accessPasswordHash)) {
+            accessAttemptLimiter.recordSuccess(clientKey)
             sendRedirect(socket, next, sessionToken = accessSessions.create())
         } else {
+            accessAttemptLimiter.recordFailure(clientKey)
             sendLoginPage(socket, request.method, next, invalidPassword = true)
         }
+    }
+
+    private fun sendRateLimited(socket: SocketChannel) {
+        val body = "Too many authentication attempts".toByteArray(StandardCharsets.UTF_8)
+        val header = buildString {
+            append("HTTP/1.1 429 Too Many Requests\r\n")
+            append("Content-Type: text/plain; charset=utf-8\r\n")
+            append("Content-Length: ${body.size}\r\n")
+            append("Retry-After: 60\r\n")
+            append("Cache-Control: no-store\r\n")
+            append("Connection: close\r\n\r\n")
+        }
+        writeAll(socket, header.toByteArray(StandardCharsets.US_ASCII))
+        writeAll(socket, body)
     }
 
     private fun sendLoginPage(socket: SocketChannel, method: String, next: String, invalidPassword: Boolean) {
@@ -1899,7 +2003,13 @@ class SpeedShareServer(
 
     private companion object {
         const val MAX_CLIENTS = 32
+        const val MAX_EVENT_STREAMS = 8
+        const val MAX_PENDING_ZIP_SELECTIONS = 128
         const val HEADER_READ_TIMEOUT_MS = 15_000
+        const val BODY_READ_TIMEOUT_MS = 60_000
+        const val ZIP_SELECTION_TTL_MS = 15L * 60L * 1000L
+        const val UPLOAD_STAGING_PREFIX = ".SpeedShareWebUpload-"
+        const val UPLOAD_STAGING_SUFFIX = ".tmp"
     }
 
     private fun sendEmptyResponse(socket: SocketChannel, status: String) {

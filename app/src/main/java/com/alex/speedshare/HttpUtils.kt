@@ -70,6 +70,11 @@ fun readHttpRequest(input: InputStream): HttpRequest? {
     )
 }
 
+fun isTrustedMutationRequest(request: HttpRequest, targetPath: String): Boolean {
+    if (request.method != "POST" || targetPath == "/login" || targetPath == "/logout") return true
+    return request.headers[TRUSTED_MUTATION_HEADER] == TRUSTED_MUTATION_VALUE
+}
+
 fun parseTarget(target: String): ParsedTarget {
     return try {
         val uri = URI(target)
@@ -125,4 +130,13 @@ private fun isHttpTokenCharacter(char: Char): Boolean {
 private const val MAX_HEADER_BYTES = 64 * 1024
 private const val MAX_TARGET_CHARS = 8 * 1024
 private val SUPPORTED_METHODS = setOf("GET", "HEAD", "POST")
-private val SINGLE_VALUE_HEADERS = setOf("host", "content-length", "transfer-encoding", "authorization")
+private val SINGLE_VALUE_HEADERS = setOf(
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "authorization",
+    TRUSTED_MUTATION_HEADER
+)
+
+internal const val TRUSTED_MUTATION_HEADER = "x-speedshare-request"
+internal const val TRUSTED_MUTATION_VALUE = "1"

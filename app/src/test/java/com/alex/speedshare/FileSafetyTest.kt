@@ -149,6 +149,46 @@ class FileSafetyTest {
         }
     }
 
+    @Test
+    fun controlledDeleteRemovesASymbolicLinkWithoutTouchingItsTarget() {
+        withTempDirectory { root ->
+            val outside = Files.createTempDirectory("speedshare-link-target-").toFile()
+            try {
+                val protectedFile = File(outside, "protected.txt").apply { writeText("keep") }
+                val link = File(root, "linked-directory")
+                Files.createSymbolicLink(link.toPath(), outside.toPath())
+
+                assertTrue(deleteRecursivelyControlled(link))
+                assertFalse(link.exists())
+                assertEquals("keep", protectedFile.readText())
+            } finally {
+                outside.deleteRecursively()
+            }
+        }
+    }
+
+    @Test
+    fun recursiveCopyRejectsSymbolicLinks() {
+        withTempDirectory { root ->
+            val source = File(root, "source").apply { mkdirs() }
+            val destination = File(root, "destination")
+            val outside = Files.createTempDirectory("speedshare-copy-link-").toFile()
+            try {
+                File(outside, "private.txt").writeText("private")
+                Files.createSymbolicLink(File(source, "outside").toPath(), outside.toPath())
+
+                val result = runCatching {
+                    copyRecursivelyControlled(source, destination, translator = translator)
+                }
+
+                assertTrue(result.isFailure)
+                assertFalse(File(destination, "outside/private.txt").exists())
+            } finally {
+                outside.deleteRecursively()
+            }
+        }
+    }
+
     private fun writePendingMetadata(
         entryDirectory: File,
         name: String,

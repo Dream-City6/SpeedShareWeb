@@ -1058,6 +1058,7 @@ object WebPageBuilder {
                     let lastStatusRenderAt = 0;
                     xhr.open('POST',url);
                     xhr.setRequestHeader('Content-Type','application/octet-stream');
+                    xhr.setRequestHeader('X-SpeedShare-Request','1');
                     xhr.upload.onprogress = function(event){
                       if(!event.lengthComputable) return;
                       const seconds = Math.max((performance.now() - started) / 1000,0.001);
@@ -1239,7 +1240,7 @@ object WebPageBuilder {
 
                 async function apiPost(url, lines){
                   const body = (lines || []).map(function(value){return encodeURIComponent(value);}).join('\n');
-                  const response = await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:body});
+                  const response = await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8','X-SpeedShare-Request':'1'},body:body});
                   const text = await response.text();
                   if(!response.ok) throw new Error(text || ('HTTP ' + response.status));
                   if(!text) return {};
@@ -1280,7 +1281,7 @@ object WebPageBuilder {
                   const input=document.getElementById('clipboardInput');
                   if(!input)return;
                   try{
-                    const response=await fetch('/api/clipboard',{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:input.value || ''});
+                    const response=await fetch('/api/clipboard',{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8','X-SpeedShare-Request':'1'},body:input.value || ''});
                     const text=await response.text();
                     if(!response.ok)throw new Error(text || ('HTTP '+response.status));
                     showConnectionBanner(t('web_clipboard_sent'),'ok',false);

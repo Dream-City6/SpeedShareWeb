@@ -253,7 +253,7 @@ class FileOperationManager(
                             )
                             ensureNotCancelled(handle)
                         } catch (error: Throwable) {
-                            runCatching { destination.deleteRecursively() }
+                            runCatching { deleteRecursivelyControlled(destination) }
                             throw error
                         }
                         if (move && !deleteRecursivelyControlled(source) { handle.isCancelled() }) {

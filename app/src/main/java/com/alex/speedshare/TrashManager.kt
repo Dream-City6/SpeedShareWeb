@@ -3,6 +3,7 @@ package com.alex.speedshare
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.nio.file.Files
 import java.util.Properties
 import java.util.UUID
 
@@ -58,11 +59,11 @@ class TrashManager(
             if (!moved) {
                 runCatching {
                     copyRecursivelyControlled(child, destination, translator = translator)
-                    child.deleteRecursively()
+                    deleteRecursivelyControlled(child)
                 }
             }
         }
-        runCatching { legacyTrashRoot.deleteRecursively() }
+        runCatching { deleteRecursivelyControlled(legacyTrashRoot) }
     }
 
     fun moveToTrash(
@@ -121,8 +122,8 @@ class TrashManager(
             }
         } catch (error: Throwable) {
             if (!moved && !copiedSafely) {
-                runCatching { dataFile.deleteRecursively() }
-                runCatching { entryDirectory.deleteRecursively() }
+                runCatching { deleteRecursivelyControlled(dataFile) }
+                runCatching { deleteRecursivelyControlled(entryDirectory) }
             }
             // If data was already moved or copied completely, keep the pending metadata and data.
             // listEntries() can safely promote it after validating size and item count.
@@ -186,21 +187,21 @@ class TrashManager(
             cleanupRestoredEntry(entryDirectory, dataFile)
             return destination
         } catch (error: Throwable) {
-            if (!moved && !copiedSafely && destination.exists()) runCatching { destination.deleteRecursively() }
+            if (!moved && !copiedSafely && destination.exists()) runCatching { deleteRecursivelyControlled(destination) }
             throw error
         }
     }
 
     fun permanentDelete(id: String): Boolean {
         val entryDirectory = safeEntryDirectory(id) ?: return false
-        return entryDirectory.deleteRecursively()
+        return deleteRecursivelyControlled(entryDirectory)
     }
 
     fun emptyTrash(): Boolean {
         trashRoot.mkdirs()
         var success = true
         trashRoot.listFiles()?.forEach { child ->
-            if (child.name != ".nomedia" && !child.deleteRecursively()) success = false
+            if (child.name != ".nomedia" && !deleteRecursivelyControlled(child)) success = false
         }
         return success
     }
@@ -268,9 +269,9 @@ class TrashManager(
         }
         if (!metadataHidden) return
 
-        runCatching { dataFile.deleteRecursively() }
+        runCatching { deleteRecursivelyControlled(dataFile) }
         if (!dataFile.exists()) {
-            runCatching { entryDirectory.deleteRecursively() }
+            runCatching { deleteRecursivelyControlled(entryDirectory) }
         }
     }
 
@@ -344,9 +345,9 @@ fun replaceWithCopiedSource(
 
         // Failure to remove the hidden backup is not a failed replacement: both the new file
         // and the old complete copy are still safe. A later cleanup can remove the stale backup.
-        runCatching { backup.deleteRecursively() }
+        runCatching { deleteRecursivelyControlled(backup) }
     } catch (error: Throwable) {
-        runCatching { staging.deleteRecursively() }
+        runCatching { deleteRecursivelyControlled(staging) }
         if (!destination.exists() && backup.exists()) {
             runCatching { backup.renameTo(destination) }
         }
@@ -369,15 +370,19 @@ fun createUniquePath(requested: File): File {
     }
 }
 
+fun isSymbolicLink(file: File): Boolean =
+    runCatching { Files.isSymbolicLink(file.toPath()) }.getOrDefault(false)
+
 fun recursiveSize(file: File): Long {
     if (!file.exists()) return 0L
+    if (isSymbolicLink(file)) return 0L
     if (file.isFile) return file.length()
     return file.listFiles()?.sumOf(::recursiveSize) ?: 0L
 }
 
 fun recursiveItemCount(file: File): Int {
     if (!file.exists()) return 0
-    if (file.isFile) return 1
+    if (isSymbolicLink(file) || file.isFile) return 1
     return 1 + (file.listFiles()?.sumOf(::recursiveItemCount) ?: 0)
 }
 
@@ -389,6 +394,9 @@ fun copyRecursivelyControlled(
     translator: Translator
 ) {
     if (isCancelled()) throw InterruptedException(translator.text("op_cancelled_exception"))
+    if (isSymbolicLink(source)) {
+        throw IllegalArgumentException(translator.text("trash_original_invalid"))
+    }
     if (source.isDirectory) {
         if (!destination.exists() && !destination.mkdirs()) {
             throw IllegalStateException(translator.text("trash_create_dir_failed", destination.name))
@@ -427,6 +435,7 @@ fun deleteRecursivelyControlled(
     isCancelled: () -> Boolean = { false }
 ): Boolean {
     if (isCancelled()) return false
+    if (isSymbolicLink(file)) return file.delete()
     if (file.isDirectory) {
         file.listFiles()?.forEach { child ->
             if (!deleteRecursivelyControlled(child, isCancelled)) return false
