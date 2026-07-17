@@ -33,6 +33,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Prepare Gradle wrapper
+        run: chmod +x gradlew
+
       - name: Validate source
         shell: bash
         run: |
