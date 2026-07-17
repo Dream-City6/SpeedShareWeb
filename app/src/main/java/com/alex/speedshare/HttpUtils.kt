@@ -10,7 +10,7 @@ fun readHttpRequest(input: InputStream): HttpRequest? {
     val output = ByteArrayOutputStream()
     var matched = 0
 
-    while (output.size() < 64 * 1024) {
+    while (output.size() < MAX_HEADER_BYTES) {
         val value = input.read()
         if (value < 0) return null
         output.write(value)
@@ -31,21 +31,41 @@ fun readHttpRequest(input: InputStream): HttpRequest? {
 
     val headerText = output.toString(StandardCharsets.ISO_8859_1.name())
     val lines = headerText.split("\r\n")
-    val requestLine = lines.firstOrNull()?.split(" ", limit = 3) ?: return null
-    if (requestLine.size < 2) return null
+    val requestLine = lines.firstOrNull()?.split(' ') ?: return null
+    if (requestLine.size != 3 || requestLine.any(String::isBlank)) return null
+
+    val method = requestLine[0].uppercase(Locale.ROOT)
+    if (method !in SUPPORTED_METHODS) return null
+    val target = requestLine[1]
+    if (target.length !in 1..MAX_TARGET_CHARS || !target.startsWith('/') || target.startsWith("//")) return null
+    val version = requestLine[2]
+    if (version != "HTTP/1.1" && version != "HTTP/1.0") return null
 
     val headers = mutableMapOf<String, String>()
     lines.drop(1).forEach { line ->
+        if (line.isEmpty()) return@forEach
+        if (line.first().isWhitespace()) return null
         val separator = line.indexOf(':')
-        if (separator > 0) {
-            headers[line.substring(0, separator).trim().lowercase(Locale.ROOT)] =
-                line.substring(separator + 1).trim()
-        }
+        if (separator <= 0) return null
+        val name = line.substring(0, separator).trim().lowercase(Locale.ROOT)
+        if (name.isEmpty() || name.any { !isHttpTokenCharacter(it) }) return null
+        val value = line.substring(separator + 1).trim()
+        if (value.any { it.code == 0x7f || (it.code < 0x20 && it != '\t') }) return null
+        if (name in SINGLE_VALUE_HEADERS && headers.containsKey(name)) return null
+        headers[name] = value
+    }
+
+    if (version == "HTTP/1.1" && headers["host"].isNullOrBlank()) return null
+    val transferEncoding = headers["transfer-encoding"]
+    if (transferEncoding != null && !transferEncoding.equals("identity", ignoreCase = true)) return null
+    if (transferEncoding != null && headers.containsKey("content-length")) return null
+    headers["content-length"]?.let { value ->
+        if (value.isEmpty() || value.any { !it.isDigit() } || value.toLongOrNull() == null) return null
     }
 
     return HttpRequest(
-        method = requestLine[0].uppercase(Locale.ROOT),
-        target = requestLine[1],
+        method = method,
+        target = target,
         headers = headers
     )
 }
@@ -97,3 +117,12 @@ fun parseRange(rangeHeader: String?, totalSize: Long): LongRange? {
     if (start < 0L || start >= totalSize || end < start) return null
     return start..end
 }
+
+private fun isHttpTokenCharacter(char: Char): Boolean {
+    return char.isLetterOrDigit() || char in "!#$%&'*+-.^_`|~"
+}
+
+private const val MAX_HEADER_BYTES = 64 * 1024
+private const val MAX_TARGET_CHARS = 8 * 1024
+private val SUPPORTED_METHODS = setOf("GET", "HEAD", "POST")
+private val SINGLE_VALUE_HEADERS = setOf("host", "content-length", "transfer-encoding", "authorization")
