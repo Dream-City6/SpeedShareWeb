@@ -12,6 +12,7 @@ import java.io.FileOutputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 
 class ThumbnailManager(
@@ -22,6 +23,7 @@ class ThumbnailManager(
     private val generationGate = Semaphore(MAX_PARALLEL_GENERATIONS, true)
     private val keyLocks = ConcurrentHashMap<String, Any>()
     private val cacheMaintenanceLock = Any()
+    private val lastCacheMaintenanceAtMs = AtomicLong(0L)
     private val cacheDirectory = File(context.cacheDir, "web_thumbnails").apply {
         mkdirs()
     }
@@ -124,9 +126,19 @@ class ThumbnailManager(
     }
 
     private fun pruneCacheIfNeeded(force: Boolean) {
+        val now = System.currentTimeMillis()
+        if (force) {
+            lastCacheMaintenanceAtMs.set(now)
+        } else {
+            while (true) {
+                val previous = lastCacheMaintenanceAtMs.get()
+                if (now - previous < CACHE_MAINTENANCE_INTERVAL_MS) return
+                if (lastCacheMaintenanceAtMs.compareAndSet(previous, now)) break
+            }
+        }
+
         synchronized(cacheMaintenanceLock) {
             if (!cacheDirectory.isDirectory) return
-            val now = System.currentTimeMillis()
             cacheDirectory.listFiles()
                 ?.filter { it.isFile && it.name.endsWith(".tmp") && now - it.lastModified() > STALE_TEMP_AGE_MS }
                 ?.forEach { runCatching { it.delete() } }
@@ -136,7 +148,7 @@ class ThumbnailManager(
                 ?.sortedBy { it.lastModified() }
                 .orEmpty()
             val totalBytes = thumbnails.sumOf { it.length() }
-            if (!force && thumbnails.size <= MAX_CACHE_FILES && totalBytes <= MAX_CACHE_BYTES) return
+            if (thumbnails.size <= MAX_CACHE_FILES && totalBytes <= MAX_CACHE_BYTES) return
 
             var remainingFiles = thumbnails.size
             var remainingBytes = totalBytes
@@ -325,5 +337,6 @@ class ThumbnailManager(
         const val MAX_CACHE_BYTES = 160L * 1024L * 1024L
         const val TARGET_CACHE_BYTES = 128L * 1024L * 1024L
         const val STALE_TEMP_AGE_MS = 60L * 60L * 1000L
+        const val CACHE_MAINTENANCE_INTERVAL_MS = 60L * 1000L
     }
 }
