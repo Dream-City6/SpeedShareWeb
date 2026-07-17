@@ -9,6 +9,8 @@ import android.os.Build
 import android.util.Size
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
 import kotlin.math.max
 
@@ -17,9 +19,15 @@ class ThumbnailManager(
 ) {
     private val thumbnailWidth = 480
     private val thumbnailHeight = 320
-    private val generationGate = Semaphore(2, true)
+    private val generationGate = Semaphore(MAX_PARALLEL_GENERATIONS, true)
+    private val keyLocks = ConcurrentHashMap<String, Any>()
+    private val cacheMaintenanceLock = Any()
     private val cacheDirectory = File(context.cacheDir, "web_thumbnails").apply {
         mkdirs()
+    }
+
+    init {
+        pruneCacheIfNeeded(force = true)
     }
 
     fun thumbnailForFile(file: File, mimeType: String): File? {
@@ -47,48 +55,103 @@ class ThumbnailManager(
     }
 
     private fun getOrCreate(key: String, bitmapFactory: () -> Bitmap?): File? {
+        if (!cacheDirectory.isDirectory && !cacheDirectory.mkdirs()) return null
         val finalFile = File(cacheDirectory, "$key.jpg")
-        if (finalFile.isFile && finalFile.length() > 0L) return finalFile
+        if (finalFile.isUsableThumbnail()) return finalFile
 
-        generationGate.acquire()
+        val keyLock = keyLocks.computeIfAbsent(key) { Any() }
         try {
-            if (finalFile.isFile && finalFile.length() > 0L) return finalFile
+            return synchronized(keyLock) {
+                if (finalFile.isUsableThumbnail()) return@synchronized finalFile
 
-            val bitmap = bitmapFactory() ?: return null
-            val softwareBitmap = ensureSoftwareBitmap(bitmap)
-            val tempFile = File(cacheDirectory, "$key.tmp")
+                var permitAcquired = false
+                try {
+                    generationGate.acquire()
+                    permitAcquired = true
+                    if (finalFile.isUsableThumbnail()) return@synchronized finalFile
 
-            try {
-                var compressed = false
-                FileOutputStream(tempFile).use { output ->
-                    compressed = softwareBitmap.compress(Bitmap.CompressFormat.JPEG, 82, output)
-                    output.flush()
-                }
-                if (!compressed) return null
+                    val bitmap = bitmapFactory() ?: return@synchronized null
+                    val softwareBitmap = ensureSoftwareBitmap(bitmap)
+                    val tempFile = File(
+                        cacheDirectory,
+                        ".$key-${UUID.randomUUID().toString().replace("-", "")}.tmp"
+                    )
 
-                if (!tempFile.renameTo(finalFile)) {
-                    tempFile.copyTo(finalFile, overwrite = true)
-                    tempFile.delete()
-                }
+                    try {
+                        val compressed = FileOutputStream(tempFile).use { output ->
+                            val ok = softwareBitmap.compress(Bitmap.CompressFormat.JPEG, 82, output)
+                            output.flush()
+                            output.fd.sync()
+                            ok
+                        }
+                        if (!compressed || !tempFile.isFile || tempFile.length() <= 0L) return@synchronized null
 
-                return finalFile.takeIf { it.isFile && it.length() > 0L }
-            } finally {
-                if (softwareBitmap !== bitmap && !softwareBitmap.isRecycled) {
-                    softwareBitmap.recycle()
-                }
-                if (!bitmap.isRecycled) {
-                    bitmap.recycle()
-                }
-                if (tempFile.exists() && tempFile != finalFile) {
-                    tempFile.delete()
+                        if (finalFile.isUsableThumbnail()) {
+                            return@synchronized finalFile
+                        }
+                        if (!tempFile.renameTo(finalFile)) {
+                            tempFile.copyTo(finalFile, overwrite = false)
+                        }
+
+                        finalFile.takeIf { it.isUsableThumbnail() }?.also {
+                            pruneCacheIfNeeded(force = false)
+                        }
+                    } finally {
+                        if (softwareBitmap !== bitmap && !softwareBitmap.isRecycled) {
+                            softwareBitmap.recycle()
+                        }
+                        if (!bitmap.isRecycled) {
+                            bitmap.recycle()
+                        }
+                        if (tempFile.exists()) {
+                            tempFile.delete()
+                        }
+                    }
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    null
+                } catch (_: OutOfMemoryError) {
+                    null
+                } catch (_: Exception) {
+                    null
+                } finally {
+                    if (permitAcquired) generationGate.release()
                 }
             }
-        } catch (_: Exception) {
-            return null
         } finally {
-            generationGate.release()
+            keyLocks.remove(key, keyLock)
         }
     }
+
+    private fun pruneCacheIfNeeded(force: Boolean) {
+        synchronized(cacheMaintenanceLock) {
+            if (!cacheDirectory.isDirectory) return
+            val now = System.currentTimeMillis()
+            cacheDirectory.listFiles()
+                ?.filter { it.isFile && it.name.endsWith(".tmp") && now - it.lastModified() > STALE_TEMP_AGE_MS }
+                ?.forEach { runCatching { it.delete() } }
+
+            val thumbnails = cacheDirectory.listFiles()
+                ?.filter { it.isUsableThumbnail() }
+                ?.sortedBy { it.lastModified() }
+                .orEmpty()
+            val totalBytes = thumbnails.sumOf { it.length() }
+            if (!force && thumbnails.size <= MAX_CACHE_FILES && totalBytes <= MAX_CACHE_BYTES) return
+
+            var remainingFiles = thumbnails.size
+            var remainingBytes = totalBytes
+            thumbnails.forEach { file ->
+                if (remainingFiles <= TARGET_CACHE_FILES && remainingBytes <= TARGET_CACHE_BYTES) return@forEach
+                val length = file.length()
+                if (runCatching { file.delete() }.getOrDefault(false)) {
+                    remainingFiles--
+                    remainingBytes = (remainingBytes - length).coerceAtLeast(0L)
+                }
+            }
+        }
+    }
+
+    private fun File.isUsableThumbnail(): Boolean = isFile && length() > 0L
 
     private fun createBitmapForFile(file: File, mimeType: String): Bitmap? {
         return try {
@@ -253,5 +316,14 @@ class ThumbnailManager(
         } else {
             bitmap
         }
+    }
+
+    private companion object {
+        const val MAX_PARALLEL_GENERATIONS = 2
+        const val MAX_CACHE_FILES = 640
+        const val TARGET_CACHE_FILES = 512
+        const val MAX_CACHE_BYTES = 160L * 1024L * 1024L
+        const val TARGET_CACHE_BYTES = 128L * 1024L * 1024L
+        const val STALE_TEMP_AGE_MS = 60L * 60L * 1000L
     }
 }
