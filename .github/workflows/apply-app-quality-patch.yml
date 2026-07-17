@@ -1,0 +1,73 @@
+name: Apply App Quality Patch
+
+on:
+  push:
+    branches:
+      - agent/app-quality-review
+    paths:
+      - .github/review/APPLY
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-app-quality-patch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v6
+        with:
+          ref: agent/app-quality-review
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Decode and validate patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/review/staging/part-* | base64 --decode > /tmp/app-quality.patch
+          echo "b8147d7186404c2dc20e6afc627c8e187c8b730248a3b5c8376a3956a6c191d2  /tmp/app-quality.patch" | sha256sum --check
+          git apply --check /tmp/app-quality.patch
+          git apply /tmp/app-quality.patch
+          git diff --check
+
+      - name: Run unit tests and lint
+        shell: bash
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest lintDebug | tee /tmp/validated-patch.log
+
+      - name: Commit validated source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/review
+          rm -f .github/workflows/apply-app-quality-patch.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Harden upload and local network operations"
+          git push origin HEAD:agent/app-quality-review
+
+      - name: Upload validation log on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-quality-patch-failure
+          path: /tmp/validated-patch.log
+          retention-days: 7
+          if-no-files-found: warn
