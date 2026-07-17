@@ -44,17 +44,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/review/staging/part-* | base64 --decode > /tmp/app-quality.patch
-          echo "b8147d7186404c2dc20e6afc627c8e187c8b730248a3b5c8376a3956a6c191d2  /tmp/app-quality.patch" | sha256sum --check
-          git apply --check /tmp/app-quality.patch
+          mkdir -p /tmp/app-quality-diagnostics
+          sha256sum .github/review/staging/part-* | tee /tmp/app-quality-diagnostics/remote-part-checksums.txt
+          cat > /tmp/expected-part-checksums.txt <<'EOF'
+          dbc609d2eaeec6a2944521a0cf60d84210c5bfe5101126d0ccf5301fb9c06568  .github/review/staging/part-00
+          92098f1c84208c8b13f9fe7d6134862c560adde2e1da64e45423065a331fceb6  .github/review/staging/part-01
+          408719d67595905e74cdb6a0669cce07745673d91cc0bffecdc9000c63ddee7f  .github/review/staging/part-02
+          c4a7d44ec689edf29a364a8ff46b6809e0ace38b805ce6b7de8acdc4cdd556c7  .github/review/staging/part-03
+          98e41a9612f72da1a312b1dee07f2af0f34bf02467838637a6dd1dbdf8088607  .github/review/staging/part-04
+          EOF
+          sha256sum --check /tmp/expected-part-checksums.txt | tee /tmp/app-quality-diagnostics/part-verification.txt
+          cat .github/review/staging/part-* > /tmp/app-quality.patch.b64
+          echo "77a82a597dc371a690ac9e2ea287b40b3b5115f882cd1b1d039d409d3d0518be  /tmp/app-quality.patch.b64" | sha256sum --check | tee /tmp/app-quality-diagnostics/base64-verification.txt
+          base64 --decode /tmp/app-quality.patch.b64 > /tmp/app-quality.patch
+          echo "b8147d7186404c2dc20e6afc627c8e187c8b730248a3b5c8376a3956a6c191d2  /tmp/app-quality.patch" | sha256sum --check | tee /tmp/app-quality-diagnostics/patch-verification.txt
+          git apply --check /tmp/app-quality.patch 2>&1 | tee /tmp/app-quality-diagnostics/git-apply-check.txt
           git apply /tmp/app-quality.patch
-          git diff --check
+          git diff --check 2>&1 | tee /tmp/app-quality-diagnostics/git-diff-check.txt
 
       - name: Run unit tests and lint
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest lintDebug | tee /tmp/validated-patch.log
+          ./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest lintDebug | tee /tmp/app-quality-diagnostics/validated-patch.log
 
       - name: Commit validated source changes
         shell: bash
@@ -68,11 +80,11 @@ jobs:
           git commit -m "Harden upload and local network operations"
           git push origin HEAD:agent/app-quality-review
 
-      - name: Upload validation log on failure
+      - name: Upload validation diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: app-quality-patch-failure
-          path: /tmp/validated-patch.log
+          path: /tmp/app-quality-diagnostics
           retention-days: 7
           if-no-files-found: warn
