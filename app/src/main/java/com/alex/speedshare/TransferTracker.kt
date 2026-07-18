@@ -4,6 +4,7 @@ import android.os.SystemClock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
@@ -28,6 +29,7 @@ class TransferTracker(
     private val activeConnections = AtomicInteger(0)
     private val totalDownloadedBytes = AtomicLong(0L)
     private val totalUploadedBytes = AtomicLong(0L)
+    private val closed = AtomicBoolean(false)
     private val scheduler = Executors.newSingleThreadScheduledExecutor { runnable ->
         Thread(runnable, "SpeedShareWeb-TransferStats").apply { isDaemon = true }
     }
@@ -37,7 +39,11 @@ class TransferTracker(
 
     init {
         scheduler.scheduleWithFixedDelay(
-            { publishSnapshot() },
+            {
+                if (!closed.get()) {
+                    runCatching { publishSnapshot() }
+                }
+            },
             0L,
             500L,
             TimeUnit.MILLISECONDS
@@ -45,6 +51,7 @@ class TransferTracker(
     }
 
     fun setConnectionCount(count: Int) {
+        if (closed.get()) return
         activeConnections.set(count.coerceAtLeast(0))
     }
 
@@ -54,6 +61,7 @@ class TransferTracker(
         clientAddress: String,
         totalBytes: Long
     ): Long {
+        if (closed.get()) return CLOSED_TRANSFER_ID
         val id = nextId.getAndIncrement()
         activeTasks[id] = Task(
             id = id,
@@ -63,12 +71,12 @@ class TransferTracker(
             totalBytes = totalBytes.coerceAtLeast(0L),
             startedAtMs = System.currentTimeMillis()
         )
-        publishSnapshot()
+        runCatching { publishSnapshot() }
         return id
     }
 
     fun addBytes(id: Long, byteCount: Long) {
-        if (byteCount <= 0L) return
+        if (byteCount <= 0L || id == CLOSED_TRANSFER_ID || closed.get()) return
         val task = activeTasks[id] ?: return
         task.transferredBytes.addAndGet(byteCount)
         when (task.direction) {
@@ -78,24 +86,30 @@ class TransferTracker(
     }
 
     fun finish(id: Long) {
+        if (id == CLOSED_TRANSFER_ID) return
         activeTasks.remove(id)
-        publishSnapshot()
+        if (!closed.get()) runCatching { publishSnapshot() }
     }
 
     fun snapshot(): TransferSnapshot = latestSnapshot
 
     fun close() {
-        activeTasks.clear()
+        if (!closed.compareAndSet(false, true)) return
         scheduler.shutdownNow()
-        latestSnapshot = TransferSnapshot(
+        activeTasks.clear()
+        activeConnections.set(0)
+        val finalSnapshot = TransferSnapshot(
             activeConnections = 0,
             totalDownloadedBytes = totalDownloadedBytes.get(),
             totalUploadedBytes = totalUploadedBytes.get()
         )
-        onSnapshot(latestSnapshot)
+        latestSnapshot = finalSnapshot
+        runCatching { onSnapshot(finalSnapshot) }
     }
 
+    @Synchronized
     private fun publishSnapshot() {
+        if (closed.get()) return
         val nowNanos = SystemClock.elapsedRealtimeNanos()
         val transfers = activeTasks.values.map { task ->
             val bytes = task.transferredBytes.get()
@@ -139,6 +153,10 @@ class TransferTracker(
         )
 
         latestSnapshot = snapshot
-        onSnapshot(snapshot)
+        runCatching { onSnapshot(snapshot) }
+    }
+
+    private companion object {
+        const val CLOSED_TRANSFER_ID = 0L
     }
 }

@@ -16,6 +16,24 @@ class WebPageBuilderTest {
     }
 
     @Test
+    fun browserMutationsCarryTheTrustedRequestHeader() {
+        val html = directoryPage(remoteManagementEnabled = true)
+
+        assertTrue(html.contains("xhr.setRequestHeader('X-SpeedShare-Request','1')"))
+        assertTrue(html.contains("'X-SpeedShare-Request':'1'"))
+    }
+
+    @Test
+    fun confirmationDialogAppearsAboveTheTrashManager() {
+        val html = directoryPage(remoteManagementEnabled = true)
+
+        assertTrue(html.contains(".managerModal{z-index:180}"))
+        assertTrue(html.contains(".dialogModal{z-index:280}"))
+        assertTrue(html.contains("emptyTrashNow()"))
+        assertTrue(html.contains("confirmDialog(t('web_empty_trash_action')"))
+    }
+
+    @Test
     fun liveRefreshDoesNotInterruptAnActiveUploadQueue() {
         val html = directoryPage(remoteManagementEnabled = true)
 

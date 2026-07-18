@@ -1,0 +1,67 @@
+name: Android Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Unit tests and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Prepare Gradle wrapper
+        run: chmod +x gradlew
+
+      - name: Validate source
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest lintDebug > gradle-output.log 2>&1
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            tail -n 500 gradle-output.log > ci-failure-summary.txt
+          fi
+          exit "$status"
+
+      - name: Collect failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p ci-diagnostics
+          cp gradle-output.log ci-diagnostics/ 2>/dev/null || true
+          cp ci-failure-summary.txt ci-diagnostics/ 2>/dev/null || true
+          find app/build/reports -type f \
+            \( -name "*.html" -o -name "*.xml" -o -name "*.txt" \) \
+            -size -10M -exec cp --parents {} ci-diagnostics/ \; 2>/dev/null || true
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-quality-diagnostics
+          path: ci-diagnostics
+          retention-days: 7
+          if-no-files-found: warn

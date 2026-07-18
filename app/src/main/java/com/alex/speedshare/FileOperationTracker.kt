@@ -54,6 +54,11 @@ class FileOperationTracker(
 
     fun start(handle: Handle, totalBytes: Long, totalItems: Int, message: String = translator.text("op_processing")) {
         val operation = operations[handle.id] ?: return
+        if (operation.cancelled.get()) {
+            markCancelled(operation, translator.text("op_cancelled"))
+            onChanged()
+            return
+        }
         operation.state = FileOperationState.RUNNING
         operation.totalBytes = totalBytes.coerceAtLeast(0L)
         operation.totalItems = totalItems.coerceAtLeast(0)
@@ -94,6 +99,11 @@ class FileOperationTracker(
 
     fun complete(handle: Handle, message: String = translator.text("op_complete")) {
         val operation = operations[handle.id] ?: return
+        if (operation.cancelled.get()) {
+            markCancelled(operation, translator.text("op_cancelled"))
+            onChanged()
+            return
+        }
         operation.state = FileOperationState.COMPLETED
         operation.message = message
         if (operation.totalBytes > 0L) operation.processedBytes = operation.totalBytes
@@ -114,10 +124,7 @@ class FileOperationTracker(
 
     fun cancelled(handle: Handle, message: String = translator.text("op_cancelled")) {
         val operation = operations[handle.id] ?: return
-        operation.state = FileOperationState.CANCELLED
-        operation.message = message
-        operation.bytesPerSecond = 0L
-        operation.updatedAtMs = System.currentTimeMillis()
+        markCancelled(operation, message)
         onChanged()
     }
 
@@ -127,21 +134,35 @@ class FileOperationTracker(
             return false
         }
         operation.cancelled.set(true)
-        operation.message = translator.text("op_cancelling")
-        operation.updatedAtMs = System.currentTimeMillis()
+        if (operation.state == FileOperationState.QUEUED) {
+            markCancelled(operation, translator.text("op_cancelled"))
+        } else {
+            operation.message = translator.text("op_cancelling")
+            operation.updatedAtMs = System.currentTimeMillis()
+        }
         onChanged()
         return true
     }
 
     fun requestCancelAll() {
+        var changed = false
         operations.values.forEach { operation ->
-            if (operation.state == FileOperationState.RUNNING || operation.state == FileOperationState.QUEUED) {
-                operation.cancelled.set(true)
-                operation.message = translator.text("op_server_stopping")
-                operation.updatedAtMs = System.currentTimeMillis()
+            when (operation.state) {
+                FileOperationState.QUEUED -> {
+                    operation.cancelled.set(true)
+                    markCancelled(operation, translator.text("op_server_stopping"))
+                    changed = true
+                }
+                FileOperationState.RUNNING -> {
+                    operation.cancelled.set(true)
+                    operation.message = translator.text("op_server_stopping")
+                    operation.updatedAtMs = System.currentTimeMillis()
+                    changed = true
+                }
+                else -> Unit
             }
         }
-        onChanged()
+        if (changed) onChanged()
     }
 
     fun snapshots(): List<FileOperationSnapshot> {
@@ -165,6 +186,13 @@ class FileOperationTracker(
                     updatedAtMs = operation.updatedAtMs
                 )
             }
+    }
+
+    private fun markCancelled(operation: MutableOperation, message: String) {
+        operation.state = FileOperationState.CANCELLED
+        operation.message = message
+        operation.bytesPerSecond = 0L
+        operation.updatedAtMs = System.currentTimeMillis()
     }
 
     private fun updateSpeed(operation: MutableOperation) {

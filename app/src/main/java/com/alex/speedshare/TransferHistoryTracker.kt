@@ -24,7 +24,7 @@ class TransferHistoryTracker(
         status: FileOperationState = FileOperationState.COMPLETED,
         openTarget: String? = null
     ) {
-        synchronized(this) {
+        val snapshot = synchronized(this) {
             items.addFirst(
                 TransferHistoryItem(
                     id = nextId.getAndIncrement(),
@@ -40,17 +40,28 @@ class TransferHistoryTracker(
                 )
             )
             while (items.size > maxItems) items.removeLast()
-            onChanged(items.toList())
+            items.toList()
         }
+        notifyChanged(snapshot)
     }
 
     @Synchronized
     fun snapshot(): List<TransferHistoryItem> = items.toList()
 
     fun clear() {
-        synchronized(this) {
-            items.clear()
-            onChanged(emptyList())
+        val changed = synchronized(this) {
+            if (items.isEmpty()) {
+                false
+            } else {
+                items.clear()
+                true
+            }
         }
+        if (changed) notifyChanged(emptyList())
+    }
+
+    private fun notifyChanged(snapshot: List<TransferHistoryItem>) {
+        // UI or service observers must not turn a completed file operation into a failure.
+        runCatching { onChanged(snapshot) }
     }
 }
