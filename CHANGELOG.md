@@ -4,6 +4,25 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.4.2] - 2026-07-18
+
+### Added
+
+- Add automated Android quality checks and dependency update monitoring
+- Add regression coverage for authentication, HTTP validation, uploads, file operations and transfer history
+
+### Changed
+
+- Bound authentication attempts, request handling, transfer tracking and thumbnail work for safer long-running use
+- Make uploads and file replacements transactional so interrupted operations do not expose partial results
+- Strengthen file, trash and restore operations while preserving recoverable data on failures
+
+### Fixed
+
+- Reject malformed or unsafe HTTP requests more consistently
+- Improve session expiry, cancellation cleanup and transfer-history consistency
+- Keep destructive confirmation dialogs visible above the recycle-bin manager
+
 ## [1.4.1] - 2026-07-16
 
 ### Changed

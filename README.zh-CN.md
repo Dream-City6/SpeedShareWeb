@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.1/SpeedShareWeb-v1.4.1.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.4.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.4.1 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.2/SpeedShareWeb-v1.4.2.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.4.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.4.2 APK">
 </a>
 
 <br><br>
 
-v1.4.1 进一步优化安卓主页与设置体验，改善三语排版和重复切换流畅度，并修复更多设备上的浅色/深色可读性问题。
+v1.4.2 加强身份验证、HTTP 请求校验、事务性上传、文件操作和回收站恢复，提升长期运行的安全性与稳定性。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
@@ -123,6 +123,7 @@ SpeedShareWeb 主要在局域网内运行，不需要账号或云存储。
 
 ## 更新履历
 
+- v1.4.2：加强身份验证与 HTTP 校验，实现事务性上传和文件替换，改善回收站恢复与资源限制，并加入自动化质量检查。
 - v1.4.1：优化主页与设置操作，改善中日英三语排版和重复切换流畅度，修复浅色/深色可读性，并更新项目截图和网站展示。
 - v1.4.0：新增品牌图标与启动画面、响应式极光界面、一键分享整个手机、实时传输控制、浅色/深色外观、紧凑设置、可点击传输历史与新版网页文件管理器。
 - v1.3.4：新增紧凑的存储空间显示、待上传文件总大小、带 256 MB 系统预留的双重容量检查，以及只需填写密码的浏览器登录页。

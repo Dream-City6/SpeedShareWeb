@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.1/SpeedShareWeb-v1.4.1.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.4.1%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.4.1 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.2/SpeedShareWeb-v1.4.2.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.4.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.4.2 APK">
 </a>
 
 <br><br>
 
-v1.4.1 refines the Android home and settings experience, improves trilingual layouts and repeated navigation, and fixes light/dark appearance readability across more devices.
+v1.4.2 strengthens authentication, HTTP validation, transactional uploads, file operations and recycle-bin recovery for safer long-running use.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -130,6 +130,7 @@ Use SpeedShareWeb only with files and devices that you are authorized to access 
 
 ## Update History
 
+- v1.4.2: Strengthened authentication and HTTP validation, made uploads and file replacement transactional, improved recycle-bin recovery and resource bounds, and added automated quality checks.
 - v1.4.1: Refined the home and settings experience, improved Chinese/Japanese/English layouts and repeated navigation, fixed light/dark readability, and refreshed the project screenshots and website showcase.
 - v1.4.0: Added the new brand icon and launch screen, responsive aurora UI, one-tap whole-phone sharing, live transfer controls, light/dark appearance modes, compact settings, clickable transfer history, and a refined browser file manager.
 - v1.3.4: Added compact storage-space visibility, selected-upload size feedback, browser/server capacity checks with a 256 MB system reserve, and a password-only browser sign-in page.
