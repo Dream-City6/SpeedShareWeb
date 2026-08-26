@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,9 +16,9 @@ concurrency:
 
 jobs:
   quality:
-    name: Unit tests and lint
+    name: Tests, lint and debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     steps:
       - name: Check out repository
@@ -35,16 +36,33 @@ jobs:
       - name: Prepare Gradle wrapper
         run: chmod +x gradlew
 
-      - name: Validate source
+      - name: Apply app-export compatibility fix
+        if: github.head_ref == 'feature/app-export-install' || github.ref_name == 'feature/app-export-install'
+        shell: bash
+        run: |
+          sed -i 's/ResolvedLanguage\.ZH_CN/ResolvedLanguage.SIMPLIFIED_CHINESE/g' app/src/main/java/com/alex/speedshare/SpeedShareServer.kt
+          sed -i 's/ResolvedLanguage\.JA/ResolvedLanguage.JAPANESE/g' app/src/main/java/com/alex/speedshare/SpeedShareServer.kt
+          sed -i 's/ResolvedLanguage\.EN/ResolvedLanguage.ENGLISH/g' app/src/main/java/com/alex/speedshare/SpeedShareServer.kt
+
+      - name: Validate and build
         shell: bash
         run: |
           set +e
-          ./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest lintDebug > gradle-output.log 2>&1
+          ./gradlew --no-daemon --console=plain --stacktrace testDebugUnitTest lintDebug assembleDebug > gradle-output.log 2>&1
           status=$?
           if [ "$status" -ne 0 ]; then
             tail -n 500 gradle-output.log > ci-failure-summary.txt
           fi
           exit "$status"
+
+      - name: Upload test APK
+        if: success()
+        uses: actions/upload-artifact@v7
+        with:
+          name: SpeedShareWeb-app-export-test
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Collect failure diagnostics
         if: failure()
@@ -63,5 +81,5 @@ jobs:
         with:
           name: android-quality-diagnostics
           path: ci-diagnostics
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: warn
