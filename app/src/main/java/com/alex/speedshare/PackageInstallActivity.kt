@@ -245,13 +245,15 @@ class PackageInstallActivity : Activity() {
     }
 
     private fun querySize(uri: Uri): Long {
-        val queried = runCatching {
+        val queried: Long = runCatching {
             contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val index = cursor.getColumnIndex(OpenableColumns.SIZE)
                     if (index >= 0 && !cursor.isNull(index)) cursor.getLong(index) else -1L
-                } else -1L
-            }
+                } else {
+                    -1L
+                }
+            } ?: -1L
         }.getOrDefault(-1L)
         return queried.takeIf { it >= 0L } ?: -1L
     }
