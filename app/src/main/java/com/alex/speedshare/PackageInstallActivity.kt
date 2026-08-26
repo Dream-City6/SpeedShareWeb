@@ -13,6 +13,7 @@ import android.widget.Toast
 import java.io.BufferedInputStream
 import java.util.Locale
 import java.util.zip.ZipInputStream
+import kotlin.concurrent.thread
 
 /**
  * Installs a normal APK or a split-APK archive using Android's PackageInstaller.Session API.
@@ -43,7 +44,12 @@ class PackageInstallActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_INSTALL_RESULT) handleInstallResult(intent)
+        if (intent.action == ACTION_INSTALL_RESULT) {
+            handleInstallResult(intent)
+        } else if (!installStarted) {
+            pendingUri = intent.data
+            maybeStartInstall()
+        }
     }
 
     override fun onResume() {
@@ -74,19 +80,32 @@ class PackageInstallActivity : Activity() {
 
         val uri = pendingUri ?: return
         installStarted = true
-        val result = runCatching { stageAndCommit(uri) }
-        if (result.isFailure) {
-            showAndFinish(result.exceptionOrNull()?.message ?: "Could not prepare app installation")
-        } else {
-            Toast.makeText(this, "Package prepared. Confirm the Android installation prompt.", Toast.LENGTH_LONG).show()
-            finish()
+        Toast.makeText(this, "Preparing app package…", Toast.LENGTH_SHORT).show()
+        thread(name = "SpeedShareWeb-PackageInstall", isDaemon = false) {
+            val result = runCatching { stageAndCommit(uri) }
+            runOnUiThread {
+                if (result.isFailure) {
+                    showAndFinish(result.exceptionOrNull()?.message ?: "Could not prepare app installation")
+                } else {
+                    Toast.makeText(
+                        this,
+                        "Package prepared. Confirm the Android installation prompt.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    finish()
+                }
+            }
         }
     }
 
     private fun stageAndCommit(uri: Uri) {
         val displayName = displayName(uri).lowercase(Locale.ROOT)
         val mimeType = contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
-        val singleApk = displayName.endsWith(".apk") || mimeType == APK_MIME
+        val knownArchive = displayName.endsWith(".apks") ||
+            displayName.endsWith(".xapk") ||
+            displayName.endsWith(".apkm") ||
+            displayName.endsWith(".zip")
+        val singleApk = !knownArchive && (displayName.endsWith(".apk") || mimeType == APK_MIME)
         val installer = packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -126,17 +145,22 @@ class PackageInstallActivity : Activity() {
         val raw = contentResolver.openInputStream(uri) ?: error("Unable to open package archive")
         var apkCount = 0
         var totalBytes = 0L
+        var containsObbPayload = false
+        var bundletoolArchive = false
         val usedNames = linkedSetOf<String>()
         ZipInputStream(BufferedInputStream(raw, COPY_BUFFER_SIZE)).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
-                if (entry.isDirectory || !entry.name.endsWith(".apk", ignoreCase = true)) {
+                val normalizedName = entry.name.replace('\\', '/').trimStart('/')
+                if (normalizedName.equals("toc.pb", ignoreCase = true)) bundletoolArchive = true
+                if (normalizedName.startsWith("Android/obb/", ignoreCase = true)) containsObbPayload = true
+                if (entry.isDirectory || !normalizedName.endsWith(".apk", ignoreCase = true)) {
                     zip.closeEntry()
                     continue
                 }
                 apkCount++
                 if (apkCount > MAX_APK_ENTRIES) error("Package archive contains too many APK entries")
-                val rawName = entry.name.substringAfterLast('/').substringAfterLast('\\')
+                val rawName = normalizedName.substringAfterLast('/')
                     .takeIf { it.endsWith(".apk", ignoreCase = true) }
                     ?: "split-$apkCount.apk"
                 val sessionName = uniqueSessionName(rawName, usedNames)
@@ -156,6 +180,12 @@ class PackageInstallActivity : Activity() {
             }
         }
         if (apkCount == 0) error("No APK files were found in this archive")
+        if (bundletoolArchive) {
+            error("This bundletool APK set contains device variants. Export/install a device-specific set instead.")
+        }
+        if (containsObbPayload) {
+            error("This XAPK also contains OBB data, which Android does not let SpeedShareWeb restore reliably.")
+        }
     }
 
     private fun handleInstallResult(intent: Intent) {
@@ -233,6 +263,6 @@ class PackageInstallActivity : Activity() {
         private const val APK_MIME = "application/vnd.android.package-archive"
         private const val COPY_BUFFER_SIZE = 1024 * 1024
         private const val MAX_APK_ENTRIES = 256
-        private const val MAX_ARCHIVE_APK_BYTES = 12L * 1024L * 1024L * 1024L
+        private const val MAX_ARCHIVE_APK_BYTES = 8L * 1024L * 1024L * 1024L
     }
 }
