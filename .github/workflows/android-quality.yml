@@ -63,5 +63,5 @@ jobs:
         with:
           name: android-quality-diagnostics
           path: ci-diagnostics
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: warn
