@@ -98,7 +98,7 @@ object InstalledAppsPageBuilder {
     ) {
         companion object {
             fun forLanguage(language: ResolvedLanguage): Texts = when (language) {
-                ResolvedLanguage.ZH_CN -> Texts(
+                ResolvedLanguage.SIMPLIFIED_CHINESE -> Texts(
                     title = "已安装应用",
                     search = "搜索应用名称或包名",
                     all = "全部",
@@ -109,7 +109,7 @@ object InstalledAppsPageBuilder {
                     empty = "没有找到应用",
                     subtitle = { total, users, systems -> "共 $total 个 · 用户应用 $users · 系统应用 $systems" }
                 )
-                ResolvedLanguage.JA -> Texts(
+                ResolvedLanguage.JAPANESE -> Texts(
                     title = "インストール済みアプリ",
                     search = "アプリ名またはパッケージ名を検索",
                     all = "すべて",
@@ -120,7 +120,7 @@ object InstalledAppsPageBuilder {
                     empty = "アプリが見つかりません",
                     subtitle = { total, users, systems -> "合計 $total · ユーザー $users · システム $systems" }
                 )
-                ResolvedLanguage.EN -> Texts(
+                ResolvedLanguage.ENGLISH -> Texts(
                     title = "Installed apps",
                     search = "Search app name or package",
                     all = "All",
