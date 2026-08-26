@@ -54,6 +54,7 @@ class SpeedShareServer(
     private val clients = ConcurrentHashMap.newKeySet<SocketChannel>()
     private val translator = Localization.translator(language)
     private val thumbnailManager = ThumbnailManager(context)
+    private val installedAppManager = InstalledAppManager(context)
     private val contentRevision = AtomicLong(1L)
     private val reservedUploadBytes = AtomicLong(0L)
     private val accessSessions = AccessSessionManager()
@@ -263,6 +264,38 @@ class SpeedShareServer(
                                 relativePath = target.query["path"].orEmpty()
                             )
                         }
+                    }
+
+                    isGetOrHead && target.path == "/apps" && mode == ShareMode.WHOLE_STORAGE -> {
+                        sendInstalledAppsPage(socket, request.method)
+                    }
+
+                    isGetOrHead && target.path == "/apps/icon" && mode == ShareMode.WHOLE_STORAGE -> {
+                        val icon = installedAppManager.iconFile(target.query["package"].orEmpty())
+                        if (icon == null) {
+                            sendTextResponse(socket, "404 Not Found", "App icon unavailable")
+                        } else {
+                            sendLocalFile(
+                                socket = socket,
+                                method = request.method,
+                                file = icon,
+                                rangeHeader = request.headers["range"],
+                                disposition = "inline",
+                                cacheControl = "private, max-age=86400",
+                                mimeTypeOverride = "image/png",
+                                fileNameOverride = "app-icon.png",
+                                trackTransfer = false
+                            )
+                        }
+                    }
+
+                    isGetOrHead && target.path == "/apps/download" && mode == ShareMode.WHOLE_STORAGE -> {
+                        sendInstalledAppDownload(
+                            socket = socket,
+                            method = request.method,
+                            packageName = target.query["package"].orEmpty(),
+                            rangeHeader = request.headers["range"]
+                        )
                     }
 
                     isGetOrHead &&
@@ -674,54 +707,76 @@ class SpeedShareServer(
             )
             .orEmpty()
 
-        val items = entries.map { file ->
-            val childRelative = if (normalizedRelative.isEmpty()) {
-                file.name
-            } else {
-                "$normalizedRelative/${file.name}"
+        val items = buildList {
+            if (normalizedRelative.isEmpty()) {
+                add(
+                    WebItem(
+                        name = installedAppsFolderName(),
+                        isDirectory = true,
+                        mimeType = "inode/directory",
+                        size = 0L,
+                        modifiedAt = 0L,
+                        openUrl = "/apps",
+                        previewUrl = null,
+                        downloadUrl = null,
+                        thumbnailUrl = null,
+                        displayPath = installedAppsFolderName(),
+                        relativePath = "__speedshare_installed_apps__",
+                        previewKind = PreviewKind.DOWNLOAD
+                    )
+                )
             }
+            addAll(
+                entries.map { file ->
+                    val childRelative = if (normalizedRelative.isEmpty()) {
+                        file.name
+                    } else {
+                        "$normalizedRelative/${file.name}"
+                    }
 
-            if (file.isDirectory) {
-                WebItem(
-                    name = file.name,
-                    isDirectory = true,
-                    mimeType = "inode/directory",
-                    size = 0L,
-                    modifiedAt = file.lastModified(),
-                    openUrl = "/?path=${urlEncode(childRelative)}",
-                    previewUrl = null,
-                    downloadUrl = null,
-                    thumbnailUrl = null,
-                    displayPath = "/storage/emulated/0/$childRelative",
-                    relativePath = childRelative,
-                    previewKind = PreviewKind.DOWNLOAD
-                )
-            } else {
-                val mimeType = guessMimeType(file.name)
-                val previewKind = previewKindFor(mimeType, file.name)
-                WebItem(
-                    name = file.name,
-                    isDirectory = false,
-                    mimeType = mimeType,
-                    size = file.length(),
-                    modifiedAt = file.lastModified(),
-                    openUrl = "/download?path=${urlEncode(childRelative)}",
-                    previewUrl = if (previewKind == PreviewKind.DOWNLOAD) {
-                        null
+                    if (file.isDirectory) {
+                        WebItem(
+                            name = file.name,
+                            isDirectory = true,
+                            mimeType = "inode/directory",
+                            size = 0L,
+                            modifiedAt = file.lastModified(),
+                            openUrl = "/?path=${urlEncode(childRelative)}",
+                            previewUrl = null,
+                            downloadUrl = null,
+                            thumbnailUrl = null,
+                            displayPath = "/storage/emulated/0/$childRelative",
+                            relativePath = childRelative,
+                            previewKind = PreviewKind.DOWNLOAD
+                        )
                     } else {
-                        "/view?path=${urlEncode(childRelative)}&v=$contentVersion-${file.length()}-${file.lastModified()}"
-                    },
-                    downloadUrl = "/download?path=${urlEncode(childRelative)}",
-                    thumbnailUrl = if (canGenerateThumbnail(mimeType)) {
-                        "/thumb?path=${urlEncode(childRelative)}&v=$contentVersion-${file.length()}-${file.lastModified()}"
-                    } else {
-                        null
-                    },
-                    displayPath = "/storage/emulated/0/$childRelative",
-                    relativePath = childRelative,
-                    previewKind = previewKind
-                )
-            }
+                        val mimeType = guessMimeType(file.name)
+                        val previewKind = previewKindFor(mimeType, file.name)
+                        WebItem(
+                            name = file.name,
+                            isDirectory = false,
+                            mimeType = mimeType,
+                            size = file.length(),
+                            modifiedAt = file.lastModified(),
+                            openUrl = "/download?path=${urlEncode(childRelative)}",
+                            previewUrl = if (previewKind == PreviewKind.DOWNLOAD) {
+                                null
+                            } else {
+                                "/view?path=${urlEncode(childRelative)}&v=$contentVersion-${file.length()}-${file.lastModified()}"
+                            },
+                            downloadUrl = "/download?path=${urlEncode(childRelative)}",
+                            thumbnailUrl = if (canGenerateThumbnail(mimeType)) {
+                                "/thumb?path=${urlEncode(childRelative)}&v=$contentVersion-${file.length()}-${file.lastModified()}"
+                            } else {
+                                null
+                            },
+                            displayPath = "/storage/emulated/0/$childRelative",
+                            relativePath = childRelative,
+                            previewKind = previewKind
+                        )
+                    }
+                }
+            )
         }
 
         val displayPath = if (normalizedRelative.isEmpty()) {
@@ -744,6 +799,44 @@ class SpeedShareServer(
         )
 
         sendHtmlResponse(socket, method, html)
+    }
+
+    private fun installedAppsFolderName(): String = when (language) {
+        ResolvedLanguage.ZH_CN -> "已安装应用"
+        ResolvedLanguage.JA -> "インストール済みアプリ"
+        ResolvedLanguage.EN -> "Installed apps"
+    }
+
+    private fun sendInstalledAppsPage(socket: SocketChannel, method: String) {
+        val apps = runCatching { installedAppManager.listInstalledApps() }.getOrElse {
+            sendTextResponse(socket, "500 Internal Server Error", "Unable to read installed apps")
+            return
+        }
+        sendHtmlResponse(socket, method, InstalledAppsPageBuilder.build(apps, language))
+    }
+
+    private fun sendInstalledAppDownload(
+        socket: SocketChannel,
+        method: String,
+        packageName: String,
+        rangeHeader: String?
+    ) {
+        val exported = installedAppManager.exportForDownload(packageName)
+        if (exported == null || !exported.file.isFile || !exported.file.canRead()) {
+            sendTextResponse(socket, "404 Not Found", "App package unavailable")
+            return
+        }
+        sendLocalFile(
+            socket = socket,
+            method = method,
+            file = exported.file,
+            rangeHeader = rangeHeader,
+            disposition = "attachment",
+            cacheControl = "no-store",
+            mimeTypeOverride = if (exported.app.isSplit) "application/zip" else "application/vnd.android.package-archive",
+            fileNameOverride = exported.fileName,
+            trackTransfer = true
+        )
     }
 
     private fun requireManagement(socket: SocketChannel, action: () -> Unit) {

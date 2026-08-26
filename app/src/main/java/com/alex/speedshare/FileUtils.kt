@@ -72,23 +72,39 @@ fun openHistoryFile(
         mimeType = guessMimeType(file.name)
     }
 
+    if (isInstallPackageFileName(item.name) || mimeType == APK_MIME_TYPE) {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !context.packageManager.canRequestPackageInstalls()
+        ) {
+            return HistoryFileOpenResult.INSTALL_PERMISSION_REQUIRED
+        }
+        val installIntent = Intent(context, PackageInstallActivity::class.java).apply {
+            data = uri
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        return runCatching {
+            context.startActivity(installIntent)
+            HistoryFileOpenResult.OPENED
+        }.getOrDefault(HistoryFileOpenResult.NO_APP)
+    }
+
     val viewIntent = Intent(Intent.ACTION_VIEW).apply {
         setDataAndType(uri, mimeType)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    val isApk = item.name.endsWith(".apk", ignoreCase = true) ||
-        mimeType == "application/vnd.android.package-archive"
-    if (
-        isApk &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-        !context.packageManager.canRequestPackageInstalls()
-    ) {
-        return HistoryFileOpenResult.INSTALL_PERMISSION_REQUIRED
     }
     return runCatching {
         context.startActivity(viewIntent)
         HistoryFileOpenResult.OPENED
     }.getOrDefault(HistoryFileOpenResult.NO_APP)
+}
+
+fun isInstallPackageFileName(name: String): Boolean {
+    val lower = name.lowercase(Locale.ROOT)
+    return lower.endsWith(".apk") ||
+        lower.endsWith(".apks") ||
+        lower.endsWith(".xapk") ||
+        lower.endsWith(".apkm")
 }
 
 fun querySharedFile(context: Context, uri: Uri, mimeTypeHint: String? = null): SharedFile? {
@@ -154,7 +170,6 @@ fun querySharedFile(context: Context, uri: Uri, mimeTypeHint: String? = null): S
         modifiedAt = modifiedAt
     )
 }
-
 
 private fun String.isConcreteMimeType(): Boolean {
     val normalized = lowercase(Locale.ROOT).substringBefore(';').trim()
@@ -324,7 +339,10 @@ fun createUniqueFile(directory: File, originalName: String): File {
 
 fun guessMimeType(name: String): String {
     return URLConnection.guessContentTypeFromName(name) ?: when {
-        name.endsWith(".apk", ignoreCase = true) -> "application/vnd.android.package-archive"
+        name.endsWith(".apk", ignoreCase = true) -> APK_MIME_TYPE
+        name.endsWith(".apks", ignoreCase = true) ||
+            name.endsWith(".xapk", ignoreCase = true) ||
+            name.endsWith(".apkm", ignoreCase = true) -> "application/zip"
         name.endsWith(".mkv", ignoreCase = true) -> "video/x-matroska"
         name.endsWith(".flac", ignoreCase = true) -> "audio/flac"
         name.endsWith(".7z", ignoreCase = true) -> "application/x-7z-compressed"
@@ -354,7 +372,7 @@ fun iconForName(name: String, mimeType: String): String {
         mimeType.startsWith("image/") -> "🖼️"
         mimeType.startsWith("video/") -> "🎬"
         mimeType.startsWith("audio/") -> "🎵"
-        lower.endsWith(".apk") -> "📦"
+        isInstallPackageFileName(lower) -> "📦"
         lower.endsWith(".pdf") -> "📕"
         lower.endsWith(".zip") || lower.endsWith(".rar") || lower.endsWith(".7z") -> "🗜️"
         lower.endsWith(".doc") || lower.endsWith(".docx") -> "📝"
@@ -434,3 +452,5 @@ fun hasManageAllFilesAccessGlobal(): Boolean {
     return android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R &&
         android.os.Environment.isExternalStorageManager()
 }
+
+private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
