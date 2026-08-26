@@ -7,7 +7,6 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Build
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
@@ -42,7 +41,6 @@ class InstalledAppManager(private val context: Context) {
         val apkFiles: List<File> get() = listOf(baseApk) + splitApks
         val totalBytes: Long get() = apkFiles.sumOf { it.length().coerceAtLeast(0L) }
         val isSplit: Boolean get() = splitApks.isNotEmpty()
-        val exportExtension: String get() = if (isSplit) "apks" else "apk"
     }
 
     data class ExportedApp(
@@ -120,7 +118,10 @@ class InstalledAppManager(private val context: Context) {
             if (destination.exists() && !destination.delete()) error("Could not replace cached app export")
             if (!staging.renameTo(destination)) {
                 FileInputStream(staging).use { input ->
-                    FileOutputStream(destination).use { output -> input.copyTo(output, COPY_BUFFER_SIZE) }
+                    FileOutputStream(destination).use { output ->
+                        input.copyTo(output, COPY_BUFFER_SIZE)
+                        output.fd.sync()
+                    }
                 }
                 if (!staging.delete()) staging.deleteOnExit()
             }
@@ -155,7 +156,10 @@ class InstalledAppManager(private val context: Context) {
             if (cacheFile.exists()) cacheFile.delete()
             if (!staging.renameTo(cacheFile)) {
                 FileInputStream(staging).use { input ->
-                    FileOutputStream(cacheFile).use { output -> input.copyTo(output, COPY_BUFFER_SIZE) }
+                    FileOutputStream(cacheFile).use { output ->
+                        input.copyTo(output, COPY_BUFFER_SIZE)
+                        output.fd.sync()
+                    }
                 }
                 staging.delete()
             }
@@ -172,13 +176,13 @@ class InstalledAppManager(private val context: Context) {
         val applicationInfo = packageInfo.applicationInfo ?: return null
         val base = File(applicationInfo.sourceDir.orEmpty())
         if (!base.isFile || !base.canRead()) return null
-        val splits = applicationInfo.splitSourceDirs.orEmpty()
+        val splitPaths = applicationInfo.splitSourceDirs.orEmpty()
+        val splits = splitPaths
             .map(::File)
             .filter { it.isFile && it.canRead() }
             .distinctBy { runCatching { it.canonicalPath }.getOrDefault(it.absolutePath) }
-        val expectedSplitCount = applicationInfo.splitSourceDirs?.size ?: 0
         // A partial split export is worse than no export: it usually creates an un-installable archive.
-        if (splits.size != expectedSplitCount) return null
+        if (splits.size != splitPaths.size) return null
 
         val label = runCatching { packageManager.getApplicationLabel(applicationInfo).toString() }
             .getOrDefault(packageInfo.packageName)
@@ -205,45 +209,54 @@ class InstalledAppManager(private val context: Context) {
     }
 
     private fun writeApksArchive(app: InstalledApp, destination: File) {
+        val usedEntryNames = linkedSetOf<String>()
         val sourceEntries = buildList {
+            usedEntryNames += "base.apk"
             add("base.apk" to app.baseApk)
             app.splitApks.forEachIndexed { index, split ->
                 val original = split.name.takeIf { it.endsWith(".apk", ignoreCase = true) }
                     ?: "split_${index + 1}.apk"
-                add(uniqueEntryName(original, map { it.first }.toSet()) to split)
+                val entryName = uniqueEntryName(original, usedEntryNames)
+                usedEntryNames += entryName
+                add(entryName to split)
             }
         }
         val digests = linkedMapOf<String, String>()
 
         FileOutputStream(destination).use { fileOutput ->
-            BufferedOutputStream(fileOutput, COPY_BUFFER_SIZE).use { buffered ->
-                ZipOutputStream(buffered).use { zip ->
-                    // APK files are already ZIP containers. Level 0 avoids wasting CPU trying to recompress them.
-                    zip.setLevel(Deflater.NO_COMPRESSION)
-                    sourceEntries.forEach { (entryName, file) ->
-                        val digest = MessageDigest.getInstance("SHA-256")
-                        zip.putNextEntry(ZipEntry(entryName).apply { time = file.lastModified() })
-                        BufferedInputStream(FileInputStream(file), COPY_BUFFER_SIZE).use { input ->
-                            val buffer = ByteArray(COPY_BUFFER_SIZE)
-                            while (true) {
-                                val read = input.read(buffer)
-                                if (read < 0) break
-                                digest.update(buffer, 0, read)
-                                zip.write(buffer, 0, read)
-                            }
+            val buffered = BufferedOutputStream(fileOutput, COPY_BUFFER_SIZE)
+            val zip = ZipOutputStream(buffered)
+            try {
+                // APK files are already ZIP containers. DEFLATE level 0 avoids wasting CPU recompressing them.
+                zip.setLevel(Deflater.NO_COMPRESSION)
+                sourceEntries.forEach { (entryName, file) ->
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    zip.putNextEntry(ZipEntry(entryName).apply { time = file.lastModified() })
+                    BufferedInputStream(FileInputStream(file), COPY_BUFFER_SIZE).use { input ->
+                        val buffer = ByteArray(COPY_BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            digest.update(buffer, 0, read)
+                            zip.write(buffer, 0, read)
                         }
-                        zip.closeEntry()
-                        digests[entryName] = digest.digest().toHex()
                     }
-
-                    val iconBytes = appIconPng(app.packageName)
-                    if (iconBytes != null) writeZipBytes(zip, "icon.png", iconBytes)
-                    writeZipText(zip, "meta.sai_v1.json", saiV1Metadata(app).toString())
-                    writeZipText(zip, "meta.sai_v2.json", saiV2Metadata(app).toString())
-                    writeZipText(zip, "speedshare.json", speedShareMetadata(app, sourceEntries, digests).toString())
+                    zip.closeEntry()
+                    digests[entryName] = digest.digest().toHex()
                 }
+
+                val iconBytes = appIconPng(app.packageName)
+                if (iconBytes != null) writeZipBytes(zip, "icon.png", iconBytes)
+                writeZipText(zip, "meta.sai_v1.json", saiV1Metadata(app).toString())
+                writeZipText(zip, "meta.sai_v2.json", saiV2Metadata(app).toString())
+                writeZipText(zip, "speedshare.json", speedShareMetadata(app, sourceEntries, digests).toString())
+                zip.finish()
+                zip.flush()
+                buffered.flush()
+                fileOutput.fd.sync()
+            } finally {
+                runCatching { zip.close() }
             }
-            fileOutput.fd.sync()
         }
     }
 
@@ -357,9 +370,12 @@ class InstalledAppManager(private val context: Context) {
             .orEmpty()
         var retainedBytes = keep.length().coerceAtLeast(0L)
         files.forEachIndexed { index, file ->
-            retainedBytes += file.length().coerceAtLeast(0L)
-            if (index >= MAX_CACHED_EXPORTS - 1 || retainedBytes > MAX_EXPORT_CACHE_BYTES) {
+            val fileBytes = file.length().coerceAtLeast(0L)
+            val shouldDelete = index >= MAX_CACHED_EXPORTS - 1 || retainedBytes + fileBytes > MAX_EXPORT_CACHE_BYTES
+            if (shouldDelete) {
                 runCatching { file.delete() }
+            } else {
+                retainedBytes += fileBytes
             }
         }
     }
@@ -406,6 +422,7 @@ class InstalledAppManager(private val context: Context) {
                 .digest(value.toByteArray(Charsets.UTF_8))
                 .toHex()
 
-        private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(Locale.US, it.toInt() and 0xff) }
+        private fun ByteArray.toHex(): String =
+            joinToString("") { "%02x".format(Locale.US, it.toInt() and 0xff) }
     }
 }
