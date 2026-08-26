@@ -31,9 +31,16 @@
         <activity
             android:name=".PackageInstallActivity"
             android:excludeFromRecents="true"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTop"
-            android:theme="@style/Theme.SpeedShare.Transparent" />
+            android:theme="@style/Theme.SpeedShare.Transparent">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.android.package-archive" />
+                <data android:mimeType="application/zip" />
+            </intent-filter>
+        </activity>
 
         <activity
             android:name=".ShortcutActionActivity"
