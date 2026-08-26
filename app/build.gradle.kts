@@ -22,6 +22,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".appsexporttest"
+            versionNameSuffix = "-app-export-test"
+        }
         release {
             optimization {
                 enable = false
