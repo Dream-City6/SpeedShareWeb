@@ -52,33 +52,45 @@ class PackageInstallActivity : Activity() {
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (waitingForUnknownSourcesPermission && canInstallPackages()) {
-            waitingForUnknownSourcesPermission = false
-            maybeStartInstall()
-        }
-    }
-
     override fun onSaveInstanceState(outState: Bundle) {
         pendingUri?.let { outState.putString(STATE_URI, it.toString()) }
         super.onSaveInstanceState(outState)
     }
 
+    @Deprecated("Uses the platform settings activity result on the minimum supported Android versions")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != REQUEST_UNKNOWN_SOURCES) return
+        waitingForUnknownSourcesPermission = false
+        if (canInstallPackages()) {
+            maybeStartInstall()
+        } else {
+            showAndFinish("App installation permission was not granted")
+        }
+    }
+
     private fun maybeStartInstall() {
-        if (installStarted) return
+        if (installStarted || waitingForUnknownSourcesPermission) return
+        val uri = pendingUri ?: return
+        if (!isSupportedPackageInput(uri)) {
+            showAndFinish("This file is not a supported Android app package")
+            return
+        }
         if (!canInstallPackages()) {
             waitingForUnknownSourcesPermission = true
             val settingsIntent = Intent(
                 Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                 Uri.parse("package:$packageName")
             )
-            runCatching { startActivity(settingsIntent) }
-                .onFailure { showAndFinish("Allow app installs for SpeedShareWeb in Android settings") }
+            @Suppress("DEPRECATION")
+            runCatching { startActivityForResult(settingsIntent, REQUEST_UNKNOWN_SOURCES) }
+                .onFailure {
+                    waitingForUnknownSourcesPermission = false
+                    showAndFinish("Allow app installs for SpeedShareWeb in Android settings")
+                }
             return
         }
 
-        val uri = pendingUri ?: return
         installStarted = true
         Toast.makeText(this, "Preparing app package…", Toast.LENGTH_SHORT).show()
         thread(name = "SpeedShareWeb-PackageInstall", isDaemon = false) {
@@ -98,13 +110,18 @@ class PackageInstallActivity : Activity() {
         }
     }
 
+    private fun isSupportedPackageInput(uri: Uri): Boolean {
+        val name = displayName(uri)
+        val mimeType = contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
+        return isInstallPackageFileName(name) || mimeType == APK_MIME
+    }
+
     private fun stageAndCommit(uri: Uri) {
         val displayName = displayName(uri).lowercase(Locale.ROOT)
         val mimeType = contentResolver.getType(uri).orEmpty().lowercase(Locale.ROOT)
         val knownArchive = displayName.endsWith(".apks") ||
             displayName.endsWith(".xapk") ||
-            displayName.endsWith(".apkm") ||
-            displayName.endsWith(".zip")
+            displayName.endsWith(".apkm")
         val singleApk = !knownArchive && (displayName.endsWith(".apk") || mimeType == APK_MIME)
         val installer = packageManager.packageInstaller
         val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
@@ -260,6 +277,7 @@ class PackageInstallActivity : Activity() {
     companion object {
         const val ACTION_INSTALL_RESULT = "com.alex.speedshare.action.PACKAGE_INSTALL_RESULT"
         private const val STATE_URI = "pending_uri"
+        private const val REQUEST_UNKNOWN_SOURCES = 7001
         private const val APK_MIME = "application/vnd.android.package-archive"
         private const val COPY_BUFFER_SIZE = 1024 * 1024
         private const val MAX_APK_ENTRIES = 256
