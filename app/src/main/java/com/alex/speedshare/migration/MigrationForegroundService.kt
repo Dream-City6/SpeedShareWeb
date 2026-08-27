@@ -25,24 +25,20 @@ class MigrationForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_STOP -> {
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            else -> {
-                val progress = intent?.getIntExtra(EXTRA_PROGRESS, 0)?.coerceIn(0, 100) ?: 0
-                val detail = intent?.getStringExtra(EXTRA_DETAIL).orEmpty()
-                val notification = buildNotification(progress, detail)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
-                } else {
-                    startForeground(NOTIFICATION_ID, notification)
-                }
-            }
+        val progress = intent?.getIntExtra(EXTRA_PROGRESS, 0)?.coerceIn(0, 100) ?: 0
+        val detail = intent?.getStringExtra(EXTRA_DETAIL).orEmpty()
+        val notification = buildNotification(progress, detail)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
         }
         return START_STICKY
+    }
+
+    override fun onDestroy() {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        super.onDestroy()
     }
 
     private fun buildNotification(progress: Int, detail: String): Notification {
@@ -70,7 +66,6 @@ class MigrationForegroundService : Service() {
         private const val CHANNEL_ID = "speedshare_migration"
         private const val NOTIFICATION_ID = 2091
         private const val ACTION_UPDATE = "com.alex.speedshare.migration.UPDATE"
-        private const val ACTION_STOP = "com.alex.speedshare.migration.STOP"
         private const val EXTRA_PROGRESS = "progress"
         private const val EXTRA_DETAIL = "detail"
 
@@ -89,7 +84,7 @@ class MigrationForegroundService : Service() {
         }
 
         fun stop(context: Context) {
-            context.startService(Intent(context, MigrationForegroundService::class.java).apply { action = ACTION_STOP })
+            context.stopService(Intent(context, MigrationForegroundService::class.java))
         }
     }
 }
