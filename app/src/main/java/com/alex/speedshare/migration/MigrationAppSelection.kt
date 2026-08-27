@@ -22,6 +22,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -41,14 +43,23 @@ internal object MigrationAppSelectionRegistry {
     private val _selectedPackages = MutableStateFlow<Set<String>>(emptySet())
     val selectedPackages = _selectedPackages.asStateFlow()
     private var catalog: Set<String>? = null
+    private var compatibilityDefaultsPeer: String? = null
 
     @Synchronized
     fun sync(apps: List<MigrationAppItem>) {
         val packages = apps.mapTo(linkedSetOf()) { it.packageName }
         if (catalog != packages) {
             catalog = packages
+            compatibilityDefaultsPeer = null
             _selectedPackages.value = packages
         }
+    }
+
+    @Synchronized
+    fun removeKnownIncompatible(peerDeviceId: String?, packageNames: Set<String>) {
+        if (peerDeviceId.isNullOrBlank() || compatibilityDefaultsPeer == peerDeviceId) return
+        compatibilityDefaultsPeer = peerDeviceId
+        _selectedPackages.value = _selectedPackages.value - packageNames
     }
 
     fun toggle(packageName: String) {
@@ -73,8 +84,6 @@ internal object MigrationAppSelectionRegistry {
             packageName == null || packageName !in knownCatalog || packageName in selected
         }
     }
-
-    fun selectedCount(): Int = _selectedPackages.value.size
 }
 
 class MigrationAppSelectionActivity : ComponentActivity() {
@@ -91,11 +100,23 @@ class MigrationAppSelectionActivity : ComponentActivity() {
 
 @Composable
 private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
-    val controller = remember { ResilientMigrationController.get(androidx.compose.ui.platform.LocalContext.current) }
+    val context = LocalContext.current
+    val controller = remember { ResilientMigrationController.get(context) }
     val state by controller.state.collectAsState()
     val apps = state.scanResult.apps
     MigrationAppSelectionRegistry.sync(apps)
     val selected by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
+    val receiver = state.connectedPeer
+    val compatibility = remember(apps, receiver) {
+        apps.associate { app -> app.packageName to AppCompatibilityAnalyzer.analyze(context, app, receiver) }
+    }
+    val incompatible = remember(compatibility) {
+        compatibility.filterValues { it.status == AppCompatibilityStatus.INCOMPATIBLE }.keys
+    }
+    LaunchedEffect(receiver?.deviceId, incompatible) {
+        MigrationAppSelectionRegistry.removeKnownIncompatible(receiver?.deviceId, incompatible)
+    }
+
     var query by remember { mutableStateOf("") }
     val filtered = remember(apps, query) {
         val needle = query.trim().lowercase()
@@ -104,6 +125,9 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
         }
     }
     val selectedBytes = apps.asSequence().filter { it.packageName in selected }.sumOf { it.totalBytes }
+    val compatibleCount = compatibility.count { it.value.status == AppCompatibilityStatus.COMPATIBLE }
+    val reviewCount = compatibility.count { it.value.status == AppCompatibilityStatus.REVIEW }
+    val incompatibleCount = compatibility.size - compatibleCount - reviewCount
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
@@ -120,6 +144,26 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                     Text("已选 ${selected.size} 个 · ${formatAppBytes(selectedBytes)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Button(onClick = onClose) { Text("完成") }
+            }
+
+            if (receiver != null) {
+                Card(shape = RoundedCornerShape(16.dp)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("新手机：${receiver.name}", fontWeight = FontWeight.Bold)
+                        Text(
+                            "兼容 $compatibleCount · 需确认 $reviewCount · 不兼容 $incompatibleCount",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (receiver.androidSdk > 0) {
+                            Text(
+                                "Android API ${receiver.androidSdk} · ${receiver.supportedAbis.joinToString().ifBlank { "ABI 未知" }}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
 
             OutlinedTextField(
@@ -140,12 +184,14 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
             }
 
             Text(
-                "这里只迁移应用安装包（base.apk + split APK）。账号登录状态、聊天记录和应用私有数据仍受 Android 限制。",
+                "已明确判断为不兼容的应用默认取消选择；“需确认”表示 APK 内部架构需要由 Android 安装器最终判断。这里只迁移安装包，不迁移登录状态和私有数据。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             filtered.forEach { app ->
+                val appCompatibility = compatibility[app.packageName]
+                    ?: AppCompatibilityResult(AppCompatibilityStatus.REVIEW, "等待检查")
                 Card(shape = RoundedCornerShape(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
@@ -156,12 +202,26 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                             onCheckedChange = { MigrationAppSelectionRegistry.toggle(app.packageName) }
                         )
                         Column(Modifier.weight(1f)) {
-                            Text(app.label, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(app.label, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Text(
+                                    compatibilityLabel(appCompatibility.status),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                             Text(
                                 "${app.versionName.ifBlank { "未知版本" }} · ${formatAppBytes(app.totalBytes)} · ${app.apkFiles.size} 个 APK",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                appCompatibility.reason,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
@@ -177,6 +237,12 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
             }
         }
     }
+}
+
+private fun compatibilityLabel(status: AppCompatibilityStatus): String = when (status) {
+    AppCompatibilityStatus.COMPATIBLE -> "兼容"
+    AppCompatibilityStatus.REVIEW -> "需确认"
+    AppCompatibilityStatus.INCOMPATIBLE -> "不兼容"
 }
 
 private fun formatAppBytes(bytes: Long): String = when {
