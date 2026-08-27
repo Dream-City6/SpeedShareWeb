@@ -12,7 +12,9 @@ data class MigrationPeer(
     val host: String,
     val port: Int,
     val model: String = "",
-    val appVersion: String = ""
+    val appVersion: String = "",
+    val androidSdk: Int = 0,
+    val supportedAbis: List<String> = emptyList()
 )
 
 data class IncomingPairRequest(
