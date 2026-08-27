@@ -1,0 +1,4 @@
+<resources>
+    <string name="migration_shortcut_short">かんたん機種変更</string>
+    <string name="migration_shortcut_long">新しいスマートフォンへデータ移行</string>
+</resources>
