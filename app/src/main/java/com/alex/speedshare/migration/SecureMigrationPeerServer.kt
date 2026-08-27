@@ -211,14 +211,14 @@ internal class SecureMigrationPeerServer(
     }
 
     private fun handleTransferPlan(output: BufferedOutputStream, request: JSONObject) {
+        if (!hasMigrationStorageAccess()) {
+            sendError(output, "receiver_storage_permission_required")
+            return
+        }
         val totalBytes = request.optLong("totalBytes", -1L)
         val totalItems = request.optInt("totalItems", -1)
         if (totalBytes < 0L || totalItems < 0) {
-            MigrationProtocol.writeJson(
-                output,
-                JSONObject().put("ok", false).put("error", "invalid_transfer_plan")
-            )
-            output.flush()
+            sendError(output, "invalid_transfer_plan")
             return
         }
         onTransferPlan(totalBytes, totalItems)
@@ -282,6 +282,10 @@ internal class SecureMigrationPeerServer(
         output: BufferedOutputStream,
         request: JSONObject
     ) {
+        if (!hasMigrationStorageAccess()) {
+            sendFileFailure(output, "receiver_storage_permission_required")
+            return
+        }
         val relativePath = normalizeRelativePath(request.optString("path"))
             ?: return sendFileFailure(output, "invalid_path")
         val size = request.optLong("size", -1L)
@@ -400,6 +404,14 @@ internal class SecureMigrationPeerServer(
         )
         output.flush()
     }
+
+    private fun sendError(output: BufferedOutputStream, message: String) {
+        MigrationProtocol.writeJson(output, JSONObject().put("ok", false).put("error", message))
+        output.flush()
+    }
+
+    private fun hasMigrationStorageAccess(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
 
     private fun normalizeHost(value: String): String? {
         val normalized = value.trim().substringBefore('%').lowercase(Locale.ROOT)
