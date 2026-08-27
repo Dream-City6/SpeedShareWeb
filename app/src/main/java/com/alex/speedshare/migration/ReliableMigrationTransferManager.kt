@@ -20,14 +20,15 @@ internal class ReliableMigrationTransferManager {
     ): MigrationBatchResult {
         val totalBytes = items.sumOf { it.size }
         val totalItems = items.size
-        val transferred = AtomicLong(0L)
+        val logicalCompletedBytes = AtomicLong(0L)
+        val wireTransferredBytes = AtomicLong(0L)
         val completed = AtomicInteger(0)
         val skipped = AtomicInteger(0)
         val failed = AtomicInteger(0)
         val failedItems = Collections.synchronizedList(mutableListOf<MigrationFileItem>())
         val started = System.currentTimeMillis()
         val lastSampleAt = AtomicLong(System.nanoTime())
-        val lastSampleBytes = AtomicLong(0L)
+        val lastSampleWireBytes = AtomicLong(0L)
         val speed = AtomicLong(0L)
         val pool = Executors.newFixedThreadPool(concurrency.coerceIn(1, 6))
 
@@ -35,17 +36,17 @@ internal class ReliableMigrationTransferManager {
             val now = System.nanoTime()
             val previousAt = lastSampleAt.get()
             if (now - previousAt >= 300_000_000L && lastSampleAt.compareAndSet(previousAt, now)) {
-                val bytesNow = transferred.get()
-                val oldBytes = lastSampleBytes.getAndSet(bytesNow)
+                val wireNow = wireTransferredBytes.get()
+                val oldWireBytes = lastSampleWireBytes.getAndSet(wireNow)
                 speed.set(
-                    ((bytesNow - oldBytes).coerceAtLeast(0L) * 1_000_000_000.0 /
+                    ((wireNow - oldWireBytes).coerceAtLeast(0L) * 1_000_000_000.0 /
                         max(1L, now - previousAt)).toLong()
                 )
             }
             onProgress(
                 MigrationProgress(
                     totalBytes = totalBytes,
-                    transferredBytes = transferred.get().coerceAtMost(totalBytes),
+                    transferredBytes = logicalCompletedBytes.get().coerceAtMost(totalBytes),
                     totalItems = totalItems,
                     completedItems = completed.get(),
                     skippedItems = skipped.get(),
@@ -66,13 +67,19 @@ internal class ReliableMigrationTransferManager {
                         kind = if (item.appPackageName != null) "app" else "file",
                         hash = hash,
                         onBytes = { delta ->
-                            transferred.addAndGet(delta)
+                            wireTransferredBytes.addAndGet(delta)
+                            logicalCompletedBytes.addAndGet(delta)
                             publish(item.file.name)
                         }
                     )
                     if (result.skipped) {
                         skipped.incrementAndGet()
-                        transferred.addAndGet(item.size)
+                        logicalCompletedBytes.addAndGet(item.size)
+                    } else {
+                        // A resumed transfer only sends the missing tail. Count the already-present
+                        // prefix toward logical progress without counting it as network throughput.
+                        val resumedPrefix = (item.size - result.sentBytes).coerceAtLeast(0L)
+                        if (resumedPrefix > 0L) logicalCompletedBytes.addAndGet(resumedPrefix)
                     }
                 } catch (_: Throwable) {
                     failed.incrementAndGet()
