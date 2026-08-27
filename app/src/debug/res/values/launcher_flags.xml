@@ -1,0 +1,4 @@
+<resources>
+    <bool name="main_launcher_enabled">false</bool>
+    <bool name="migration_launcher_enabled">true</bool>
+</resources>
