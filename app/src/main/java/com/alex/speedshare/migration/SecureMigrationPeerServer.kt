@@ -1,6 +1,5 @@
 package com.alex.speedshare.migration
 
-import android.content.Context
 import android.os.Build
 import android.os.Environment
 import org.json.JSONObject
@@ -10,6 +9,7 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.Locale
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -22,13 +22,11 @@ import kotlin.math.min
  * Peer server used by the migration flow.
  *
  * Discovery/HELLO and the explicit PAIR request are public on the local network. Every command
- * that can change state, receive data or expose migration metadata is accepted only from an IP
- * address that the user explicitly approved in the pairing dialog. This is not a replacement for
- * transport encryption, but it prevents unrelated LAN clients from writing files merely by
- * discovering or scanning the migration port.
+ * that can change state, receive data or expose migration metadata is accepted only from a host
+ * that participated in an accepted pairing. This is not transport encryption, but it prevents
+ * unrelated LAN clients from writing files merely by discovering or scanning the migration port.
  */
 internal class SecureMigrationPeerServer(
-    private val context: Context,
     private val localDeviceId: String,
     private val localDeviceName: String,
     private val appVersion: String,
@@ -72,6 +70,16 @@ internal class SecureMigrationPeerServer(
         pairDecisions.remove(requestId)?.complete(accepted)
     }
 
+    /** Authorizes the remote side after this phone initiated a PAIR request and it was accepted. */
+    fun authorizePeer(peer: MigrationPeer) {
+        normalizeHost(peer.host)?.let(authorizedHosts::add)
+    }
+
+    /** Ends the trust window when the user leaves/resets the current migration session. */
+    fun clearAuthorizedPeers() {
+        authorizedHosts.clear()
+    }
+
     @Synchronized
     fun stop() {
         running = false
@@ -95,7 +103,7 @@ internal class SecureMigrationPeerServer(
                 val output = BufferedOutputStream(socket.getOutputStream(), 1024 * 1024)
                 val request = MigrationProtocol.readJson(input)
                 val type = request.optString("type")
-                val remoteHost = socket.inetAddress.hostAddress.orEmpty()
+                val remoteHost = normalizeHost(socket.inetAddress.hostAddress.orEmpty()).orEmpty()
 
                 if (type !in PUBLIC_COMMANDS && remoteHost !in authorizedHosts) {
                     MigrationProtocol.writeJson(
@@ -161,7 +169,7 @@ internal class SecureMigrationPeerServer(
         pairDecisions.remove(requestId)
 
         if (accepted) {
-            authorizedHosts += peer.host
+            authorizePeer(peer)
             onPeerConnected(peer)
         }
 
@@ -373,6 +381,11 @@ internal class SecureMigrationPeerServer(
                 .put("error", message)
         )
         output.flush()
+    }
+
+    private fun normalizeHost(value: String): String? {
+        val normalized = value.trim().substringBefore('%').lowercase(Locale.ROOT)
+        return normalized.takeIf { it.isNotBlank() }
     }
 
     companion object {
