@@ -52,6 +52,7 @@ internal object MigrationCommands {
     const val SPEED_UPLOAD = "speed_upload"
     const val SPEED_DOWNLOAD = "speed_download"
     const val SPEED_RESULT = "speed_result"
+    const val TRANSFER_PLAN = "transfer_plan"
     const val FILE_OFFER = "file_offer"
     const val FILE_READY = "file_ready"
     const val FILE_RESULT = "file_result"
