@@ -76,13 +76,29 @@ class MigrationController private constructor(private val context: Context) {
                 )
             }
         },
+        onTransferPlan = { totalBytes, totalItems ->
+            update {
+                it.copy(
+                    stage = MigrationStage.TRANSFERRING,
+                    progress = MigrationProgress(
+                        totalBytes = totalBytes,
+                        totalItems = totalItems
+                    ),
+                    report = null,
+                    error = null,
+                    status = "旧手机已开始迁移，共 $totalItems 项"
+                )
+            }
+            MigrationForegroundService.update(context, _state.value.progress, "正在接收换机数据")
+        },
         onReceiveBytes = { bytes, name ->
             update { current ->
                 val p = current.progress
                 current.copy(
                     stage = MigrationStage.TRANSFERRING,
                     progress = p.copy(
-                        transferredBytes = p.transferredBytes + bytes,
+                        transferredBytes = (p.transferredBytes + bytes)
+                            .coerceAtMost(p.totalBytes.takeIf { it > 0L } ?: Long.MAX_VALUE),
                         currentName = name
                     ),
                     status = "正在接收 $name"
@@ -153,8 +169,6 @@ class MigrationController private constructor(private val context: Context) {
                     return@launch
                 }
 
-                // The receiver authorized this phone while accepting the PAIR request. Authorize
-                // the receiver locally as well so role/speed/report callbacks work in both directions.
                 peerServer.authorizePeer(peer)
                 update {
                     it.copy(
@@ -329,12 +343,13 @@ class MigrationController private constructor(private val context: Context) {
             return
         }
 
+        val totalBytes = items.sumOf { item -> item.size }
         val concurrency = recommendedConcurrency(current.speedResult)
         update {
             it.copy(
                 stage = MigrationStage.TRANSFERRING,
                 progress = MigrationProgress(
-                    totalBytes = items.sumOf { item -> item.size },
+                    totalBytes = totalBytes,
                     totalItems = items.size
                 ),
                 report = null,
@@ -345,6 +360,20 @@ class MigrationController private constructor(private val context: Context) {
         MigrationForegroundService.update(context, _state.value.progress, "正在准备迁移 ${items.size} 项")
 
         scope.launch {
+            try {
+                sendMigrationTransferPlan(peer, totalBytes, items.size)
+            } catch (error: Throwable) {
+                MigrationForegroundService.stop(context)
+                update {
+                    it.copy(
+                        stage = MigrationStage.SELECTION,
+                        error = error.message,
+                        status = "无法通知新手机开始迁移，请检查连接后重试"
+                    )
+                }
+                return@launch
+            }
+
             val manager = ReliableMigrationTransferManager()
             val first = manager.transfer(peer, items, concurrency) { progress ->
                 val status = transferStatus(progress)
