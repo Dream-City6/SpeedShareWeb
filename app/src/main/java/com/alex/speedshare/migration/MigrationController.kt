@@ -201,23 +201,39 @@ class MigrationController private constructor(private val context: Context) {
         }
         MigrationForegroundService.update(context, _state.value.progress, "正在准备迁移 ${items.size} 项")
         scope.launch {
-            val manager = MigrationTransferManager()
-            fun runPass(): MigrationReport = manager.transfer(peer, items, concurrency) { progress ->
+            val manager = ReliableMigrationTransferManager()
+            val first = manager.transfer(peer, items, concurrency) { progress ->
                 val status = transferStatus(progress)
                 update { it.copy(progress = progress, stage = MigrationStage.TRANSFERRING, status = status) }
                 MigrationForegroundService.update(context, progress, status)
             }
 
-            var report = runPass()
-            if (report.failedCount > 0) {
-                update { it.copy(status = "检测到 ${report.failedCount} 项中断，正在自动重连并继续…") }
-                report = runPass()
-            }
+            val retry = if (first.failedItems.isNotEmpty()) {
+                update { it.copy(status = "检测到 ${first.failedItems.size} 项中断，正在自动重连并继续…") }
+                manager.transfer(peer, first.failedItems, concurrency) { progress ->
+                    val status = if (progress.currentName.isBlank()) {
+                        "正在自动重试中断项目"
+                    } else {
+                        "自动重试 ${progress.currentName} · ${formatRate(progress.bytesPerSecond)}"
+                    }
+                    update { it.copy(progress = progress, stage = MigrationStage.TRANSFERRING, status = status) }
+                    MigrationForegroundService.update(context, progress, status)
+                }
+            } else null
 
+            val report = manager.combine(items, first, retry)
             update {
                 it.copy(
                     stage = MigrationStage.COMPLETE,
                     report = report,
+                    progress = MigrationProgress(
+                        totalBytes = report.totalBytes,
+                        transferredBytes = report.transferredBytes,
+                        totalItems = report.successCount + report.failedCount,
+                        completedItems = report.successCount + report.failedCount,
+                        skippedItems = report.skippedCount,
+                        failedItems = report.failedCount
+                    ),
                     status = if (report.failedCount == 0) "换机完成" else "完成，但仍有 ${report.failedCount} 项失败"
                 )
             }
