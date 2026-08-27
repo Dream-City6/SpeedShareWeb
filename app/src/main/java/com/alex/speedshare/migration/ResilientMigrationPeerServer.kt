@@ -1,0 +1,386 @@
+package com.alex.speedshare.migration
+
+import android.os.Build
+import android.os.Environment
+import org.json.JSONObject
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.File
+import java.io.RandomAccessFile
+import java.net.ServerSocket
+import java.net.Socket
+import java.security.SecureRandom
+import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import kotlin.math.max
+import kotlin.math.min
+
+internal object ResilientCommands {
+    const val HELLO = "v2_hello"
+    const val PAIR = "v2_pair"
+    const val ROLE = "v2_role"
+    const val SPEED_UPLOAD = "v2_speed_upload"
+    const val SPEED_DOWNLOAD = "v2_speed_download"
+    const val SPEED_RESULT = "v2_speed_result"
+    const val STORAGE_INFO = "v2_storage_info"
+    const val TRANSFER_PLAN = "v2_transfer_plan"
+    const val FILE_OFFER = "v2_file_offer"
+    const val PROGRESS_SYNC = "v2_progress_sync"
+    const val REPORT = "v2_report"
+}
+
+internal class ResilientMigrationPeerServer(
+    private val localDeviceId: String,
+    private val localDeviceName: String,
+    private val appVersion: String,
+    private val onPairRequest: (IncomingPairRequest) -> Unit,
+    private val onPeerConnected: (MigrationPeer, String) -> Unit,
+    private val onRole: (MigrationRole) -> Unit,
+    private val onSpeedResult: (SpeedTestResult) -> Unit,
+    private val onTransferPlan: (String, Long, Int) -> Unit,
+    private val onProgressSync: (MigrationProgress) -> Unit,
+    private val onReport: (MigrationReport) -> Unit
+) {
+    private data class PendingPair(
+        val decision: CompletableFuture<Boolean>,
+        val peer: MigrationPeer,
+        val peerReturnToken: String
+    )
+
+    private val executor = Executors.newCachedThreadPool { runnable ->
+        Thread(runnable, "SpeedShare-ResilientPeer").apply { isDaemon = true }
+    }
+    private val pendingPairs = ConcurrentHashMap<String, PendingPair>()
+    private val acceptedTokens = ConcurrentHashMap.newKeySet<String>()
+    private val random = SecureRandom()
+    private var serverSocket: ServerSocket? = null
+    @Volatile private var running = false
+
+    val port: Int get() = serverSocket?.localPort ?: 0
+
+    @Synchronized
+    fun start() {
+        if (running) return
+        val socket = ServerSocket(0).apply { reuseAddress = true }
+        serverSocket = socket
+        running = true
+        executor.execute {
+            while (running) {
+                try {
+                    val client = socket.accept()
+                    executor.execute { handle(client) }
+                } catch (_: Throwable) {
+                    if (!running) break
+                }
+            }
+        }
+    }
+
+    fun respondPair(requestId: String, accepted: Boolean) {
+        pendingPairs[requestId]?.decision?.complete(accepted)
+    }
+
+    fun acceptInboundToken(token: String) {
+        if (token.length >= 32) acceptedTokens.add(token)
+    }
+
+    fun clearSessions() {
+        acceptedTokens.clear()
+    }
+
+    @Synchronized
+    fun stop() {
+        running = false
+        runCatching { serverSocket?.close() }
+        serverSocket = null
+        pendingPairs.values.forEach { it.decision.complete(false) }
+        pendingPairs.clear()
+        acceptedTokens.clear()
+        executor.shutdownNow()
+    }
+
+    private fun handle(raw: Socket) {
+        raw.use { socket ->
+            try {
+                socket.tcpNoDelay = true
+                socket.sendBufferSize = 1024 * 1024
+                socket.receiveBufferSize = 1024 * 1024
+                socket.soTimeout = 120_000
+                val input = BufferedInputStream(socket.getInputStream(), 1024 * 1024)
+                val output = BufferedOutputStream(socket.getOutputStream(), 1024 * 1024)
+                val request = MigrationProtocol.readJson(input)
+                val type = request.optString("type")
+                if (type !in PUBLIC_COMMANDS && request.optString("sessionToken") !in acceptedTokens) {
+                    sendError(output, "session_required")
+                    return
+                }
+                when (type) {
+                    ResilientCommands.HELLO -> sendOk(output, JSONObject().put("deviceId", localDeviceId))
+                    ResilientCommands.PAIR -> handlePair(socket, output, request)
+                    ResilientCommands.ROLE -> {
+                        val role = runCatching { MigrationRole.valueOf(request.optString("role")) }
+                            .getOrDefault(MigrationRole.UNSET)
+                        onRole(role)
+                        sendOk(output)
+                    }
+                    ResilientCommands.SPEED_UPLOAD -> handleSpeedUpload(input, output, request)
+                    ResilientCommands.SPEED_DOWNLOAD -> handleSpeedDownload(output, request)
+                    ResilientCommands.SPEED_RESULT -> {
+                        onSpeedResult(speedFromJson(request))
+                        sendOk(output)
+                    }
+                    ResilientCommands.STORAGE_INFO -> handleStorageInfo(output)
+                    ResilientCommands.TRANSFER_PLAN -> handleTransferPlan(output, request)
+                    ResilientCommands.FILE_OFFER -> handleFileOffer(socket, input, output, request)
+                    ResilientCommands.PROGRESS_SYNC -> {
+                        onProgressSync(progressFromJson(request))
+                        sendOk(output)
+                    }
+                    ResilientCommands.REPORT -> {
+                        onReport(reportFromJsonV2(request))
+                        sendOk(output)
+                    }
+                    else -> sendError(output, "unknown_command")
+                }
+            } catch (_: Throwable) {
+                // A partial file remains available for the next resume connection.
+            }
+        }
+    }
+
+    private fun handlePair(socket: Socket, output: BufferedOutputStream, request: JSONObject) {
+        val requestId = request.optString("requestId").ifBlank { UUID.randomUUID().toString() }
+        val returnToken = request.optString("returnToken")
+        val peer = MigrationPeer(
+            deviceId = request.optString("deviceId"),
+            name = request.optString("name").ifBlank { "SpeedShare" },
+            host = socket.inetAddress.hostAddress.orEmpty(),
+            port = request.optInt("servicePort"),
+            model = request.optString("model"),
+            appVersion = request.optString("version")
+        )
+        if (peer.deviceId.isBlank() || peer.port !in 1..65535 || returnToken.length < 32) {
+            MigrationProtocol.writeJson(output, JSONObject().put("accepted", false).put("error", "invalid_pair"))
+            output.flush()
+            return
+        }
+        val pending = PendingPair(CompletableFuture(), peer, returnToken)
+        pendingPairs[requestId] = pending
+        onPairRequest(IncomingPairRequest(requestId, peer))
+        val accepted = runCatching { pending.decision.get(60, TimeUnit.SECONDS) }.getOrDefault(false)
+        pendingPairs.remove(requestId)
+        val outboundToken = if (accepted) newToken() else ""
+        if (accepted) {
+            acceptedTokens.add(returnToken)
+            onPeerConnected(peer, returnToken)
+        }
+        MigrationProtocol.writeJson(
+            output,
+            JSONObject()
+                .put("accepted", accepted)
+                .put("sessionToken", outboundToken)
+                .put("deviceId", localDeviceId)
+                .put("name", localDeviceName)
+                .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+                .put("version", appVersion)
+                .put("servicePort", port)
+        )
+        output.flush()
+    }
+
+    private fun handleStorageInfo(output: BufferedOutputStream) {
+        val root = Environment.getExternalStorageDirectory()
+        sendOk(
+            output,
+            JSONObject()
+                .put("freeBytes", root.usableSpace.coerceAtLeast(0L))
+                .put("totalBytes", root.totalSpace.coerceAtLeast(0L))
+        )
+    }
+
+    private fun handleTransferPlan(output: BufferedOutputStream, request: JSONObject) {
+        if (!hasStorageAccess()) return sendError(output, "receiver_storage_permission_required")
+        val migrationId = request.optString("migrationId")
+        val totalBytes = request.optLong("totalBytes", -1L)
+        val totalItems = request.optInt("totalItems", -1)
+        val root = Environment.getExternalStorageDirectory()
+        val free = root.usableSpace.coerceAtLeast(0L)
+        if (migrationId.isBlank() || totalBytes < 0L || totalItems < 0) return sendError(output, "invalid_transfer_plan")
+        if (free < totalBytes + STORAGE_RESERVE_BYTES) {
+            return sendError(output, "insufficient_space", JSONObject().put("freeBytes", free))
+        }
+        onTransferPlan(migrationId, totalBytes, totalItems)
+        sendOk(output, JSONObject().put("freeBytes", free))
+    }
+
+    private fun handleSpeedUpload(input: BufferedInputStream, output: BufferedOutputStream, request: JSONObject) {
+        val size = request.optLong("size").coerceIn(1L, MAX_SPEED_TEST_BYTES)
+        val buffer = ByteArray(1024 * 1024)
+        var remaining = size
+        val started = System.nanoTime()
+        while (remaining > 0) {
+            val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
+            if (read < 0) error("speed_upload_ended")
+            remaining -= read
+        }
+        val elapsed = max(1L, System.nanoTime() - started)
+        sendOk(output, JSONObject().put("elapsedNanos", elapsed).put("size", size))
+    }
+
+    private fun handleSpeedDownload(output: BufferedOutputStream, request: JSONObject) {
+        val size = request.optLong("size").coerceIn(1L, MAX_SPEED_TEST_BYTES)
+        MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("size", size))
+        val buffer = ByteArray(1024 * 1024)
+        var remaining = size
+        while (remaining > 0) {
+            val count = min(buffer.size.toLong(), remaining).toInt()
+            output.write(buffer, 0, count)
+            remaining -= count
+        }
+        output.flush()
+    }
+
+    private fun handleFileOffer(
+        socket: Socket,
+        input: BufferedInputStream,
+        output: BufferedOutputStream,
+        request: JSONObject
+    ) {
+        if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        val migrationId = normalizeId(request.optString("migrationId")) ?: return sendFileFailure(output, "invalid_migration_id")
+        val relativePath = normalizeRelativePath(request.optString("path")) ?: return sendFileFailure(output, "invalid_path")
+        val size = request.optLong("size", -1L)
+        val modifiedAt = request.optLong("modifiedAt", 0L)
+        val sourceHash = request.optString("sha256")
+        val kind = request.optString("kind", "file")
+        if (size < 0L || !sourceHash.matches(SHA256_REGEX)) return sendFileFailure(output, "invalid_file")
+        val requestedTarget = resolveTarget(migrationId, relativePath, kind) ?: return sendFileFailure(output, "invalid_target")
+        requestedTarget.parentFile?.mkdirs()
+
+        if (requestedTarget.isFile && requestedTarget.length() == size && runCatching { sha256(requestedTarget) }.getOrNull() == sourceHash) {
+            MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("action", "skip").put("offset", size))
+            output.flush()
+            return
+        }
+
+        val finalTarget = if (requestedTarget.exists()) conflictTarget(requestedTarget) else requestedTarget
+        val part = File(finalTarget.parentFile, ".${finalTarget.name}.${sourceHash.take(12)}.speedshare.part")
+        if (part.length() > size) part.delete()
+        val offset = part.length().coerceIn(0L, size)
+        MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("action", "send").put("offset", offset))
+        output.flush()
+
+        // Pausing on the sender can intentionally leave this connection idle for a long time.
+        socket.soTimeout = 0
+        RandomAccessFile(part, "rw").use { destination ->
+            destination.seek(offset)
+            var remaining = size - offset
+            val buffer = ByteArray(1024 * 1024)
+            while (remaining > 0) {
+                val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
+                if (read < 0) error("transfer_ended")
+                destination.write(buffer, 0, read)
+                remaining -= read
+            }
+            destination.fd.sync()
+        }
+        if (part.length() != size) return sendFileFailure(output, "size_mismatch")
+        if (sha256(part) != sourceHash) {
+            part.delete()
+            return sendFileFailure(output, "hash_mismatch")
+        }
+        if (!part.renameTo(finalTarget)) {
+            part.copyTo(finalTarget, overwrite = false)
+            part.delete()
+        }
+        if (modifiedAt > 0L) finalTarget.setLastModified(modifiedAt)
+        MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("action", "complete").put("path", relativePath))
+        output.flush()
+    }
+
+    private fun resolveTarget(migrationId: String, relativePath: String, kind: String): File? {
+        val root = Environment.getExternalStorageDirectory().canonicalFile
+        val base = if (kind == "app") {
+            File(root, "Download/SpeedShare/Apps/$migrationId").apply { mkdirs() }.canonicalFile
+        } else root
+        val target = File(base, relativePath).canonicalFile
+        return target.takeIf { it.path.startsWith(base.path + File.separator) }
+    }
+
+    private fun conflictTarget(file: File): File {
+        val dot = file.name.lastIndexOf('.')
+        val stem = if (dot > 0) file.name.substring(0, dot) else file.name
+        val ext = if (dot > 0) file.name.substring(dot) else ""
+        var index = 1
+        while (true) {
+            val candidate = File(file.parentFile, "$stem ($index)$ext")
+            if (!candidate.exists()) return candidate
+            index++
+        }
+    }
+
+    private fun newToken(): String {
+        val bytes = ByteArray(32)
+        random.nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
+
+    private fun normalizeId(value: String): String? = value.takeIf {
+        it.length in 8..80 && it.all { c -> c.isLetterOrDigit() || c == '-' || c == '_' }
+    }
+
+    private fun hasStorageAccess(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
+
+    private fun sendOk(output: BufferedOutputStream, extra: JSONObject = JSONObject()) {
+        extra.put("ok", true)
+        MigrationProtocol.writeJson(output, extra)
+        output.flush()
+    }
+
+    private fun sendError(output: BufferedOutputStream, error: String, extra: JSONObject = JSONObject()) {
+        extra.put("ok", false).put("error", error)
+        MigrationProtocol.writeJson(output, extra)
+        output.flush()
+    }
+
+    private fun sendFileFailure(output: BufferedOutputStream, error: String) = sendError(output, error)
+
+    companion object {
+        private val PUBLIC_COMMANDS = setOf(ResilientCommands.HELLO, ResilientCommands.PAIR)
+        private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
+        private const val MAX_SPEED_TEST_BYTES = 96L * 1024L * 1024L
+        private const val STORAGE_RESERVE_BYTES = 256L * 1024L * 1024L
+    }
+}
+
+private fun speedFromJson(json: JSONObject) = SpeedTestResult(
+    latencyMs = json.optLong("latencyMs"),
+    uploadBytesPerSecond = json.optLong("uploadBps"),
+    downloadBytesPerSecond = json.optLong("downloadBps"),
+    stabilityPercent = json.optInt("stability", 100).coerceIn(0, 100)
+)
+
+private fun progressFromJson(json: JSONObject) = MigrationProgress(
+    totalBytes = json.optLong("totalBytes"),
+    transferredBytes = json.optLong("transferredBytes"),
+    totalItems = json.optInt("totalItems"),
+    completedItems = json.optInt("completedItems"),
+    skippedItems = json.optInt("skippedItems"),
+    failedItems = json.optInt("failedItems"),
+    bytesPerSecond = json.optLong("bytesPerSecond"),
+    currentName = json.optString("currentName")
+)
+
+private fun reportFromJsonV2(json: JSONObject) = MigrationReport(
+    totalBytes = json.optLong("totalBytes"),
+    transferredBytes = json.optLong("transferredBytes"),
+    successCount = json.optInt("successCount"),
+    skippedCount = json.optInt("skippedCount"),
+    failedCount = json.optInt("failedCount"),
+    durationMs = json.optLong("durationMs"),
+    averageBytesPerSecond = json.optLong("averageBps")
+)
