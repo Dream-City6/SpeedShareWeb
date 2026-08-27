@@ -133,12 +133,17 @@ class MigrationController private constructor(private val context: Context) {
         scope.launch {
             try {
                 val result = MigrationClient.testSpeed(peer)
-                update { it.copy(speedTesting = false, speedResult = result, stage = MigrationStage.ROLE, status = speedSummary(result)) }
+                update { it.copy(speedTesting = false, speedResult = result, stage = MigrationStage.SPEED_TEST, status = speedSummary(result)) }
                 runCatching { MigrationClient.sendSpeedResult(peer, result) }
             } catch (error: Throwable) {
                 update { it.copy(speedTesting = false, error = error.message, status = "测速失败，可重新测试") }
             }
         }
+    }
+
+    fun confirmNetwork() {
+        val result = _state.value.speedResult ?: return
+        update { it.copy(stage = MigrationStage.ROLE, status = "已选择当前 Wi‑Fi · 平均 ${formatRate(result.averageBytesPerSecond)}") }
     }
 
     fun setRole(role: MigrationRole) {
