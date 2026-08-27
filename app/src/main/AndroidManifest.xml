@@ -75,7 +75,7 @@
 
         <activity-alias
             android:name=".MainLauncher"
-            android:enabled="@bool/main_launcher_enabled"
+            android:enabled="true"
             android:exported="true"
             android:label="@string/app_name"
             android:targetActivity=".MainActivity">
@@ -86,18 +86,6 @@
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
-        </activity-alias>
-
-        <activity-alias
-            android:name=".MigrationLauncher"
-            android:enabled="@bool/migration_launcher_enabled"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:targetActivity=".migration.MigrationCenterActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity-alias>
 
         <receiver
@@ -135,6 +123,10 @@
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:value="false"
+                tools:node="remove" />
             <meta-data
                 android:name="android.service.quicksettings.ACTIVE_TILE"
                 android:value="true" />
