@@ -1,15 +1,27 @@
 package com.alex.speedshare.ui.theme
 
+import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppThemeMode
+import com.alex.speedshare.MainActivity
+import com.alex.speedshare.migration.MigrationCenterActivity
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFF8AB4FF),
@@ -70,7 +82,32 @@ fun SpeedShareTheme(
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme,
         typography = Typography,
-        shapes = SpeedShareShapes,
-        content = content
-    )
+        shapes = SpeedShareShapes
+    ) {
+        val context = LocalContext.current
+        Box {
+            content()
+            if (context is MainActivity) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 18.dp)
+                        .clickable {
+                            context.startActivity(Intent(context, MigrationCenterActivity::class.java))
+                        },
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 5.dp
+                ) {
+                    Text(
+                        text = "⇄  一键换机  ›",
+                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
+                        fontWeight = FontWeight.Black
+                    )
+                }
+            }
+        }
+    }
 }
