@@ -26,7 +26,7 @@ class MigrationCoreTest {
             downloadBytesPerSecond = 60,
             stabilityPercent = 95
         )
-        assertEquals(50, result.averageBytesPerSecond)
+        assertEquals(50L, result.averageBytesPerSecond)
     }
 
     @Test
@@ -38,7 +38,7 @@ class MigrationCoreTest {
         )
         val result = MigrationScanResult(files = files)
         assertEquals(2, result.count(MigrationCategory.PHOTOS))
-        assertEquals(300, result.bytes(MigrationCategory.PHOTOS))
+        assertEquals(300L, result.bytes(MigrationCategory.PHOTOS))
         assertEquals(1, result.count(MigrationCategory.DOCUMENTS))
     }
 }
