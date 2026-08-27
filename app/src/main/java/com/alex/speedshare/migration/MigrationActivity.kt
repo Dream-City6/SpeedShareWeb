@@ -209,6 +209,11 @@ private fun SpeedTestSection(state: MigrationUiState, controller: MigrationContr
             MetricRow("延迟", "${result.latencyMs} ms")
             MetricRow("稳定性", "${result.stabilityPercent}%")
             Text(networkAdvice(result), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (!state.speedTesting) {
+                Button(onClick = controller::confirmNetwork, modifier = Modifier.fillMaxWidth()) {
+                    Text("使用当前 Wi‑Fi，继续")
+                }
+            }
         }
         OutlinedButton(enabled = !state.speedTesting, onClick = controller::runSpeedTest, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.speedResult == null) "开始测速" else "重新测试")
