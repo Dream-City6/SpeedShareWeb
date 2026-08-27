@@ -1,9 +1,12 @@
 package com.alex.speedshare.migration
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.nio.file.Files
 
 class MigrationCoreTest {
     @Test
@@ -40,5 +43,29 @@ class MigrationCoreTest {
         assertEquals(2, result.count(MigrationCategory.PHOTOS))
         assertEquals(300L, result.bytes(MigrationCategory.PHOTOS))
         assertEquals(1, result.count(MigrationCategory.DOCUMENTS))
+    }
+
+    @Test
+    fun resilientPairToken_isRandomAndStrongLength() {
+        val first = ResilientMigrationClient.newInboundToken()
+        val second = ResilientMigrationClient.newInboundToken()
+        assertEquals(64, first.length)
+        assertTrue(first.all { it in '0'..'9' || it in 'a'..'f' })
+        assertNotEquals(first, second)
+    }
+
+    @Test
+    fun migrationHashCache_returnsStableSha256() {
+        val file = Files.createTempFile("speedshare-hash", ".bin").toFile()
+        try {
+            file.writeText("SpeedShare migration")
+            val first = MigrationHashCache.sha256(file)
+            val second = MigrationHashCache.sha256(file)
+            assertEquals(64, first.length)
+            assertEquals(first, second)
+        } finally {
+            file.delete()
+            MigrationHashCache.clear()
+        }
     }
 }
