@@ -55,6 +55,7 @@ class MigrationController private constructor(private val context: Context) {
                     status = "正在接收 $name"
                 )
             }
+            MigrationForegroundService.update(context, _state.value.progress, "正在接收 $name")
         },
         onReport = { report ->
             update {
@@ -72,6 +73,7 @@ class MigrationController private constructor(private val context: Context) {
                     status = if (report.failedCount == 0) "换机完成" else "换机完成，但有 ${report.failedCount} 项失败"
                 )
             }
+            MigrationForegroundService.stop(context)
         }
     )
 
@@ -189,9 +191,12 @@ class MigrationController private constructor(private val context: Context) {
                 status = "开始迁移，共 ${items.size} 项；并发 $concurrency 路"
             )
         }
+        MigrationForegroundService.update(context, _state.value.progress, "正在准备迁移 ${items.size} 项")
         scope.launch {
             val report = MigrationTransferManager().transfer(peer, items, concurrency) { progress ->
-                update { it.copy(progress = progress, stage = MigrationStage.TRANSFERRING, status = transferStatus(progress)) }
+                val status = transferStatus(progress)
+                update { it.copy(progress = progress, stage = MigrationStage.TRANSFERRING, status = status) }
+                MigrationForegroundService.update(context, progress, status)
             }
             update {
                 it.copy(
@@ -200,11 +205,13 @@ class MigrationController private constructor(private val context: Context) {
                     status = if (report.failedCount == 0) "换机完成" else "完成，但有 ${report.failedCount} 项失败"
                 )
             }
+            MigrationForegroundService.stop(context)
             runCatching { MigrationClient.sendReport(peer, report) }
         }
     }
 
     fun reset() {
+        MigrationForegroundService.stop(context)
         update {
             MigrationUiState(
                 localDeviceName = deviceName,
@@ -216,6 +223,7 @@ class MigrationController private constructor(private val context: Context) {
     }
 
     fun shutdown() {
+        MigrationForegroundService.stop(context)
         discovery.stop()
         peerServer.stop()
     }
