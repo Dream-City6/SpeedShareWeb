@@ -68,7 +68,7 @@ internal class ResilientMigrationTransferManager(
             pool.submit {
                 try {
                     control.awaitReady()
-                    val hash = sha256(item.file)
+                    val hash = MigrationHashCache.sha256(item.file)
                     control.awaitReady()
                     val result = ResilientMigrationClient.sendFile(
                         session = session,
@@ -91,10 +91,12 @@ internal class ResilientMigrationTransferManager(
                     }
                     completedItems.incrementAndGet()
                     store.markCompleted(migrationId, item, result.skipped)
-                } catch (_: CancellationException) {
+                } catch (error: CancellationException) {
                     failedItems += item
-                } catch (_: Throwable) {
+                    store.markFailed(migrationId, item, "paused_or_cancelled")
+                } catch (error: Throwable) {
                     failedItems += item
+                    store.markFailed(migrationId, item, normalizeFailure(error))
                 } finally {
                     publish(item.file.name)
                 }
@@ -117,5 +119,19 @@ internal class ResilientMigrationTransferManager(
         )
         publish("")
         return ResilientBatchResult(report, failedItems.toList(), control.isCancelled())
+    }
+
+    private fun normalizeFailure(error: Throwable): String {
+        val text = error.message.orEmpty().lowercase()
+        return when {
+            "insufficient_space" in text -> "新手机空间不足"
+            "receiver_storage_permission_required" in text -> "新手机缺少存储权限"
+            "hash_mismatch" in text -> "完整性校验失败"
+            "session_required" in text -> "配对会话已失效"
+            "timeout" in text -> "连接超时"
+            "connection" in text || "broken pipe" in text || "reset" in text -> "网络连接中断"
+            text.isNotBlank() -> error.message.orEmpty().take(200)
+            else -> error::class.java.simpleName
+        }
     }
 }
