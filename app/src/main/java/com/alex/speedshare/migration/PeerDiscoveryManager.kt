@@ -82,6 +82,8 @@ class PeerDiscoveryManager(
             setAttribute("name", localDeviceName)
             setAttribute("version", appVersion)
             setAttribute("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+            setAttribute("sdk", Build.VERSION.SDK_INT.toString())
+            setAttribute("abis", Build.SUPPORTED_ABIS.joinToString(","))
         }
         val listener = object : NsdManager.RegistrationListener {
             override fun onServiceRegistered(serviceInfo: NsdServiceInfo) = Unit
@@ -109,8 +111,6 @@ class PeerDiscoveryManager(
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 val deviceId = serviceToDeviceId.remove(serviceInfo.serviceName) ?: return
-                // UDP fallback may still be seeing this device. Stale cleanup removes it later if
-                // neither discovery path sees it again.
                 if (System.currentTimeMillis() - (lastSeen[deviceId] ?: 0L) > PEER_STALE_MS) {
                     peers.remove(deviceId)
                     lastSeen.remove(deviceId)
@@ -142,7 +142,10 @@ class PeerDiscoveryManager(
                             host = host,
                             port = resolved.port,
                             model = attributes["model"]?.toString(Charsets.UTF_8).orEmpty(),
-                            appVersion = attributes["version"]?.toString(Charsets.UTF_8).orEmpty()
+                            appVersion = attributes["version"]?.toString(Charsets.UTF_8).orEmpty(),
+                            androidSdk = attributes["sdk"]?.toString(Charsets.UTF_8)?.toIntOrNull() ?: 0,
+                            supportedAbis = attributes["abis"]?.toString(Charsets.UTF_8)
+                                ?.split(',')?.filter { it.isNotBlank() }.orEmpty()
                         )
                     )
                     serviceToDeviceId[resolved.serviceName] = deviceId
@@ -186,7 +189,9 @@ class PeerDiscoveryManager(
                             host = packet.address.hostAddress.orEmpty(),
                             port = port,
                             model = json.optString("model"),
-                            appVersion = json.optString("version")
+                            appVersion = json.optString("version"),
+                            androidSdk = json.optInt("sdk", 0),
+                            supportedAbis = json.optString("abis").split(',').filter { it.isNotBlank() }
                         )
                     )
                 } catch (_: SocketTimeoutException) {
@@ -205,6 +210,8 @@ class PeerDiscoveryManager(
                 .put("port", servicePort)
                 .put("version", appVersion)
                 .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+                .put("sdk", Build.VERSION.SDK_INT)
+                .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
                 .toString()
                 .toByteArray(Charsets.UTF_8)
             while (fallbackRunning) {
