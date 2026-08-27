@@ -36,13 +36,20 @@ class MigrationForegroundService : Service() {
         return START_STICKY
     }
 
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        // Android 15+ limits dataSync foreground services to a rolling six-hour budget while the
+        // app is backgrounded. File completion checkpoints and .part files are already persisted,
+        // so stop promptly and let the user resume safely after returning to the app.
+        stopSelf(startId)
+    }
+
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
     private fun buildNotification(progress: Int, detail: String): Notification {
-        val openIntent = Intent(this, MigrationActivity::class.java).apply {
+        val openIntent = Intent(this, ResilientMigrationActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val pending = PendingIntent.getActivity(
