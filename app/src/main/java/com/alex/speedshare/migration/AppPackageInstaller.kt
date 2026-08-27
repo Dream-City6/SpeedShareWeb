@@ -95,7 +95,7 @@ object AppPackageInstaller {
     @Synchronized
     private fun startNext(context: Context): InstallStartResult {
         if (currentPackagePath != null) return InstallStartResult.STARTED
-        val directory = installQueue.removeFirstOrNull() ?: return InstallStartResult.NO_APKS
+        val directory = installQueue.pollFirst() ?: return InstallStartResult.NO_APKS
         val result = startSession(context, directory)
         if (result != InstallStartResult.STARTED) {
             updateStatus(directory.absolutePath, MigrationAppInstallState.FAILED, result.name)
