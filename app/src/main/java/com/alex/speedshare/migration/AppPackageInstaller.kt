@@ -55,8 +55,7 @@ object AppPackageInstaller {
         val permission = ensureInstallPermission(activity)
         if (permission != null) return permission
         synchronized(this) {
-            installQueue.clear()
-            currentPackagePath = null
+            if (currentPackagePath != null || installQueue.isNotEmpty()) return InstallStartResult.STARTED
             installQueue.add(packageDirectory)
         }
         return startNext(activity.applicationContext)
@@ -68,8 +67,7 @@ object AppPackageInstaller {
         val valid = packageDirectories.filter { it.isDirectory && containsApk(it) }
         if (valid.isEmpty()) return InstallStartResult.NO_APKS
         synchronized(this) {
-            installQueue.clear()
-            currentPackagePath = null
+            if (currentPackagePath != null || installQueue.isNotEmpty()) return InstallStartResult.STARTED
             valid.forEach(installQueue::addLast)
             updateStatuses(valid.associate { it.absolutePath to MigrationAppInstallStatus() })
         }
