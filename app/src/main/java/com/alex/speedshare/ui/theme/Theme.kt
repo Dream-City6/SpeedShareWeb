@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppThemeMode
 import com.alex.speedshare.MainActivity
-import com.alex.speedshare.migration.MigrationCenterActivity
+import com.alex.speedshare.migration.ResilientMigrationActivity
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFF8AB4FF),
@@ -93,7 +93,7 @@ fun SpeedShareTheme(
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 18.dp)
                         .clickable {
-                            context.startActivity(Intent(context, MigrationCenterActivity::class.java))
+                            context.startActivity(Intent(context, ResilientMigrationActivity::class.java))
                         },
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.primary,
