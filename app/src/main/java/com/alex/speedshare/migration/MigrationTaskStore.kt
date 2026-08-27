@@ -33,6 +33,7 @@ internal class MigrationTaskStore(context: Context) {
         items: List<MigrationFileItem>,
         selectedCategories: Set<MigrationCategory>
     ): PendingMigrationTask {
+        val effectiveItems = MigrationAppSelectionRegistry.filterTransferItems(items)
         val id = UUID.randomUUID().toString()
         val dir = taskDir(id).apply { mkdirs() }
         val metadata = JSONObject()
@@ -44,7 +45,7 @@ internal class MigrationTaskStore(context: Context) {
             .put("selectedCategories", selectedCategories.joinToString(",") { it.name })
         File(dir, META_FILE).writeText(metadata.toString())
         File(dir, MANIFEST_FILE).bufferedWriter().use { writer ->
-            items.forEach { item ->
+            effectiveItems.forEach { item ->
                 writer.appendLine(
                     JSONObject()
                         .put("absolutePath", item.file.absolutePath)
@@ -64,7 +65,7 @@ internal class MigrationTaskStore(context: Context) {
             peerName = peer.name,
             createdAt = metadata.getLong("createdAt"),
             selectedCategories = selectedCategories,
-            allItems = items,
+            allItems = effectiveItems,
             completedPaths = emptySet(),
             failedReasons = emptyMap()
         )
