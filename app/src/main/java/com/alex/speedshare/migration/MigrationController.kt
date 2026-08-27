@@ -38,7 +38,11 @@ class MigrationController private constructor(private val context: Context) {
         },
         onRole = { role ->
             update { it.copy(role = role, stage = MigrationStage.SELECTION, status = roleStatus(role)) }
-            if (role == MigrationRole.OLD_PHONE) scanContent()
+            when (role) {
+                MigrationRole.OLD_PHONE -> scanContent()
+                MigrationRole.NEW_PHONE -> MigrationForegroundService.update(context, MigrationProgress(), "已连接，等待旧手机发送数据")
+                MigrationRole.UNSET -> Unit
+            }
         },
         onSpeedResult = { result ->
             update { it.copy(speedTesting = false, speedResult = result, stage = MigrationStage.ROLE, status = speedSummary(result)) }
@@ -143,7 +147,11 @@ class MigrationController private constructor(private val context: Context) {
         val remoteRole = if (role == MigrationRole.OLD_PHONE) MigrationRole.NEW_PHONE else MigrationRole.OLD_PHONE
         update { it.copy(role = role, stage = MigrationStage.SELECTION, status = roleStatus(role)) }
         scope.launch { runCatching { MigrationClient.sendRole(peer, remoteRole) } }
-        if (role == MigrationRole.OLD_PHONE) scanContent()
+        when (role) {
+            MigrationRole.OLD_PHONE -> scanContent()
+            MigrationRole.NEW_PHONE -> MigrationForegroundService.update(context, MigrationProgress(), "已连接，等待旧手机发送数据")
+            MigrationRole.UNSET -> Unit
+        }
     }
 
     fun scanContent() {
@@ -193,16 +201,24 @@ class MigrationController private constructor(private val context: Context) {
         }
         MigrationForegroundService.update(context, _state.value.progress, "正在准备迁移 ${items.size} 项")
         scope.launch {
-            val report = MigrationTransferManager().transfer(peer, items, concurrency) { progress ->
+            val manager = MigrationTransferManager()
+            fun runPass(): MigrationReport = manager.transfer(peer, items, concurrency) { progress ->
                 val status = transferStatus(progress)
                 update { it.copy(progress = progress, stage = MigrationStage.TRANSFERRING, status = status) }
                 MigrationForegroundService.update(context, progress, status)
             }
+
+            var report = runPass()
+            if (report.failedCount > 0) {
+                update { it.copy(status = "检测到 ${report.failedCount} 项中断，正在自动重连并继续…") }
+                report = runPass()
+            }
+
             update {
                 it.copy(
                     stage = MigrationStage.COMPLETE,
                     report = report,
-                    status = if (report.failedCount == 0) "换机完成" else "完成，但有 ${report.failedCount} 项失败"
+                    status = if (report.failedCount == 0) "换机完成" else "完成，但仍有 ${report.failedCount} 项失败"
                 )
             }
             MigrationForegroundService.stop(context)
@@ -267,6 +283,13 @@ class MigrationController private constructor(private val context: Context) {
 
         fun get(context: Context): MigrationController = instance ?: synchronized(this) {
             instance ?: MigrationController(context.applicationContext).also { instance = it }
+        }
+
+        fun release() {
+            synchronized(this) {
+                instance?.shutdown()
+                instance = null
+            }
         }
 
         private fun formatRate(bytes: Long): String = when {
