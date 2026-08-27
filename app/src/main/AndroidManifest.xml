@@ -93,6 +93,12 @@
             android:stopWithTask="false" />
 
         <service
+            android:name=".migration.MigrationForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
+        <service
             android:name=".SpeedShareTileService"
             android:exported="true"
             android:icon="@drawable/ic_speedshare_tile"
