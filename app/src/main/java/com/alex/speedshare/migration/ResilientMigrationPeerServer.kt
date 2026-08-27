@@ -9,7 +9,6 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
 import java.net.Socket
-import java.security.SecureRandom
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
@@ -47,7 +46,7 @@ internal class ResilientMigrationPeerServer(
     private data class PendingPair(
         val decision: CompletableFuture<Boolean>,
         val peer: MigrationPeer,
-        val peerReturnToken: String
+        val sharedToken: String
     )
 
     private val executor = Executors.newCachedThreadPool { runnable ->
@@ -55,7 +54,6 @@ internal class ResilientMigrationPeerServer(
     }
     private val pendingPairs = ConcurrentHashMap<String, PendingPair>()
     private val acceptedTokens = ConcurrentHashMap.newKeySet<String>()
-    private val random = SecureRandom()
     private var serverSocket: ServerSocket? = null
     @Volatile private var running = false
 
@@ -84,7 +82,7 @@ internal class ResilientMigrationPeerServer(
     }
 
     fun acceptInboundToken(token: String) {
-        if (token.length >= 32) acceptedTokens.add(token)
+        if (isValidToken(token)) acceptedTokens.add(token)
     }
 
     fun clearSessions() {
@@ -153,40 +151,46 @@ internal class ResilientMigrationPeerServer(
 
     private fun handlePair(socket: Socket, output: BufferedOutputStream, request: JSONObject) {
         val requestId = request.optString("requestId").ifBlank { UUID.randomUUID().toString() }
-        val returnToken = request.optString("returnToken")
+        val sharedToken = request.optString("returnToken")
         val peer = MigrationPeer(
             deviceId = request.optString("deviceId"),
             name = request.optString("name").ifBlank { "SpeedShare" },
             host = socket.inetAddress.hostAddress.orEmpty(),
             port = request.optInt("servicePort"),
             model = request.optString("model"),
-            appVersion = request.optString("version")
+            appVersion = request.optString("version"),
+            androidSdk = request.optInt("sdk", 0),
+            supportedAbis = request.optString("abis").split(',').filter { it.isNotBlank() }
         )
-        if (peer.deviceId.isBlank() || peer.port !in 1..65535 || returnToken.length < 32) {
-            MigrationProtocol.writeJson(output, JSONObject().put("accepted", false).put("error", "invalid_pair"))
+        if (peer.deviceId.isBlank() || peer.port !in 1..65535 || !isValidToken(sharedToken)) {
+            MigrationProtocol.writeJson(
+                output,
+                JSONObject().put("accepted", false).put("error", "invalid_pair")
+            )
             output.flush()
             return
         }
-        val pending = PendingPair(CompletableFuture(), peer, returnToken)
+        val pending = PendingPair(CompletableFuture(), peer, sharedToken)
         pendingPairs[requestId] = pending
         onPairRequest(IncomingPairRequest(requestId, peer))
         val accepted = runCatching { pending.decision.get(60, TimeUnit.SECONDS) }.getOrDefault(false)
         pendingPairs.remove(requestId)
-        val outboundToken = if (accepted) newToken() else ""
         if (accepted) {
-            acceptedTokens.add(returnToken)
-            onPeerConnected(peer, returnToken)
+            acceptedTokens.add(sharedToken)
+            onPeerConnected(peer, sharedToken)
         }
         MigrationProtocol.writeJson(
             output,
             JSONObject()
                 .put("accepted", accepted)
-                .put("sessionToken", outboundToken)
+                .put("sessionToken", if (accepted) sharedToken else "")
                 .put("deviceId", localDeviceId)
                 .put("name", localDeviceName)
                 .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
                 .put("version", appVersion)
                 .put("servicePort", port)
+                .put("sdk", Build.VERSION.SDK_INT)
+                .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
         )
         output.flush()
     }
@@ -208,7 +212,9 @@ internal class ResilientMigrationPeerServer(
         val totalItems = request.optInt("totalItems", -1)
         val root = Environment.getExternalStorageDirectory()
         val free = root.usableSpace.coerceAtLeast(0L)
-        if (migrationId.isBlank() || totalBytes < 0L || totalItems < 0) return sendError(output, "invalid_transfer_plan")
+        if (migrationId.isBlank() || totalBytes < 0L || totalItems < 0) {
+            return sendError(output, "invalid_transfer_plan")
+        }
         if (free < totalBytes + STORAGE_RESERVE_BYTES) {
             return sendError(output, "insufficient_space", JSONObject().put("freeBytes", free))
         }
@@ -216,7 +222,11 @@ internal class ResilientMigrationPeerServer(
         sendOk(output, JSONObject().put("freeBytes", free))
     }
 
-    private fun handleSpeedUpload(input: BufferedInputStream, output: BufferedOutputStream, request: JSONObject) {
+    private fun handleSpeedUpload(
+        input: BufferedInputStream,
+        output: BufferedOutputStream,
+        request: JSONObject
+    ) {
         val size = request.optLong("size").coerceIn(1L, MAX_SPEED_TEST_BYTES)
         val buffer = ByteArray(1024 * 1024)
         var remaining = size
@@ -250,18 +260,30 @@ internal class ResilientMigrationPeerServer(
         request: JSONObject
     ) {
         if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
-        val migrationId = normalizeId(request.optString("migrationId")) ?: return sendFileFailure(output, "invalid_migration_id")
-        val relativePath = normalizeRelativePath(request.optString("path")) ?: return sendFileFailure(output, "invalid_path")
+        val migrationId = normalizeId(request.optString("migrationId"))
+            ?: return sendFileFailure(output, "invalid_migration_id")
+        val relativePath = normalizeRelativePath(request.optString("path"))
+            ?: return sendFileFailure(output, "invalid_path")
         val size = request.optLong("size", -1L)
         val modifiedAt = request.optLong("modifiedAt", 0L)
         val sourceHash = request.optString("sha256")
         val kind = request.optString("kind", "file")
-        if (size < 0L || !sourceHash.matches(SHA256_REGEX)) return sendFileFailure(output, "invalid_file")
-        val requestedTarget = resolveTarget(migrationId, relativePath, kind) ?: return sendFileFailure(output, "invalid_target")
+        if (size < 0L || !sourceHash.matches(SHA256_REGEX)) {
+            return sendFileFailure(output, "invalid_file")
+        }
+        val requestedTarget = resolveTarget(migrationId, relativePath, kind)
+            ?: return sendFileFailure(output, "invalid_target")
         requestedTarget.parentFile?.mkdirs()
 
-        if (requestedTarget.isFile && requestedTarget.length() == size && runCatching { sha256(requestedTarget) }.getOrNull() == sourceHash) {
-            MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("action", "skip").put("offset", size))
+        if (
+            requestedTarget.isFile &&
+            requestedTarget.length() == size &&
+            runCatching { MigrationHashCache.sha256(requestedTarget) }.getOrNull() == sourceHash
+        ) {
+            MigrationProtocol.writeJson(
+                output,
+                JSONObject().put("ok", true).put("action", "skip").put("offset", size)
+            )
             output.flush()
             return
         }
@@ -270,10 +292,13 @@ internal class ResilientMigrationPeerServer(
         val part = File(finalTarget.parentFile, ".${finalTarget.name}.${sourceHash.take(12)}.speedshare.part")
         if (part.length() > size) part.delete()
         val offset = part.length().coerceIn(0L, size)
-        MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("action", "send").put("offset", offset))
+        MigrationProtocol.writeJson(
+            output,
+            JSONObject().put("ok", true).put("action", "send").put("offset", offset)
+        )
         output.flush()
 
-        // Pausing on the sender can intentionally leave this connection idle for a long time.
+        // Sender pause can intentionally keep the socket idle for a long time.
         socket.soTimeout = 0
         RandomAccessFile(part, "rw").use { destination ->
             destination.seek(offset)
@@ -288,7 +313,8 @@ internal class ResilientMigrationPeerServer(
             destination.fd.sync()
         }
         if (part.length() != size) return sendFileFailure(output, "size_mismatch")
-        if (sha256(part) != sourceHash) {
+        if (MigrationHashCache.sha256(part) != sourceHash) {
+            MigrationHashCache.invalidate(part)
             part.delete()
             return sendFileFailure(output, "hash_mismatch")
         }
@@ -296,8 +322,13 @@ internal class ResilientMigrationPeerServer(
             part.copyTo(finalTarget, overwrite = false)
             part.delete()
         }
+        MigrationHashCache.invalidate(part)
+        MigrationHashCache.invalidate(finalTarget)
         if (modifiedAt > 0L) finalTarget.setLastModified(modifiedAt)
-        MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("action", "complete").put("path", relativePath))
+        MigrationProtocol.writeJson(
+            output,
+            JSONObject().put("ok", true).put("action", "complete").put("path", relativePath)
+        )
         output.flush()
     }
 
@@ -305,7 +336,9 @@ internal class ResilientMigrationPeerServer(
         val root = Environment.getExternalStorageDirectory().canonicalFile
         val base = if (kind == "app") {
             File(root, "Download/SpeedShare/Apps/$migrationId").apply { mkdirs() }.canonicalFile
-        } else root
+        } else {
+            root
+        }
         val target = File(base, relativePath).canonicalFile
         return target.takeIf { it.path.startsWith(base.path + File.separator) }
     }
@@ -322,15 +355,12 @@ internal class ResilientMigrationPeerServer(
         }
     }
 
-    private fun newToken(): String {
-        val bytes = ByteArray(32)
-        random.nextBytes(bytes)
-        return bytes.joinToString("") { "%02x".format(it) }
-    }
-
     private fun normalizeId(value: String): String? = value.takeIf {
         it.length in 8..80 && it.all { c -> c.isLetterOrDigit() || c == '-' || c == '_' }
     }
+
+    private fun isValidToken(token: String): Boolean =
+        token.length == 64 && token.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }
 
     private fun hasStorageAccess(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
