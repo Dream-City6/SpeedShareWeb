@@ -13,6 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -21,7 +24,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppThemeMode
 import com.alex.speedshare.MainActivity
+import com.alex.speedshare.migration.MigrationAppSelectionActivity
+import com.alex.speedshare.migration.MigrationAppSelectionRegistry
+import com.alex.speedshare.migration.MigrationCategory
+import com.alex.speedshare.migration.MigrationRole
+import com.alex.speedshare.migration.MigrationStage
 import com.alex.speedshare.migration.ResilientMigrationActivity
+import com.alex.speedshare.migration.ResilientMigrationController
 
 private val DarkColorScheme = darkColorScheme(
     primary = Color(0xFF8AB4FF),
@@ -106,6 +115,42 @@ fun SpeedShareTheme(
                         modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
                         fontWeight = FontWeight.Black
                     )
+                }
+            }
+
+            if (context is ResilientMigrationActivity) {
+                val migrationState by ResilientMigrationController.get(context).state.collectAsState()
+                val selectedApps by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
+                LaunchedEffect(migrationState.scanResult.apps) {
+                    if (migrationState.scanResult.apps.isNotEmpty()) {
+                        MigrationAppSelectionRegistry.sync(migrationState.scanResult.apps)
+                    }
+                }
+                if (
+                    migrationState.stage == MigrationStage.SELECTION &&
+                    migrationState.role == MigrationRole.OLD_PHONE &&
+                    MigrationCategory.APPS in migrationState.selectedCategories &&
+                    migrationState.scanResult.apps.isNotEmpty()
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 18.dp)
+                            .clickable {
+                                context.startActivity(Intent(context, MigrationAppSelectionActivity::class.java))
+                            },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 5.dp
+                    ) {
+                        Text(
+                            text = "应用 ${selectedApps.size}/${migrationState.scanResult.apps.size}  ›",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            fontWeight = FontWeight.Black
+                        )
+                    }
                 }
             }
         }
