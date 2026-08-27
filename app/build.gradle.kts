@@ -22,6 +22,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".migration"
+        }
         release {
             optimization {
                 enable = false
