@@ -34,6 +34,8 @@ internal object ResilientMigrationClient {
                     .put("version", local.appVersion)
                     .put("servicePort", local.port)
                     .put("returnToken", inboundToken)
+                    .put("sdk", Build.VERSION.SDK_INT)
+                    .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
             )
             output.flush()
             val response = MigrationProtocol.readJson(input)
@@ -43,7 +45,12 @@ internal object ResilientMigrationClient {
                 name = response.optString("name", peer.name),
                 model = response.optString("model", peer.model),
                 appVersion = response.optString("version", peer.appVersion),
-                port = response.optInt("servicePort", peer.port)
+                port = response.optInt("servicePort", peer.port),
+                androidSdk = response.optInt("sdk", peer.androidSdk),
+                supportedAbis = response.optString("abis")
+                    .split(',')
+                    .filter { it.isNotBlank() }
+                    .ifEmpty { peer.supportedAbis }
             )
             return PairSessionResult(
                 accepted = accepted,
@@ -80,7 +87,6 @@ internal object ResilientMigrationClient {
     }
 
     fun testSpeed(session: MigrationSession): SpeedTestResult {
-        val peer = session.peer
         val latencySamples = mutableListOf<Long>()
         repeat(3) {
             val started = System.nanoTime()
