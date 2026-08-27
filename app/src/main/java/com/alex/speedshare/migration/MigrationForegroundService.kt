@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.IBinder
 
 class MigrationForegroundService : Service() {
+    private var receiverMode = false
+
     override fun onCreate() {
         super.onCreate()
         val manager = getSystemService(NotificationManager::class.java)
@@ -27,6 +29,13 @@ class MigrationForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val progress = intent?.getIntExtra(EXTRA_PROGRESS, 0)?.coerceIn(0, 100) ?: 0
         val detail = intent?.getStringExtra(EXTRA_DETAIL).orEmpty()
+        if (
+            detail.contains("接收") ||
+            detail.contains("新手机") ||
+            detail.contains("等待旧手机")
+        ) {
+            receiverMode = true
+        }
         val notification = buildNotification(progress, detail)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
@@ -45,6 +54,9 @@ class MigrationForegroundService : Service() {
 
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
+        if (receiverMode) {
+            MigrationMediaIndexer.refreshStandardMediaFolders(applicationContext)
+        }
         super.onDestroy()
     }
 
