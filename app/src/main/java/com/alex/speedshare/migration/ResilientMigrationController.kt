@@ -143,11 +143,24 @@ class ResilientMigrationController private constructor(private val context: Cont
 
     fun connect(peer: MigrationPeer) {
         if (_state.value.pairing) return
-        update { it.copy(pairing = true, stage = MigrationStage.PAIRING, error = null, status = "正在连接 ${peer.name}…") }
+        update {
+            it.copy(
+                pairing = true,
+                stage = MigrationStage.PAIRING,
+                error = null,
+                status = "正在连接 ${peer.name}…"
+            )
+        }
         scope.launch {
             val connected = establishSession(peer)
             if (connected == null) {
-                update { it.copy(pairing = false, stage = MigrationStage.DISCOVERY, status = "连接失败或对方未接受") }
+                update {
+                    it.copy(
+                        pairing = false,
+                        stage = MigrationStage.DISCOVERY,
+                        status = "连接失败或对方未接受"
+                    )
+                }
                 return@launch
             }
             update {
@@ -183,7 +196,14 @@ class ResilientMigrationController private constructor(private val context: Cont
     fun runSpeedTest() {
         val currentSession = session ?: return
         if (_state.value.speedTesting) return
-        update { it.copy(speedTesting = true, stage = MigrationStage.SPEED_TEST, error = null, status = "正在双向测速…") }
+        update {
+            it.copy(
+                speedTesting = true,
+                stage = MigrationStage.SPEED_TEST,
+                error = null,
+                status = "正在双向测速…"
+            )
+        }
         scope.launch {
             try {
                 val result = ResilientMigrationClient.testSpeed(currentSession)
@@ -197,20 +217,35 @@ class ResilientMigrationController private constructor(private val context: Cont
                 }
                 runCatching { ResilientMigrationClient.sendSpeedResult(currentSession, result) }
             } catch (error: Throwable) {
-                update { it.copy(speedTesting = false, error = error.message, status = "测速失败，可重新测试") }
+                update {
+                    it.copy(
+                        speedTesting = false,
+                        error = error.message,
+                        status = "测速失败，可重新测试"
+                    )
+                }
             }
         }
     }
 
     fun confirmNetwork() {
         val result = _state.value.speedResult ?: return
-        update { it.copy(stage = MigrationStage.ROLE, status = "已选择当前 Wi‑Fi · 平均 ${formatRate(result.averageBytesPerSecond)}") }
+        update {
+            it.copy(
+                stage = MigrationStage.ROLE,
+                status = "已选择当前 Wi‑Fi · 平均 ${formatRate(result.averageBytesPerSecond)}"
+            )
+        }
     }
 
     fun setRole(role: MigrationRole) {
         if (role == MigrationRole.UNSET) return
         val currentSession = session ?: return
-        val remoteRole = if (role == MigrationRole.OLD_PHONE) MigrationRole.NEW_PHONE else MigrationRole.OLD_PHONE
+        val remoteRole = if (role == MigrationRole.OLD_PHONE) {
+            MigrationRole.NEW_PHONE
+        } else {
+            MigrationRole.OLD_PHONE
+        }
         update { it.copy(role = role, stage = MigrationStage.SELECTION, status = roleStatus(role)) }
         scope.launch { runCatching { ResilientMigrationClient.sendRole(currentSession, remoteRole) } }
         if (role == MigrationRole.OLD_PHONE) scanContent()
@@ -221,14 +256,32 @@ class ResilientMigrationController private constructor(private val context: Cont
 
     fun scanContent() {
         if (_state.value.scanning) return
-        update { it.copy(scanning = true, stage = MigrationStage.SELECTION, status = "正在扫描照片、视频、文档和应用…") }
+        update {
+            it.copy(
+                scanning = true,
+                stage = MigrationStage.SELECTION,
+                status = "正在扫描照片、视频、文档和应用…"
+            )
+        }
         scope.launch {
             try {
-                val result = MigrationScanner.scan(context)
-                update { it.copy(scanning = false, scanResult = result, status = "扫描完成，可选择要迁移的内容") }
+                val result = MigrationScannerV2.scan(context)
+                update {
+                    it.copy(
+                        scanning = false,
+                        scanResult = result,
+                        status = "扫描完成，可选择要迁移的内容"
+                    )
+                }
                 refreshReceiverStorage()
             } catch (error: Throwable) {
-                update { it.copy(scanning = false, error = error.message, status = "扫描失败，请检查存储权限") }
+                update {
+                    it.copy(
+                        scanning = false,
+                        error = error.message,
+                        status = "扫描失败，请检查存储权限"
+                    )
+                }
             }
         }
     }
@@ -253,15 +306,19 @@ class ResilientMigrationController private constructor(private val context: Cont
         val current = _state.value
         val currentSession = session ?: return
         if (current.role != MigrationRole.OLD_PHONE || current.scanning) return
+
         val normal = current.scanResult.files.filter { it.category in current.selectedCategories }
         val apps = if (MigrationCategory.APPS in current.selectedCategories) {
-            MigrationScanner.appTransferItems(current.scanResult.apps)
-        } else emptyList()
+            MigrationScannerV2.appTransferItems(current.scanResult.apps)
+        } else {
+            emptyList()
+        }
         val items = normal + apps
         if (items.isEmpty()) {
             update { it.copy(status = "没有选择可迁移内容") }
             return
         }
+
         val selectedBytes = items.sumOf { it.size }
         val free = current.receiverStorage?.freeBytes
         if (free != null && selectedBytes + STORAGE_RESERVE_BYTES > free) {
@@ -273,18 +330,37 @@ class ResilientMigrationController private constructor(private val context: Cont
             }
             return
         }
+
         val task = taskStore.create(currentSession.peer, items, current.selectedCategories)
-        update { it.copy(pendingTask = task, activeMigrationId = task.migrationId) }
+        update {
+            it.copy(
+                pendingTask = task,
+                activeMigrationId = task.migrationId,
+                error = null
+            )
+        }
         scope.launch { runTask(task, currentSession) }
     }
 
     fun resumePendingTask() {
         val task = _state.value.pendingTask ?: taskStore.loadLatestIncomplete() ?: return
         scope.launch {
-            update { it.copy(reconnecting = true, status = "正在寻找 ${task.peerName} 并恢复未完成换机…") }
+            update {
+                it.copy(
+                    reconnecting = true,
+                    error = null,
+                    status = "正在寻找 ${task.peerName} 并恢复未完成换机…"
+                )
+            }
             val restoredSession = reconnectToDevice(task.peerDeviceId, 90_000L)
             if (restoredSession == null) {
-                update { it.copy(reconnecting = false, error = "暂时找不到原来的新手机", status = "未完成任务已保留，可稍后继续") }
+                update {
+                    it.copy(
+                        reconnecting = false,
+                        error = "暂时找不到原来的新手机",
+                        status = "未完成任务已保留，可稍后继续"
+                    )
+                }
                 return@launch
             }
             update {
@@ -325,7 +401,7 @@ class ResilientMigrationController private constructor(private val context: Cont
     }
 
     fun reset() {
-        if (transferControl != null && !_state.value.report.let { it != null }) transferControl?.cancel()
+        if (transferControl != null && _state.value.report == null) transferControl?.cancel()
         MigrationForegroundService.stop(context)
         session = null
         peerServer.clearSessions()
@@ -342,12 +418,19 @@ class ResilientMigrationController private constructor(private val context: Cont
 
     private suspend fun runTask(task: PendingMigrationTask, initialSession: MigrationSession) {
         var activeSession = initialSession
-        var pending = task.pendingItems
+        val pending = task.pendingItems
         if (pending.isEmpty()) {
             taskStore.markComplete(task.migrationId)
-            update { it.copy(pendingTask = null, stage = MigrationStage.COMPLETE, status = "换机已经完成") }
+            update {
+                it.copy(
+                    pendingTask = null,
+                    stage = MigrationStage.COMPLETE,
+                    status = "换机已经完成"
+                )
+            }
             return
         }
+
         val control = MigrationTransferControl()
         transferControl = control
         val concurrency = recommendedConcurrency(_state.value.speedResult)
@@ -367,17 +450,32 @@ class ResilientMigrationController private constructor(private val context: Cont
                 paused = false,
                 reconnecting = false,
                 error = null,
-                status = if (initialCompletedItems > 0) "继续换机：已完成 $initialCompletedItems / $totalItems 项" else "开始换机，共 $totalItems 项"
+                status = if (initialCompletedItems > 0) {
+                    "继续换机：已完成 $initialCompletedItems / $totalItems 项"
+                } else {
+                    "开始换机，共 $totalItems 项"
+                }
             )
         }
         MigrationForegroundService.update(context, _state.value.progress, "正在准备换机")
 
         try {
-            ResilientMigrationClient.sendTransferPlan(activeSession, task.migrationId, pending.sumOf { it.size }, pending.size)
+            ResilientMigrationClient.sendTransferPlan(
+                activeSession,
+                task.migrationId,
+                pending.sumOf { it.size },
+                pending.size
+            )
         } catch (error: Throwable) {
             transferControl = null
             MigrationForegroundService.stop(context)
-            update { it.copy(stage = MigrationStage.SELECTION, error = friendlyTransferError(error), status = "新手机尚未准备好") }
+            update {
+                it.copy(
+                    stage = MigrationStage.SELECTION,
+                    error = friendlyTransferError(error),
+                    status = "新手机尚未准备好"
+                )
+            }
             return
         }
 
@@ -403,10 +501,10 @@ class ResilientMigrationController private constructor(private val context: Cont
             )
             totalDuration += result.report.durationMs
             lastFailed = result.failedItems
-            if (control.isCancelled()) break
-            if (lastFailed.isEmpty()) break
+            if (control.isCancelled() || lastFailed.isEmpty()) break
 
             attempt++
+            if (attempt >= MAX_TRANSFER_ATTEMPTS) break
             update {
                 it.copy(
                     reconnecting = true,
@@ -419,9 +517,20 @@ class ResilientMigrationController private constructor(private val context: Cont
             activeSession = reconnected
             session = reconnected
             runCatching {
-                ResilientMigrationClient.sendTransferPlan(activeSession, task.migrationId, lastFailed.sumOf { it.size }, lastFailed.size)
+                ResilientMigrationClient.sendTransferPlan(
+                    activeSession,
+                    task.migrationId,
+                    lastFailed.sumOf { it.size },
+                    lastFailed.size
+                )
             }
-            update { it.copy(reconnecting = false, status = "已重新连接，继续剩余 ${lastFailed.size} 项") }
+            update {
+                it.copy(
+                    connectedPeer = activeSession.peer,
+                    reconnecting = false,
+                    status = "已重新连接，继续剩余 ${lastFailed.size} 项"
+                )
+            }
         }
 
         transferControl = null
@@ -467,7 +576,11 @@ class ResilientMigrationController private constructor(private val context: Cont
                 ),
                 reconnecting = false,
                 pendingTask = taskStore.loadLatestIncomplete(),
-                status = if (finalFailed.isEmpty()) "换机完成" else "已保存进度，仍有 ${finalFailed.size} 项未完成"
+                status = if (finalFailed.isEmpty()) {
+                    "换机完成"
+                } else {
+                    "已保存进度，仍有 ${finalFailed.size} 项未完成"
+                }
             )
         }
         MigrationForegroundService.stop(context)
@@ -475,20 +588,40 @@ class ResilientMigrationController private constructor(private val context: Cont
     }
 
     private fun onSenderProgress(activeSession: MigrationSession, progress: MigrationProgress) {
-        update { it.copy(progress = progress, stage = MigrationStage.TRANSFERRING, status = transferStatus(progress)) }
+        update {
+            it.copy(
+                progress = progress,
+                stage = MigrationStage.TRANSFERRING,
+                status = transferStatus(progress)
+            )
+        }
         MigrationForegroundService.update(context, progress, transferStatus(progress))
         val now = System.currentTimeMillis()
         val previous = lastProgressSyncAt.get()
         if (now - previous >= 800L && lastProgressSyncAt.compareAndSet(previous, now)) {
-            scope.launch { runCatching { ResilientMigrationClient.sendProgress(activeSession, progress) } }
+            scope.launch {
+                runCatching { ResilientMigrationClient.sendProgress(activeSession, progress) }
+            }
         }
     }
 
     private suspend fun reconnectToDevice(deviceId: String, timeoutMs: Long): MigrationSession? {
         val deadline = System.currentTimeMillis() + timeoutMs
+        val reusableToken = session?.outboundToken?.takeIf { it.isNotBlank() }
         while (System.currentTimeMillis() < deadline) {
             val peer = _state.value.peers.firstOrNull { it.deviceId == deviceId }
             if (peer != null) {
+                if (reusableToken != null) {
+                    val reused = MigrationSession(peer, reusableToken, reusableToken)
+                    val stillTrusted = runCatching {
+                        ResilientMigrationClient.storageInfo(reused)
+                        true
+                    }.getOrDefault(false)
+                    if (stillTrusted) {
+                        session = reused
+                        return reused
+                    }
+                }
                 val restored = establishSession(peer)
                 if (restored != null) return restored
             }
@@ -502,8 +635,6 @@ class ResilientMigrationController private constructor(private val context: Cont
         return try {
             val result = ResilientMigrationClient.requestPair(localPeer(), peer, sharedToken)
             if (!result.accepted) return null
-            // V2 uses one random per-pair token for both directions. Both peer servers accept it only
-            // after the user explicitly accepts the PAIR request, and reset clears the trust window.
             peerServer.acceptInboundToken(sharedToken)
             MigrationSession(result.peer, sharedToken, sharedToken).also { session = it }
         } catch (_: Throwable) {
@@ -517,7 +648,9 @@ class ResilientMigrationController private constructor(private val context: Cont
         host = "",
         port = peerServer.port,
         model = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
-        appVersion = appVersion
+        appVersion = appVersion,
+        androidSdk = Build.VERSION.SDK_INT,
+        supportedAbis = Build.SUPPORTED_ABIS.toList()
     )
 
     private fun recommendedConcurrency(result: SpeedTestResult?): Int {
@@ -530,7 +663,9 @@ class ResilientMigrationController private constructor(private val context: Cont
     }
 
     private fun update(block: (ResilientMigrationState) -> ResilientMigrationState) {
-        synchronized(_state) { _state.value = block(_state.value) }
+        synchronized(_state) {
+            _state.value = block(_state.value)
+        }
     }
 
     private fun roleStatus(role: MigrationRole) = when (role) {
@@ -551,6 +686,7 @@ class ResilientMigrationController private constructor(private val context: Cont
     private fun friendlyTransferError(error: Throwable): String = when {
         error.message?.contains("insufficient_space") == true -> "新手机剩余空间不足"
         error.message?.contains("receiver_storage_permission_required") == true -> "新手机还没有授予全部文件访问权限"
+        error.message?.contains("session_required") == true -> "配对会话已失效，请重新连接"
         else -> error.message ?: "连接失败"
     }
 
