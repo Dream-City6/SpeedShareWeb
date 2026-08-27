@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name" translatable="false">SpeedShareWeb</string>
+    <string name="migration_shortcut_short">One-click migration</string>
+    <string name="migration_shortcut_long">Move data to a new phone</string>
 </resources>
