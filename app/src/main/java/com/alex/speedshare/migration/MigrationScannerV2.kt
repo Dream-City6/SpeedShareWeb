@@ -41,7 +41,7 @@ internal object MigrationScannerV2 {
     fun appTransferItems(apps: List<MigrationAppItem>): List<MigrationFileItem> {
         val selected = MigrationAppSelectionRegistry.selectedPackages.value
         return apps.asSequence()
-            .filter { selected.isEmpty() || it.packageName in selected }
+            .filter { it.packageName in selected }
             .flatMap { app ->
                 app.apkFiles.mapIndexed { index, apk ->
                     val name = if (index == 0) "base.apk" else apk.name.ifBlank { "split-$index.apk" }
