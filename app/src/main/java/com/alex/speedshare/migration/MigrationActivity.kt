@@ -118,11 +118,18 @@ private fun MigrationScreen(onClose: () -> Unit) {
 
             StatusCard(state)
 
-            if (!storageAccess && state.role == MigrationRole.OLD_PHONE) {
+            val roleNeedsStorage = state.role == MigrationRole.OLD_PHONE || state.role == MigrationRole.NEW_PHONE
+            if (!storageAccess && roleNeedsStorage) {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("需要全部文件访问权限", fontWeight = FontWeight.Bold)
-                        Text("用于扫描并保持 DCIM、Download、Documents 等原目录结构。Android/data 与其他应用私有数据仍受系统限制。")
+                        Text(
+                            if (state.role == MigrationRole.NEW_PHONE) {
+                                "新手机需要此权限，才能把 DCIM、Download、Documents 等内容恢复到原目录。Android/data 与其他应用私有数据仍受系统限制。"
+                            } else {
+                                "旧手机需要此权限，用于扫描并保持 DCIM、Download、Documents 等原目录结构。Android/data 与其他应用私有数据仍受系统限制。"
+                            }
+                        )
                         Button(onClick = { openAllFilesAccess(context) }) { Text("授予权限") }
                     }
                 }
@@ -182,7 +189,10 @@ private fun DiscoverySection(state: MigrationUiState, controller: MigrationContr
                     Column(Modifier.weight(1f)) {
                         Text(peer.name, fontWeight = FontWeight.Bold)
                         Text(
-                            listOf(peer.model, peer.appVersion.takeIf { it.isNotBlank() }?.let { "SpeedShare $it" }).filterNotNull().filter { it.isNotBlank() }.joinToString(" · "),
+                            listOf(peer.model, peer.appVersion.takeIf { it.isNotBlank() }?.let { "SpeedShare $it" })
+                                .filterNotNull()
+                                .filter { it.isNotBlank() }
+                                .joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -238,7 +248,13 @@ private fun RoleSection(controller: MigrationController) {
 private fun SelectionSection(state: MigrationUiState, controller: MigrationController, storageAccess: Boolean) {
     if (state.role == MigrationRole.NEW_PHONE) {
         SectionCard("新手机已准备好") {
-            Text("保持此页面打开。旧手机完成内容选择后会自动开始传输，目录会尽可能恢复到原位置。")
+            Text(
+                if (storageAccess) {
+                    "保持此页面打开。旧手机完成内容选择后会自动开始传输，目录会尽可能恢复到原位置。"
+                } else {
+                    "请先授予上方的全部文件访问权限。授权后新手机才能按原目录接收换机内容。"
+                }
+            )
             state.speedResult?.let { Text("当前连接平均约 ${formatRate(it.averageBytesPerSecond)}") }
         }
         return
@@ -274,10 +290,15 @@ private fun SelectionSection(state: MigrationUiState, controller: MigrationContr
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = controller::scanContent, enabled = !state.scanning, modifier = Modifier.weight(1f)) { Text("重新扫描") }
+            OutlinedButton(
+                onClick = controller::scanContent,
+                enabled = !state.scanning,
+                modifier = Modifier.weight(1f)
+            ) { Text("重新扫描") }
             Button(
                 onClick = controller::startTransfer,
-                enabled = !state.scanning && storageAccess && (state.scanResult.files.isNotEmpty() || state.scanResult.apps.isNotEmpty()),
+                enabled = !state.scanning && storageAccess &&
+                    (state.scanResult.files.isNotEmpty() || state.scanResult.apps.isNotEmpty()),
                 modifier = Modifier.weight(1f)
             ) { Text("开始换机") }
         }
@@ -296,7 +317,11 @@ private fun ProgressSection(state: MigrationUiState) {
         if (p.skippedItems > 0) MetricRow("自动跳过重复", p.skippedItems.toString())
         if (p.failedItems > 0) MetricRow("失败", p.failedItems.toString())
         if (p.currentName.isNotBlank()) Text("当前：${p.currentName}", style = MaterialTheme.typography.bodySmall)
-        Text("断线后重新连接并再次发送时，会根据同一文件的临时片段继续传输；完整文件使用 SHA‑256 校验。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            "断线后重新连接并再次发送时，会根据同一文件的临时片段继续传输；完整文件使用 SHA‑256 校验。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -319,7 +344,11 @@ private fun ReportSection(state: MigrationUiState, controller: MigrationControll
             MetricRow("耗时", formatDuration(report.durationMs))
             MetricRow("平均速度", formatRate(report.averageBytesPerSecond))
             Text(
-                if (report.failedCount == 0) "数据传输与完整性检查已完成。" else "有 ${report.failedCount} 项未成功，可返回后重新连接再传；已经完成的相同文件会自动跳过。",
+                if (report.failedCount == 0) {
+                    "数据传输与完整性检查已完成。"
+                } else {
+                    "有 ${report.failedCount} 项未成功，可返回后重新连接再传；已经完成的相同文件会自动跳过。"
+                },
                 color = if (report.failedCount == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
         }
@@ -327,7 +356,10 @@ private fun ReportSection(state: MigrationUiState, controller: MigrationControll
         if (receivedApps.isNotEmpty()) {
             HorizontalDivider()
             Text("已接收应用 ${receivedApps.size} 个", fontWeight = FontWeight.Bold)
-            Text("每个目录包含原机可读取到的 base.apk 和 split APK。点击安装后由 Android 系统确认安装。", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "每个目录包含原机可读取到的 base.apk 和 split APK。点击安装后由 Android 系统确认安装。",
+                style = MaterialTheme.typography.bodySmall
+            )
             receivedApps.forEach { directory ->
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
@@ -386,7 +418,10 @@ private fun openAllFilesAccess(context: android.content.Context) {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }.recoverCatching {
-            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            context.startActivity(
+                Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
         }
     }
 }
@@ -402,7 +437,11 @@ private fun categoryLabel(category: MigrationCategory): String = when (category)
 }
 
 private fun formatBytes(bytes: Long): String = when {
-    bytes >= 1024L * 1024L * 1024L -> String.format(Locale.getDefault(), "%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)
+    bytes >= 1024L * 1024L * 1024L -> String.format(
+        Locale.getDefault(),
+        "%.2f GB",
+        bytes / 1024.0 / 1024.0 / 1024.0
+    )
     bytes >= 1024L * 1024L -> String.format(Locale.getDefault(), "%.1f MB", bytes / 1024.0 / 1024.0)
     bytes >= 1024L -> String.format(Locale.getDefault(), "%.0f KB", bytes / 1024.0)
     else -> "$bytes B"
@@ -418,7 +457,10 @@ private fun formatDuration(ms: Long): String {
 }
 
 private fun networkAdvice(result: SpeedTestResult): String = when {
-    result.averageBytesPerSecond >= 50L * 1024L * 1024L && result.stabilityPercent >= 90 -> "连接质量：优秀，适合大容量换机。"
-    result.averageBytesPerSecond >= 15L * 1024L * 1024L -> "连接质量：良好。若有大量视频，建议使用 5GHz / 6GHz Wi‑Fi。"
-    else -> "当前网络偏慢。建议两台手机靠近路由器、使用 5GHz / 6GHz Wi‑Fi，并暂时关闭 VPN。"
+    result.averageBytesPerSecond >= 50L * 1024L * 1024L && result.stabilityPercent >= 90 ->
+        "连接质量：优秀，适合大容量换机。"
+    result.averageBytesPerSecond >= 15L * 1024L * 1024L ->
+        "连接质量：良好。若有大量视频，建议使用 5GHz / 6GHz Wi‑Fi。"
+    else ->
+        "当前网络偏慢。建议两台手机靠近路由器、使用 5GHz / 6GHz Wi‑Fi，并暂时关闭 VPN。"
 }
