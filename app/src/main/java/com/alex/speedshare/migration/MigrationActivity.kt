@@ -6,12 +6,12 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -131,7 +131,7 @@ private fun MigrationScreen(onClose: () -> Unit) {
             when (state.stage) {
                 MigrationStage.DISCOVERY, MigrationStage.PAIRING -> DiscoverySection(state, controller)
                 MigrationStage.SPEED_TEST -> SpeedTestSection(state, controller)
-                MigrationStage.ROLE -> RoleSection(state, controller)
+                MigrationStage.ROLE -> RoleSection(controller)
                 MigrationStage.SELECTION -> SelectionSection(state, controller, storageAccess)
                 MigrationStage.TRANSFERRING, MigrationStage.VERIFYING -> ProgressSection(state)
                 MigrationStage.COMPLETE -> ReportSection(state, controller)
@@ -213,14 +213,11 @@ private fun SpeedTestSection(state: MigrationUiState, controller: MigrationContr
         OutlinedButton(enabled = !state.speedTesting, onClick = controller::runSpeedTest, modifier = Modifier.fillMaxWidth()) {
             Text(if (state.speedResult == null) "开始测速" else "重新测试")
         }
-        if (state.speedResult != null) {
-            Button(onClick = { }, enabled = false, modifier = Modifier.fillMaxWidth()) { Text("下一步：选择新机 / 旧机") }
-        }
     }
 }
 
 @Composable
-private fun RoleSection(state: MigrationUiState, controller: MigrationController) {
+private fun RoleSection(controller: MigrationController) {
     SectionCard("这台手机是？") {
         Text("只需在其中一台选择，另一台会自动切换成相反角色。")
         Button(onClick = { controller.setRole(MigrationRole.OLD_PHONE) }, modifier = Modifier.fillMaxWidth()) {
@@ -275,7 +272,7 @@ private fun SelectionSection(state: MigrationUiState, controller: MigrationContr
             OutlinedButton(onClick = controller::scanContent, enabled = !state.scanning, modifier = Modifier.weight(1f)) { Text("重新扫描") }
             Button(
                 onClick = controller::startTransfer,
-                enabled = !state.scanning && storageAccess && state.scanResult.files.isNotEmpty(),
+                enabled = !state.scanning && storageAccess && (state.scanResult.files.isNotEmpty() || state.scanResult.apps.isNotEmpty()),
                 modifier = Modifier.weight(1f)
             ) { Text("开始换机") }
         }
@@ -300,6 +297,11 @@ private fun ProgressSection(state: MigrationUiState) {
 
 @Composable
 private fun ReportSection(state: MigrationUiState, controller: MigrationController) {
+    val context = LocalContext.current
+    val activity = context as? ComponentActivity
+    val receivedApps = remember(state.report, state.role) {
+        if (state.role == MigrationRole.NEW_PHONE) AppPackageInstaller.receivedPackages() else emptyList()
+    }
     val report = state.report
     SectionCard("换机报告") {
         if (report == null) {
@@ -316,6 +318,36 @@ private fun ReportSection(state: MigrationUiState, controller: MigrationControll
                 color = if (report.failedCount == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
             )
         }
+
+        if (receivedApps.isNotEmpty()) {
+            HorizontalDivider()
+            Text("已接收应用 ${receivedApps.size} 个", fontWeight = FontWeight.Bold)
+            Text("每个目录包含原机可读取到的 base.apk 和 split APK。点击安装后由 Android 系统确认安装。", style = MaterialTheme.typography.bodySmall)
+            receivedApps.forEach { directory ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(directory.name, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                    OutlinedButton(
+                        enabled = activity != null,
+                        onClick = {
+                            val result = activity?.let { AppPackageInstaller.requestInstall(it, directory) }
+                            val text = when (result) {
+                                AppPackageInstaller.InstallStartResult.STARTED -> "已交给系统安装器"
+                                AppPackageInstaller.InstallStartResult.PERMISSION_REQUIRED -> "请先允许 SpeedShare 安装未知应用，然后再次点击安装"
+                                AppPackageInstaller.InstallStartResult.NO_APKS -> "没有找到 APK"
+                                AppPackageInstaller.InstallStartResult.FAILED -> "启动安装失败"
+                                null -> "无法启动安装"
+                            }
+                            Toast.makeText(context, text, Toast.LENGTH_LONG).show()
+                        }
+                    ) { Text("安装") }
+                }
+            }
+        }
+
         Button(onClick = controller::reset, modifier = Modifier.fillMaxWidth()) { Text("完成") }
     }
 }
