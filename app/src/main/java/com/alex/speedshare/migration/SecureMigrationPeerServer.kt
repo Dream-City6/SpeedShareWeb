@@ -34,6 +34,7 @@ internal class SecureMigrationPeerServer(
     private val onPeerConnected: (MigrationPeer) -> Unit,
     private val onRole: (MigrationRole) -> Unit,
     private val onSpeedResult: (SpeedTestResult) -> Unit,
+    private val onTransferPlan: (Long, Int) -> Unit,
     private val onReceiveBytes: (Long, String) -> Unit,
     private val onReport: (MigrationReport) -> Unit
 ) {
@@ -127,6 +128,7 @@ internal class SecureMigrationPeerServer(
                     MigrationCommands.SPEED_UPLOAD -> handleSpeedUpload(input, output, request)
                     MigrationCommands.SPEED_DOWNLOAD -> handleSpeedDownload(output, request)
                     MigrationCommands.SPEED_RESULT -> handleSpeedResult(output, request)
+                    MigrationCommands.TRANSFER_PLAN -> handleTransferPlan(output, request)
                     MigrationCommands.FILE_OFFER -> handleFileOffer(input, output, request)
                     MigrationCommands.REPORT -> handleReport(output, request)
                     else -> {
@@ -204,6 +206,22 @@ internal class SecureMigrationPeerServer(
                 stabilityPercent = request.optInt("stability", 100).coerceIn(0, 100)
             )
         )
+        MigrationProtocol.writeJson(output, JSONObject().put("ok", true))
+        output.flush()
+    }
+
+    private fun handleTransferPlan(output: BufferedOutputStream, request: JSONObject) {
+        val totalBytes = request.optLong("totalBytes", -1L)
+        val totalItems = request.optInt("totalItems", -1)
+        if (totalBytes < 0L || totalItems < 0) {
+            MigrationProtocol.writeJson(
+                output,
+                JSONObject().put("ok", false).put("error", "invalid_transfer_plan")
+            )
+            output.flush()
+            return
+        }
+        onTransferPlan(totalBytes, totalItems)
         MigrationProtocol.writeJson(output, JSONObject().put("ok", true))
         output.flush()
     }
