@@ -12,7 +12,8 @@ data class PendingMigrationTask(
     val createdAt: Long,
     val selectedCategories: Set<MigrationCategory>,
     val allItems: List<MigrationFileItem>,
-    val completedPaths: Set<String>
+    val completedPaths: Set<String>,
+    val failedReasons: Map<String, String> = emptyMap()
 ) {
     val pendingItems: List<MigrationFileItem>
         get() = allItems.filterNot { it.relativePath in completedPaths }
@@ -64,20 +65,31 @@ internal class MigrationTaskStore(context: Context) {
             createdAt = metadata.getLong("createdAt"),
             selectedCategories = selectedCategories,
             allItems = items,
-            completedPaths = emptySet()
+            completedPaths = emptySet(),
+            failedReasons = emptyMap()
         )
     }
 
     @Synchronized
     fun markCompleted(migrationId: String, item: MigrationFileItem, skipped: Boolean) {
-        val dir = taskDir(migrationId)
-        if (!dir.isDirectory) return
-        File(dir, EVENTS_FILE).appendText(
+        appendEvent(
+            migrationId,
             JSONObject()
                 .put("path", item.relativePath)
                 .put("status", if (skipped) "skipped" else "complete")
                 .put("at", System.currentTimeMillis())
-                .toString() + "\n"
+        )
+    }
+
+    @Synchronized
+    fun markFailed(migrationId: String, item: MigrationFileItem, reason: String) {
+        appendEvent(
+            migrationId,
+            JSONObject()
+                .put("path", item.relativePath)
+                .put("status", "failed")
+                .put("reason", reason.take(300))
+                .put("at", System.currentTimeMillis())
         )
     }
 
@@ -103,6 +115,12 @@ internal class MigrationTaskStore(context: Context) {
         ?.filter { it.pendingItems.isNotEmpty() }
         ?.maxByOrNull { it.createdAt }
 
+    private fun appendEvent(migrationId: String, event: JSONObject) {
+        val dir = taskDir(migrationId)
+        if (!dir.isDirectory) return
+        File(dir, EVENTS_FILE).appendText(event.toString() + "\n")
+    }
+
     private fun readTask(dir: File): PendingMigrationTask? {
         val metaFile = File(dir, META_FILE)
         val manifestFile = File(dir, MANIFEST_FILE)
@@ -111,13 +129,21 @@ internal class MigrationTaskStore(context: Context) {
         if (meta.optBoolean("complete", false)) return null
 
         val completed = linkedSetOf<String>()
+        val failures = linkedMapOf<String, String>()
         val events = File(dir, EVENTS_FILE)
         if (events.isFile) {
             events.forEachLine { line ->
                 if (line.isBlank()) return@forEachLine
                 val event = runCatching { JSONObject(line) }.getOrNull() ?: return@forEachLine
-                if (event.optString("status") in setOf("complete", "skipped")) {
-                    event.optString("path").takeIf { it.isNotBlank() }?.let(completed::add)
+                val path = event.optString("path").takeIf { it.isNotBlank() } ?: return@forEachLine
+                when (event.optString("status")) {
+                    "complete", "skipped" -> {
+                        completed.add(path)
+                        failures.remove(path)
+                    }
+                    "failed" -> if (path !in completed) {
+                        failures[path] = event.optString("reason", "transfer_failed")
+                    }
                 }
             }
         }
@@ -155,7 +181,8 @@ internal class MigrationTaskStore(context: Context) {
             createdAt = meta.optLong("createdAt", dir.lastModified()),
             selectedCategories = categories,
             allItems = items,
-            completedPaths = completed
+            completedPaths = completed,
+            failedReasons = failures.filterKeys { it !in completed }
         )
     }
 
