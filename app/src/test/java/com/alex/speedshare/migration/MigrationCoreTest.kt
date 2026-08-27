@@ -46,6 +46,42 @@ class MigrationCoreTest {
     }
 
     @Test
+    fun resilientScanner_prioritizesStandardDirectories() {
+        assertEquals(
+            MigrationCategory.DOWNLOADS,
+            MigrationScannerV2.categoryFor("Download/photo.jpg", "photo.jpg")
+        )
+        assertEquals(
+            MigrationCategory.DOCUMENTS,
+            MigrationScannerV2.categoryFor("Documents/video.mp4", "video.mp4")
+        )
+        assertEquals(
+            MigrationCategory.PHOTOS,
+            MigrationScannerV2.categoryFor("DCIM/Camera/raw.bin", "raw.bin")
+        )
+        assertEquals(
+            MigrationCategory.VIDEOS,
+            MigrationScannerV2.categoryFor("Movies/readme.txt", "readme.txt")
+        )
+    }
+
+    @Test
+    fun resilientScanner_usesExtensionOutsideStandardDirectories() {
+        assertEquals(
+            MigrationCategory.PHOTOS,
+            MigrationScannerV2.categoryFor("Tencent/cache/picture.webp", "picture.webp")
+        )
+        assertEquals(
+            MigrationCategory.VIDEOS,
+            MigrationScannerV2.categoryFor("CameraExports/clip.mkv", "clip.mkv")
+        )
+        assertEquals(
+            MigrationCategory.OTHER,
+            MigrationScannerV2.categoryFor("Backup/blob.dat", "blob.dat")
+        )
+    }
+
+    @Test
     fun resilientPairToken_isRandomAndStrongLength() {
         val first = ResilientMigrationClient.newInboundToken()
         val second = ResilientMigrationClient.newInboundToken()
