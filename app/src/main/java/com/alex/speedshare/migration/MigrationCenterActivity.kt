@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -79,13 +78,11 @@ private fun MigrationCenterScreen(onClose: () -> Unit) {
     val activity = context as? ComponentActivity
     val controller = remember { MigrationController.get(context) }
     val state by controller.state.collectAsState()
-    var storageAccess by remember { mutableStateOf(hasMigrationStorageAccessCenter()) }
+    var storageAccess by remember { mutableStateOf(hasStorageAccess()) }
 
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                storageAccess = hasMigrationStorageAccessCenter()
-            }
+            if (event == Lifecycle.Event.ON_RESUME) storageAccess = hasStorageAccess()
         }
         activity?.lifecycle?.addObserver(observer)
         onDispose { activity?.lifecycle?.removeObserver(observer) }
@@ -97,7 +94,7 @@ private fun MigrationCenterScreen(onClose: () -> Unit) {
             title = { Text("确认连接") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${request.peer.name} 想与你的手机建立换机连接。")
+                    Text("${request.peer.name} 想连接这台手机并开始换机。")
                     if (request.peer.model.isNotBlank()) {
                         Text(
                             request.peer.model,
@@ -106,7 +103,7 @@ private fun MigrationCenterScreen(onClose: () -> Unit) {
                         )
                     }
                     Text(
-                        "只允许你认识的设备。允许后，该设备才能进行测速和发送换机数据。",
+                        "只允许你认识的设备。允许后，对方才能测速和发送换机数据。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -126,45 +123,49 @@ private fun MigrationCenterScreen(onClose: () -> Unit) {
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            TopBar(state = state, onClose = onClose)
-            MigrationHero(state)
-            StepRail(state.stage)
-            StatusBanner(state)
+            Header(state, onClose)
+            Hero(state)
+            StepBar(state.stage)
+            StatusCard(state)
 
-            val needsStorage = state.role != MigrationRole.UNSET
-            if (!storageAccess && needsStorage) {
+            if (!storageAccess && state.role != MigrationRole.UNSET) {
                 PermissionCard(
-                    isReceiver = state.role == MigrationRole.NEW_PHONE,
-                    onGrant = { openAllFilesAccessCenter(context) }
+                    receiver = state.role == MigrationRole.NEW_PHONE,
+                    onGrant = { openAllFilesAccess(context) }
                 )
             }
 
             when (state.stage) {
-                MigrationStage.DISCOVERY, MigrationStage.PAIRING -> DiscoveryPane(state, controller)
-                MigrationStage.SPEED_TEST -> SpeedPane(state, controller)
-                MigrationStage.ROLE -> RolePane(controller)
-                MigrationStage.SELECTION -> SelectionPane(state, controller, storageAccess)
-                MigrationStage.TRANSFERRING, MigrationStage.VERIFYING -> TransferPane(state)
-                MigrationStage.COMPLETE -> ReportPane(state, controller)
+                MigrationStage.DISCOVERY, MigrationStage.PAIRING -> DiscoverySection(state, controller)
+                MigrationStage.SPEED_TEST -> SpeedSection(state, controller)
+                MigrationStage.ROLE -> RoleSection(controller)
+                MigrationStage.SELECTION -> SelectionSection(state, controller, storageAccess)
+                MigrationStage.TRANSFERRING, MigrationStage.VERIFYING -> TransferSection(state)
+                MigrationStage.COMPLETE -> ReportSection(state, controller)
             }
 
             if (
                 state.connectedPeer != null &&
-                state.stage !in setOf(MigrationStage.DISCOVERY, MigrationStage.PAIRING, MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)
+                state.stage !in setOf(
+                    MigrationStage.DISCOVERY,
+                    MigrationStage.PAIRING,
+                    MigrationStage.TRANSFERRING,
+                    MigrationStage.VERIFYING
+                )
             ) {
                 OutlinedButton(onClick = controller::reset, modifier = Modifier.fillMaxWidth()) {
                     Text("结束当前连接")
                 }
             }
 
-            SecurityNote()
-            Spacer(Modifier.height(10.dp))
+            SecurityCard()
+            Spacer(Modifier.height(8.dp))
         }
     }
 }
 
 @Composable
-private fun TopBar(state: MigrationUiState, onClose: () -> Unit) {
+private fun Header(state: MigrationUiState, onClose: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -179,35 +180,46 @@ private fun TopBar(state: MigrationUiState, onClose: () -> Unit) {
             )
         }
         TextButton(onClick = onClose) {
-            Text(if (state.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)) "后台运行" else "返回")
+            Text(
+                if (state.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)) {
+                    "后台运行"
+                } else {
+                    "返回"
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun MigrationHero(state: MigrationUiState) {
-    val start = MaterialTheme.colorScheme.primaryContainer
-    val end = MaterialTheme.colorScheme.secondaryContainer
+private fun Hero(state: MigrationUiState) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(26.dp))
-            .background(Brush.linearGradient(listOf(start, end)))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primaryContainer,
+                        MaterialTheme.colorScheme.secondaryContainer
+                    )
+                )
+            )
             .padding(18.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text("一键换机", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
                 Surface(
                     shape = RoundedCornerShape(999.dp),
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f)
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.76f)
                 ) {
                     Text(
-                        stageLabel(state.stage),
+                        stageText(state.stage),
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
@@ -216,16 +228,16 @@ private fun MigrationHero(state: MigrationUiState) {
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                DeviceMiniCard(
+                DeviceCard(
                     modifier = Modifier.weight(1f),
                     title = state.localDeviceName.ifBlank { "本机" },
-                    subtitle = roleShortLabel(state.role)
+                    subtitle = roleText(state.role)
                 )
                 Text("→", fontSize = 24.sp, fontWeight = FontWeight.Black)
-                DeviceMiniCard(
+                DeviceCard(
                     modifier = Modifier.weight(1f),
                     title = state.connectedPeer?.name ?: "等待设备",
                     subtitle = state.connectedPeer?.model?.takeIf { it.isNotBlank() } ?: "同一 Wi‑Fi 自动发现"
@@ -236,27 +248,27 @@ private fun MigrationHero(state: MigrationUiState) {
 }
 
 @Composable
-private fun DeviceMiniCard(modifier: Modifier, title: String, subtitle: String) {
+private fun DeviceCard(modifier: Modifier, title: String, subtitle: String) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
         shape = RoundedCornerShape(18.dp)
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
 
 @Composable
-private fun StepRail(stage: MigrationStage) {
+private fun StepBar(stage: MigrationStage) {
     val current = stepIndex(stage)
     val labels = listOf("连接", "测速", "角色", "内容", "迁移")
     Card(shape = RoundedCornerShape(20.dp)) {
@@ -282,15 +294,17 @@ private fun StepRail(stage: MigrationStage) {
                     ) {
                         Text(
                             if (index < current) "✓" else (index + 1).toString(),
-                            color = if (index <= current) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Black
+                            color = if (index <= current) MaterialTheme.colorScheme.onPrimary
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Black,
+                            style = MaterialTheme.typography.labelMedium
                         )
                     }
                     Text(
                         label,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (index <= current) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (index <= current) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -299,14 +313,19 @@ private fun StepRail(stage: MigrationStage) {
 }
 
 @Composable
-private fun StatusBanner(state: MigrationUiState) {
-    val container = if (state.error == null) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.errorContainer
-    Card(colors = CardDefaults.cardColors(containerColor = container), shape = RoundedCornerShape(18.dp)) {
+private fun StatusCard(state: MigrationUiState) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if (state.error == null) MaterialTheme.colorScheme.surface
+            else MaterialTheme.colorScheme.errorContainer
+        ),
+        shape = RoundedCornerShape(18.dp)
+    ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(state.status.ifBlank { "准备换机" }, fontWeight = FontWeight.Bold)
-            state.connectedPeer?.let {
+            state.connectedPeer?.let { peer ->
                 Text(
-                    "已连接 ${it.name}${it.appVersion.takeIf { v -> v.isNotBlank() }?.let { v -> " · SpeedShare $v" }.orEmpty()}",
+                    "已连接 ${peer.name}${peer.appVersion.takeIf { it.isNotBlank() }?.let { " · v$it" }.orEmpty()}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -319,20 +338,19 @@ private fun StatusBanner(state: MigrationUiState) {
 }
 
 @Composable
-private fun PermissionCard(isReceiver: Boolean, onGrant: () -> Unit) {
+private fun PermissionCard(receiver: Boolean, onGrant: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         shape = RoundedCornerShape(20.dp)
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-            Text("还差一个权限", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+            Text("还差一个权限", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
             Text(
-                if (isReceiver) {
-                    "新手机需要“全部文件访问”权限，才能把照片、下载和文档恢复到原来的目录。"
+                if (receiver) {
+                    "新手机需要“全部文件访问”权限，才能把照片、下载和文档恢复到原目录。"
                 } else {
                     "旧手机需要“全部文件访问”权限，才能完整扫描照片、视频、下载和文档。"
-                },
-                style = MaterialTheme.typography.bodyMedium
+                }
             )
             Button(onClick = onGrant, modifier = Modifier.fillMaxWidth()) { Text("去授权") }
         }
@@ -340,108 +358,115 @@ private fun PermissionCard(isReceiver: Boolean, onGrant: () -> Unit) {
 }
 
 @Composable
-private fun DiscoveryPane(state: MigrationUiState, controller: MigrationController) {
-    MatureSection("附近设备", "两台手机连接同一个 Wi‑Fi，并同时打开 SpeedShare Migration。") {
-        if (state.peers.isEmpty()) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
-                shape = RoundedCornerShape(18.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 3.dp)
-                    Column {
-                        Text("正在自动搜索", fontWeight = FontWeight.Bold)
-                        Text(
-                            "无需扫码，也不用输入 IP 地址",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-        } else {
-            state.peers.forEach { peer ->
-                PeerCard(peer, state.pairing) { controller.connect(peer) }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PeerCard(peer: MigrationPeer, busy: Boolean, onConnect: () -> Unit) {
-    Card(shape = RoundedCornerShape(20.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+private fun DiscoverySection(state: MigrationUiState, controller: MigrationController) {
+    SectionTitle("附近设备", "两台手机连接同一个 Wi‑Fi，并同时打开 SpeedShare Migration。")
+    if (state.peers.isEmpty()) {
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f)),
+            shape = RoundedCornerShape(18.dp)
         ) {
-            Box(
-                modifier = Modifier.size(46.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text(peer.name.take(1).uppercase(), fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onPrimaryContainer)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(peer.name, fontWeight = FontWeight.Black)
-                Text(
-                    listOf(peer.model, peer.appVersion.takeIf { it.isNotBlank() }?.let { "v$it" })
-                        .filterNotNull().filter { it.isNotBlank() }.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Button(onClick = onConnect, enabled = !busy) { Text(if (busy) "连接中" else "连接") }
-        }
-    }
-}
-
-@Composable
-private fun SpeedPane(state: MigrationUiState, controller: MigrationController) {
-    MatureSection("连接质量", "使用真实数据双向传输测试，而不是只看 Wi‑Fi 信号格。") {
-        if (state.speedTesting) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            Text("正在测试上传、下载、延迟和稳定性…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-
-        state.speedResult?.let { result ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricTile("发送", formatRateCenter(result.uploadBytesPerSecond), Modifier.weight(1f))
-                MetricTile("接收", formatRateCenter(result.downloadBytesPerSecond), Modifier.weight(1f))
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MetricTile("延迟", "${result.latencyMs} ms", Modifier.weight(1f))
-                MetricTile("稳定性", "${result.stabilityPercent}%", Modifier.weight(1f))
-            }
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(networkAdviceCenter(result), fontWeight = FontWeight.Bold)
+                CircularProgressIndicator(modifier = Modifier.size(30.dp), strokeWidth = 3.dp)
+                Column {
+                    Text("正在自动搜索", fontWeight = FontWeight.Bold)
                     Text(
-                        "按当前平均速度，迁移 50 GB 约需 ${estimateDurationCenter(50L * 1024L * 1024L * 1024L, result.averageBytesPerSecond)}。",
+                        "无需扫码，也不用输入 IP 地址",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
-            if (!state.speedTesting) {
-                Button(onClick = controller::confirmNetwork, modifier = Modifier.fillMaxWidth()) {
-                    Text("使用当前 Wi‑Fi，继续")
+        }
+    } else {
+        state.peers.forEach { peer ->
+            Card(shape = RoundedCornerShape(20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            peer.name.take(1).uppercase(),
+                            fontWeight = FontWeight.Black,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text(peer.name, fontWeight = FontWeight.Black)
+                        Text(
+                            listOf(peer.model, peer.appVersion.takeIf { it.isNotBlank() }?.let { "v$it" })
+                                .filterNotNull()
+                                .filter { it.isNotBlank() }
+                                .joinToString(" · "),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = { controller.connect(peer) },
+                        enabled = !state.pairing
+                    ) { Text(if (state.pairing) "连接中" else "连接") }
                 }
             }
         }
+    }
+}
 
-        OutlinedButton(onClick = controller::runSpeedTest, enabled = !state.speedTesting, modifier = Modifier.fillMaxWidth()) {
-            Text(if (state.speedResult == null) "开始测速" else "重新测速")
+@Composable
+private fun SpeedSection(state: MigrationUiState, controller: MigrationController) {
+    SectionTitle("连接质量", "使用真实数据双向传输测速，而不是只看 Wi‑Fi 信号格。")
+    if (state.speedTesting) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Text("正在测试上传、下载、延迟和稳定性…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    state.speedResult?.let { result ->
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricTile("发送", formatRate(result.uploadBytesPerSecond), Modifier.weight(1f))
+            MetricTile("接收", formatRate(result.downloadBytesPerSecond), Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricTile("延迟", "${result.latencyMs} ms", Modifier.weight(1f))
+            MetricTile("稳定性", "${result.stabilityPercent}%", Modifier.weight(1f))
+        }
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.52f)),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(networkAdvice(result), fontWeight = FontWeight.Bold)
+                Text(
+                    "按当前平均速度，迁移 50 GB 约需 ${estimateTime(50L * 1024L * 1024L * 1024L, result.averageBytesPerSecond)}。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (!state.speedTesting) {
+            Button(onClick = controller::confirmNetwork, modifier = Modifier.fillMaxWidth()) {
+                Text("使用当前 Wi‑Fi，继续")
+            }
         }
     }
+
+    OutlinedButton(
+        onClick = controller::runSpeedTest,
+        enabled = !state.speedTesting,
+        modifier = Modifier.fillMaxWidth()
+    ) { Text(if (state.speedResult == null) "开始测速" else "重新测速") }
 }
 
 @Composable
@@ -449,158 +474,112 @@ private fun MetricTile(label: String, value: String, modifier: Modifier) {
     Card(modifier = modifier, shape = RoundedCornerShape(16.dp)) {
         Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
         }
     }
 }
 
 @Composable
-private fun RolePane(controller: MigrationController) {
-    MatureSection("选择这台手机", "只需要在其中一台选择，另一台会自动切换成相反角色。") {
-        RoleChoice(
-            title = "这是旧手机",
-            subtitle = "扫描并发送照片、视频、文档和应用",
-            primary = true,
-            onClick = { controller.setRole(MigrationRole.OLD_PHONE) }
-        )
-        RoleChoice(
-            title = "这是新手机",
-            subtitle = "接收数据，并尽可能恢复原目录结构",
-            primary = false,
-            onClick = { controller.setRole(MigrationRole.NEW_PHONE) }
-        )
+private fun RoleSection(controller: MigrationController) {
+    SectionTitle("选择这台手机", "只需要在其中一台选择，另一台会自动切换成相反角色。")
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("这是旧手机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+            Text("扫描并发送照片、视频、文档和应用", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(
+                onClick = { controller.setRole(MigrationRole.OLD_PHONE) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("选择旧手机") }
+        }
+    }
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("这是新手机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+            Text("接收数据，并尽可能恢复原目录结构", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(
+                onClick = { controller.setRole(MigrationRole.NEW_PHONE) },
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("选择新手机") }
+        }
     }
 }
 
 @Composable
-private fun RoleChoice(title: String, subtitle: String, primary: Boolean, onClick: () -> Unit) {
-    Card(shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (primary) {
-                Button(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text("选择旧手机") }
-            } else {
-                OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) { Text("选择新手机") }
+private fun SelectionSection(
+    state: MigrationUiState,
+    controller: MigrationController,
+    storageAccess: Boolean
+) {
+    if (state.role == MigrationRole.NEW_PHONE) {
+        SectionTitle("新手机已准备", "旧手机完成选择后会自动开始传输。")
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = if (storageAccess) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                else MaterialTheme.colorScheme.errorContainer
+            ),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (storageAccess) "准备完成" else "等待授权", fontWeight = FontWeight.Black)
+                Text(
+                    if (storageAccess) {
+                        "保持连接即可。照片、下载和文档会尽可能恢复到原目录。"
+                    } else {
+                        "请先完成上方权限授权，否则无法按原目录接收数据。"
+                    }
+                )
+                state.speedResult?.let {
+                    Text(
+                        "当前连接平均 ${formatRate(it.averageBytesPerSecond)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun SelectionPane(state: MigrationUiState, controller: MigrationController, storageAccess: Boolean) {
-    if (state.role == MigrationRole.NEW_PHONE) {
-        ReceiverReadyPane(state, storageAccess)
         return
     }
 
     val selectedBytes = state.selectedCategories.sumOf { state.scanResult.bytes(it) }
     val selectedCount = state.selectedCategories.sumOf { state.scanResult.count(it) }
 
-    MatureSection("选择要迁移的内容", "默认全选。你可以按类别排除不需要的数据。") {
-        Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.46f)),
-            shape = RoundedCornerShape(18.dp)
+    SectionTitle("选择要迁移的内容", "默认全选，可按类别排除不需要的数据。")
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f)),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
+            Column {
+                Text("已选择", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(formatBytes(selectedBytes), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+            }
+            Text("$selectedCount 项", fontWeight = FontWeight.Bold)
+        }
+    }
+
+    if (state.scanning) {
+        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        Text("正在扫描存储和已安装应用…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+
+    MigrationCategory.entries.forEach { category ->
+        Card(shape = RoundedCornerShape(16.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text("已选择", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(formatBytesCenter(selectedBytes), fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge)
-                }
-                Text("$selectedCount 项", fontWeight = FontWeight.Bold)
-            }
-        }
-
-        if (state.scanning) {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            Text("正在扫描存储和已安装应用…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-
-        MigrationCategory.entries.forEach { category ->
-            CategoryRow(
-                category = category,
-                count = state.scanResult.count(category),
-                bytes = state.scanResult.bytes(category),
-                checked = category in state.selectedCategories,
-                onToggle = { controller.toggleCategory(category) }
-            )
-        }
-
-        if (state.scanResult.apps.isNotEmpty()) {
-            Text(
-                "应用迁移会尽量保留 base.apk + split APK。应用登录状态和私有数据仍受 Android 系统限制。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(
-                onClick = controller::scanContent,
-                enabled = !state.scanning,
-                modifier = Modifier.weight(1f)
-            ) { Text("重新扫描") }
-            Button(
-                onClick = controller::startTransfer,
-                enabled = !state.scanning && storageAccess && selectedCount > 0,
-                modifier = Modifier.weight(1f)
-            ) { Text("开始换机") }
-        }
-    }
-}
-
-@Composable
-private fun CategoryRow(
-    category: MigrationCategory,
-    count: Int,
-    bytes: Long,
-    checked: Boolean,
-    onToggle: () -> Unit
-) {
-    Card(shape = RoundedCornerShape(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(checked = checked, onCheckedChange = { onToggle() })
-            Column(Modifier.weight(1f)) {
-                Text(categoryLabelCenter(category), fontWeight = FontWeight.Bold)
-                Text(
-                    "$count 项 · ${formatBytesCenter(bytes)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Checkbox(
+                    checked = category in state.selectedCategories,
+                    onCheckedChange = { controller.toggleCategory(category) }
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReceiverReadyPane(state: MigrationUiState, storageAccess: Boolean) {
-    MatureSection("新手机已准备", "旧手机完成选择后会自动开始传输。") {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = if (storageAccess) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.48f)
-                else MaterialTheme.colorScheme.errorContainer
-            ),
-            shape = RoundedCornerShape(20.dp)
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (storageAccess) "准备完成" else "等待授权", fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    if (storageAccess) {
-                        "保持连接即可。照片、下载和文档会尽可能恢复到原来的目录。"
-                    } else {
-                        "请先完成上方的文件访问授权，否则无法按原目录接收数据。"
-                    }
-                )
-                state.speedResult?.let {
+                Column(Modifier.weight(1f)) {
+                    Text(categoryLabel(category), fontWeight = FontWeight.Bold)
                     Text(
-                        "当前连接平均 ${formatRateCenter(it.averageBytesPerSecond)}",
+                        "${state.scanResult.count(category)} 项 · ${formatBytes(state.scanResult.bytes(category))}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -608,134 +587,162 @@ private fun ReceiverReadyPane(state: MigrationUiState, storageAccess: Boolean) {
             }
         }
     }
-}
 
-@Composable
-private fun TransferPane(state: MigrationUiState) {
-    val p = state.progress
-    val remaining = (p.totalBytes - p.transferredBytes).coerceAtLeast(0L)
-    val eta = estimateDurationCenter(remaining, p.bytesPerSecond)
-
-    MatureSection("正在迁移", "可以切到后台，前台服务会继续保持换机任务。") {
-        Card(shape = RoundedCornerShape(24.dp)) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("${(p.fraction * 100).toInt()}%", fontSize = 42.sp, fontWeight = FontWeight.Black)
-                    Text("预计剩余 $eta", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                LinearProgressIndicator(progress = { p.fraction }, modifier = Modifier.fillMaxWidth().height(10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MetricTile("实时速度", formatRateCenter(p.bytesPerSecond), Modifier.weight(1f))
-                    MetricTile("已传输", formatBytesCenter(p.transferredBytes), Modifier.weight(1f))
-                }
-                MetricLine("总数据", "${formatBytesCenter(p.transferredBytes)} / ${formatBytesCenter(p.totalBytes)}")
-                MetricLine("项目", "${p.completedItems} / ${p.totalItems}")
-                if (p.skippedItems > 0) MetricLine("自动跳过重复", p.skippedItems.toString())
-                if (p.failedItems > 0) MetricLine("当前失败", p.failedItems.toString())
-                if (p.currentName.isNotBlank()) {
-                    HorizontalDivider()
-                    Text("正在处理", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(p.currentName, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
+    if (state.scanResult.apps.isNotEmpty()) {
         Text(
-            "断线后重新连接会继续未完成的大文件；完整文件使用 SHA‑256 做最终校验。",
+            "应用会尽量保留 base.apk + split APK。登录状态和私有数据仍受 Android 系统限制。",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = controller::scanContent,
+            enabled = !state.scanning,
+            modifier = Modifier.weight(1f)
+        ) { Text("重新扫描") }
+        Button(
+            onClick = controller::startTransfer,
+            enabled = !state.scanning && storageAccess && selectedCount > 0,
+            modifier = Modifier.weight(1f)
+        ) { Text("开始换机") }
+    }
 }
 
 @Composable
-private fun ReportPane(state: MigrationUiState, controller: MigrationController) {
+private fun TransferSection(state: MigrationUiState) {
+    val progress = state.progress
+    val remaining = (progress.totalBytes - progress.transferredBytes).coerceAtLeast(0L)
+
+    SectionTitle("正在迁移", "可以切到后台，前台服务会继续保持换机任务。")
+    Card(shape = RoundedCornerShape(24.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("${(progress.fraction * 100).toInt()}%", fontSize = 42.sp, fontWeight = FontWeight.Black)
+                Text(
+                    "预计剩余 ${estimateTime(remaining, progress.bytesPerSecond)}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            LinearProgressIndicator(
+                progress = { progress.fraction },
+                modifier = Modifier.fillMaxWidth().height(10.dp)
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                MetricTile("实时速度", formatRate(progress.bytesPerSecond), Modifier.weight(1f))
+                MetricTile("已传输", formatBytes(progress.transferredBytes), Modifier.weight(1f))
+            }
+            MetricLine("总数据", "${formatBytes(progress.transferredBytes)} / ${formatBytes(progress.totalBytes)}")
+            MetricLine("项目", "${progress.completedItems} / ${progress.totalItems}")
+            if (progress.skippedItems > 0) MetricLine("自动跳过重复", progress.skippedItems.toString())
+            if (progress.failedItems > 0) MetricLine("当前失败", progress.failedItems.toString())
+            if (progress.currentName.isNotBlank()) {
+                HorizontalDivider()
+                Text("正在处理", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(progress.currentName, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+    Text(
+        "断线后重新连接会继续未完成的大文件；完整文件使用 SHA‑256 做最终校验。",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun ReportSection(state: MigrationUiState, controller: MigrationController) {
     val context = LocalContext.current
     val activity = context as? ComponentActivity
     val report = state.report
-    val receivedApps = remember(state.report, state.role) {
+    val apps = remember(state.report, state.role) {
         if (state.role == MigrationRole.NEW_PHONE) AppPackageInstaller.receivedPackages() else emptyList()
     }
 
-    MatureSection("换机报告", "传输结束后会自动汇总成功、跳过和失败项目。") {
-        Card(
-            colors = CardDefaults.cardColors(
-                containerColor = if ((report?.failedCount ?: 0) == 0) {
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-                } else {
-                    MaterialTheme.colorScheme.errorContainer
-                }
-            ),
-            shape = RoundedCornerShape(22.dp)
-        ) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    if ((report?.failedCount ?: 0) == 0) "换机完成" else "换机完成，有部分项目失败",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black
-                )
-                report?.let {
-                    MetricLine("总数据", formatBytesCenter(it.totalBytes))
-                    MetricLine("成功项目", it.successCount.toString())
-                    MetricLine("重复跳过", it.skippedCount.toString())
-                    MetricLine("失败项目", it.failedCount.toString())
-                    MetricLine("耗时", formatDurationCenter(it.durationMs))
-                    MetricLine("平均速度", formatRateCenter(it.averageBytesPerSecond))
-                }
+    SectionTitle("换机报告", "传输结束后自动汇总成功、跳过和失败项目。")
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = if ((report?.failedCount ?: 0) == 0) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+            } else {
+                MaterialTheme.colorScheme.errorContainer
+            }
+        ),
+        shape = RoundedCornerShape(22.dp)
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                if ((report?.failedCount ?: 0) == 0) "换机完成" else "换机完成，有部分项目失败",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Black
+            )
+            report?.let {
+                MetricLine("总数据", formatBytes(it.totalBytes))
+                MetricLine("成功项目", it.successCount.toString())
+                MetricLine("重复跳过", it.skippedCount.toString())
+                MetricLine("失败项目", it.failedCount.toString())
+                MetricLine("耗时", formatDuration(it.durationMs))
+                MetricLine("平均速度", formatRate(it.averageBytesPerSecond))
             }
         }
+    }
 
-        if (receivedApps.isNotEmpty()) {
-            Card(shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("已接收应用 ${receivedApps.size} 个", fontWeight = FontWeight.Black)
-                    Text(
-                        "应用以完整 APK 集合保存。点击安装后，由 Android 系统逐个确认。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    receivedApps.forEach { directory ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(directory.name, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            OutlinedButton(
-                                enabled = activity != null,
-                                onClick = {
-                                    val result = activity?.let { AppPackageInstaller.requestInstall(it, directory) }
-                                    val message = when (result) {
-                                        AppPackageInstaller.InstallStartResult.STARTED -> "已交给系统安装器"
-                                        AppPackageInstaller.InstallStartResult.PERMISSION_REQUIRED -> "请允许安装未知应用后再试"
-                                        AppPackageInstaller.InstallStartResult.NO_APKS -> "没有找到 APK"
-                                        AppPackageInstaller.InstallStartResult.FAILED -> "启动安装失败"
-                                        null -> "无法启动安装"
-                                    }
-                                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    if (apps.isNotEmpty()) {
+        Card(shape = RoundedCornerShape(20.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("已接收应用 ${apps.size} 个", fontWeight = FontWeight.Black)
+                Text(
+                    "应用以完整 APK 集合保存，点击安装后由 Android 系统确认。",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                apps.forEach { directory ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            directory.name,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        OutlinedButton(
+                            enabled = activity != null,
+                            onClick = {
+                                val result = activity?.let { AppPackageInstaller.requestInstall(it, directory) }
+                                val message = when (result) {
+                                    AppPackageInstaller.InstallStartResult.STARTED -> "已交给系统安装器"
+                                    AppPackageInstaller.InstallStartResult.PERMISSION_REQUIRED -> "请允许安装未知应用后再试"
+                                    AppPackageInstaller.InstallStartResult.NO_APKS -> "没有找到 APK"
+                                    AppPackageInstaller.InstallStartResult.FAILED -> "启动安装失败"
+                                    null -> "无法启动安装"
                                 }
-                            ) { Text("安装") }
-                        }
+                                Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            }
+                        ) { Text("安装") }
                     }
                 }
             }
         }
+    }
 
-        Button(onClick = controller::reset, modifier = Modifier.fillMaxWidth()) { Text("完成并返回设备列表") }
+    Button(onClick = controller::reset, modifier = Modifier.fillMaxWidth()) {
+        Text("完成并返回设备列表")
     }
 }
 
 @Composable
-private fun MatureSection(title: String, subtitle: String, content: @Composable () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        content()
+private fun SectionTitle(title: String, subtitle: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -748,7 +755,7 @@ private fun MetricLine(label: String, value: String) {
 }
 
 @Composable
-private fun SecurityNote() {
+private fun SecurityCard() {
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f)),
         shape = RoundedCornerShape(18.dp)
@@ -772,7 +779,7 @@ private fun stepIndex(stage: MigrationStage): Int = when (stage) {
     MigrationStage.TRANSFERRING, MigrationStage.VERIFYING, MigrationStage.COMPLETE -> 4
 }
 
-private fun stageLabel(stage: MigrationStage): String = when (stage) {
+private fun stageText(stage: MigrationStage): String = when (stage) {
     MigrationStage.DISCOVERY -> "正在发现设备"
     MigrationStage.PAIRING -> "正在连接"
     MigrationStage.SPEED_TEST -> "网络测速"
@@ -783,13 +790,13 @@ private fun stageLabel(stage: MigrationStage): String = when (stage) {
     MigrationStage.COMPLETE -> "已完成"
 }
 
-private fun roleShortLabel(role: MigrationRole): String = when (role) {
+private fun roleText(role: MigrationRole): String = when (role) {
     MigrationRole.OLD_PHONE -> "旧手机 · 发送"
     MigrationRole.NEW_PHONE -> "新手机 · 接收"
     MigrationRole.UNSET -> "本机"
 }
 
-private fun categoryLabelCenter(category: MigrationCategory): String = when (category) {
+private fun categoryLabel(category: MigrationCategory): String = when (category) {
     MigrationCategory.PHOTOS -> "照片"
     MigrationCategory.VIDEOS -> "视频"
     MigrationCategory.MUSIC -> "音乐 / 录音"
@@ -799,10 +806,10 @@ private fun categoryLabelCenter(category: MigrationCategory): String = when (cat
     MigrationCategory.APPS -> "应用"
 }
 
-private fun hasMigrationStorageAccessCenter(): Boolean =
+private fun hasStorageAccess(): Boolean =
     Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
 
-private fun openAllFilesAccessCenter(context: android.content.Context) {
+private fun openAllFilesAccess(context: android.content.Context) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
     runCatching {
         context.startActivity(
@@ -819,23 +826,23 @@ private fun openAllFilesAccessCenter(context: android.content.Context) {
     }
 }
 
-private fun formatBytesCenter(bytes: Long): String = when {
+private fun formatBytes(bytes: Long): String = when {
     bytes >= 1024L * 1024L * 1024L -> String.format(Locale.getDefault(), "%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)
     bytes >= 1024L * 1024L -> String.format(Locale.getDefault(), "%.1f MB", bytes / 1024.0 / 1024.0)
     bytes >= 1024L -> String.format(Locale.getDefault(), "%.0f KB", bytes / 1024.0)
     else -> "$bytes B"
 }
 
-private fun formatRateCenter(bytesPerSecond: Long): String = "${formatBytesCenter(bytesPerSecond)}/s"
+private fun formatRate(bytesPerSecond: Long): String = "${formatBytes(bytesPerSecond)}/s"
 
-private fun formatDurationCenter(ms: Long): String {
+private fun formatDuration(ms: Long): String {
     val seconds = (ms / 1000L).coerceAtLeast(0L)
     val minutes = seconds / 60L
     val remain = seconds % 60L
     return if (minutes > 0L) "${minutes}分${remain}秒" else "${remain}秒"
 }
 
-private fun estimateDurationCenter(bytes: Long, speed: Long): String {
+private fun estimateTime(bytes: Long, speed: Long): String {
     if (bytes <= 0L) return "0秒"
     if (speed <= 0L) return "计算中"
     val seconds = (bytes / speed).coerceAtLeast(1L)
@@ -848,7 +855,7 @@ private fun estimateDurationCenter(bytes: Long, speed: Long): String {
     }
 }
 
-private fun networkAdviceCenter(result: SpeedTestResult): String = when {
+private fun networkAdvice(result: SpeedTestResult): String = when {
     result.averageBytesPerSecond >= 50L * 1024L * 1024L && result.stabilityPercent >= 90 -> "连接质量优秀，适合大容量换机"
     result.averageBytesPerSecond >= 15L * 1024L * 1024L -> "连接质量良好，可以继续换机"
     else -> "当前网络偏慢，建议切换 5GHz / 6GHz Wi‑Fi 或靠近路由器"
