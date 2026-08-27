@@ -27,6 +27,7 @@ import com.alex.speedshare.MainActivity
 import com.alex.speedshare.migration.MigrationAppSelectionActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
 import com.alex.speedshare.migration.MigrationCategory
+import com.alex.speedshare.migration.MigrationResultDetailsActivity
 import com.alex.speedshare.migration.MigrationRole
 import com.alex.speedshare.migration.MigrationStage
 import com.alex.speedshare.migration.ResilientMigrationActivity
@@ -148,6 +149,26 @@ fun SpeedShareTheme(
                         Text(
                             text = "应用 ${selectedApps.size}/${migrationState.scanResult.apps.size}  ›",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                } else if (migrationState.stage == MigrationStage.COMPLETE) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 18.dp)
+                            .clickable {
+                                context.startActivity(Intent(context, MigrationResultDetailsActivity::class.java))
+                            },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 5.dp
+                    ) {
+                        Text(
+                            text = "详细报告  ›",
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 13.dp),
                             fontWeight = FontWeight.Black
                         )
                     }
