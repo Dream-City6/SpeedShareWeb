@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
+        android:shortcutId="one_click_migration"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_speedshare"
+        android:shortcutShortLabel="@string/migration_shortcut_short"
+        android:shortcutLongLabel="@string/migration_shortcut_long">
+        <intent
+            android:action="com.alex.speedshare.action.OPEN_MIGRATION"
+            android:targetPackage="com.alex.speedshare"
+            android:targetClass="com.alex.speedshare.ShortcutActionActivity" />
+    </shortcut>
+
+    <shortcut
         android:shortcutId="share_whole_storage"
         android:enabled="true"
         android:icon="@mipmap/ic_launcher_speedshare"
