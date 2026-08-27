@@ -3,6 +3,7 @@ package com.alex.speedshare.migration
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import java.util.concurrent.ConcurrentHashMap
 
@@ -14,14 +15,19 @@ class PeerDiscoveryManager(
     private val appVersion: String,
     private val onPeersChanged: (List<MigrationPeer>) -> Unit
 ) {
-    private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val appContext = context.applicationContext
+    private val nsdManager = appContext.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private val wifiManager = appContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
     private val peers = ConcurrentHashMap<String, MigrationPeer>()
+    private val serviceToDeviceId = ConcurrentHashMap<String, String>()
+    private var multicastLock: WifiManager.MulticastLock? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var discoveryListener: NsdManager.DiscoveryListener? = null
 
     @Synchronized
     fun start() {
         if (registrationListener != null || discoveryListener != null) return
+        acquireMulticastLock()
         registerService()
         discoverServices()
     }
@@ -33,7 +39,18 @@ class PeerDiscoveryManager(
         discoveryListener = null
         registrationListener = null
         peers.clear()
+        serviceToDeviceId.clear()
+        multicastLock?.let { lock -> if (lock.isHeld) runCatching { lock.release() } }
+        multicastLock = null
         onPeersChanged(emptyList())
+    }
+
+    private fun acquireMulticastLock() {
+        if (multicastLock?.isHeld == true) return
+        multicastLock = wifiManager?.createMulticastLock("SpeedShareWeb:MigrationDiscovery")?.apply {
+            setReferenceCounted(false)
+            runCatching { acquire() }
+        }
     }
 
     private fun registerService() {
@@ -71,11 +88,9 @@ class PeerDiscoveryManager(
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                val toRemove = peers.entries.firstOrNull { it.value.name == serviceInfo.serviceName }?.key
-                if (toRemove != null) {
-                    peers.remove(toRemove)
-                    publish()
-                }
+                val deviceId = serviceToDeviceId.remove(serviceInfo.serviceName) ?: return
+                peers.remove(deviceId)
+                publish()
             }
         }
         discoveryListener = listener
@@ -102,6 +117,7 @@ class PeerDiscoveryManager(
                     model = attributes["model"]?.toString(Charsets.UTF_8).orEmpty(),
                     appVersion = attributes["version"]?.toString(Charsets.UTF_8).orEmpty()
                 )
+                serviceToDeviceId[resolved.serviceName] = deviceId
                 peers[deviceId] = peer
                 publish()
             }
