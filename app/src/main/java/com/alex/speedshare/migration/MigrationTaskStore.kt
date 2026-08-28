@@ -33,7 +33,8 @@ internal class MigrationTaskStore(context: Context) {
         items: List<MigrationFileItem>,
         selectedCategories: Set<MigrationCategory>
     ): PendingMigrationTask {
-        val effectiveItems = MigrationAppSelectionRegistry.filterTransferItems(items)
+        val appFiltered = MigrationAppSelectionRegistry.filterTransferItems(items)
+        val effectiveItems = MigrationMediaSelectionRegistry.filterTransferItems(appFiltered)
         val id = UUID.randomUUID().toString()
         val dir = taskDir(id).apply { mkdirs() }
         val metadata = JSONObject()
