@@ -2,15 +2,19 @@ package com.alex.speedshare.migration
 
 import java.util.Collections
 import java.util.concurrent.CancellationException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
+import kotlin.math.min
 
 internal data class ResilientBatchResult(
     val report: MigrationReport,
     val failedItems: List<MigrationFileItem>,
-    val cancelled: Boolean
+    val omittedItems: List<MigrationFileItem>,
+    val cancelled: Boolean,
+    val finishedEarly: Boolean
 )
 
 internal class ResilientMigrationTransferManager(
@@ -33,22 +37,40 @@ internal class ResilientMigrationTransferManager(
         val completedItems = AtomicInteger(alreadyCompletedItems)
         val skippedItems = AtomicInteger(0)
         val failedItems = Collections.synchronizedList(mutableListOf<MigrationFileItem>())
+        val omittedItems = Collections.synchronizedList(mutableListOf<MigrationFileItem>())
+        val activeNames = ConcurrentHashMap.newKeySet<String>()
         val started = System.currentTimeMillis()
-        val lastSampleAt = AtomicLong(System.nanoTime())
-        val lastSampleBytes = AtomicLong(0L)
-        val speed = AtomicLong(0L)
-        val pool = Executors.newFixedThreadPool(concurrency.coerceIn(1, 6))
 
-        fun publish(name: String) {
+        val lastUiPublishAt = AtomicLong(0L)
+        val lastSpeedSampleAt = AtomicLong(System.nanoTime())
+        val lastSampleBytes = AtomicLong(0L)
+        val smoothedSpeed = AtomicLong(0L)
+        val pool = Executors.newFixedThreadPool(concurrency.coerceIn(1, MAX_FILE_CONCURRENCY))
+
+        fun publish(force: Boolean = false) {
             val now = System.nanoTime()
-            val previousAt = lastSampleAt.get()
-            if (now - previousAt >= 350_000_000L && lastSampleAt.compareAndSet(previousAt, now)) {
+            val previousUi = lastUiPublishAt.get()
+            if (!force && now - previousUi < UI_REFRESH_NANOS) return
+            if (!force && !lastUiPublishAt.compareAndSet(previousUi, now)) return
+            if (force) lastUiPublishAt.set(now)
+
+            val previousSampleAt = lastSpeedSampleAt.get()
+            if (now - previousSampleAt >= SPEED_SAMPLE_NANOS && lastSpeedSampleAt.compareAndSet(previousSampleAt, now)) {
                 val currentWire = wireBytes.get()
                 val previousWire = lastSampleBytes.getAndSet(currentWire)
-                speed.set(
-                    ((currentWire - previousWire).coerceAtLeast(0L) * 1_000_000_000.0 /
-                        max(1L, now - previousAt)).toLong()
-                )
+                val instant = (
+                    (currentWire - previousWire).coerceAtLeast(0L) * 1_000_000_000.0 /
+                        max(1L, now - previousSampleAt)
+                    ).toLong()
+                val old = smoothedSpeed.get()
+                smoothedSpeed.set(if (old <= 0L) instant else ((old * 3L + instant * 2L) / 5L).coerceAtLeast(0L))
+            }
+
+            val names = activeNames.toList()
+            val displayName = when (names.size) {
+                0 -> ""
+                1 -> names.first()
+                else -> "并行传输 ${names.size} 个项目"
             }
             onProgress(
                 MigrationProgress(
@@ -58,18 +80,28 @@ internal class ResilientMigrationTransferManager(
                     completedItems = completedItems.get().coerceIn(0, totalItems),
                     skippedItems = skippedItems.get(),
                     failedItems = failedItems.size,
-                    bytesPerSecond = speed.get(),
-                    currentName = name
+                    bytesPerSecond = smoothedSpeed.get(),
+                    currentName = displayName
                 )
             )
         }
 
         val futures = items.map { item ->
             pool.submit {
+                activeNames += item.file.name
                 try {
                     control.awaitReady()
                     val hash = MigrationHashCache.sha256(item.file)
                     control.awaitReady()
+                    val chunkStreams = if (
+                        item.size >= LARGE_FILE_THRESHOLD &&
+                        items.size <= 2 &&
+                        concurrency >= 2
+                    ) {
+                        min(MAX_CHUNK_STREAMS, concurrency)
+                    } else {
+                        1
+                    }
                     val result = ResilientMigrationClient.sendFile(
                         session = session,
                         migrationId = migrationId,
@@ -79,8 +111,9 @@ internal class ResilientMigrationTransferManager(
                         onBytes = { delta ->
                             wireBytes.addAndGet(delta)
                             logicalBytes.addAndGet(delta)
-                            publish(item.file.name)
-                        }
+                            publish()
+                        },
+                        parallelStreams = chunkStreams
                     )
                     if (result.skipped) {
                         skippedItems.incrementAndGet()
@@ -91,14 +124,25 @@ internal class ResilientMigrationTransferManager(
                     }
                     completedItems.incrementAndGet()
                     store.markCompleted(migrationId, item, result.skipped)
+                } catch (_: MigrationEarlyFinishException) {
+                    omittedItems += item
                 } catch (error: CancellationException) {
-                    failedItems += item
-                    store.markFailed(migrationId, item, "paused_or_cancelled")
+                    if (control.isFinishingEarly()) {
+                        omittedItems += item
+                    } else {
+                        failedItems += item
+                        store.markFailed(migrationId, item, "paused_or_cancelled")
+                    }
                 } catch (error: Throwable) {
-                    failedItems += item
-                    store.markFailed(migrationId, item, normalizeFailure(error))
+                    if (control.isFinishingEarly()) {
+                        omittedItems += item
+                    } else {
+                        failedItems += item
+                        store.markFailed(migrationId, item, normalizeFailure(error))
+                    }
                 } finally {
-                    publish(item.file.name)
+                    activeNames -= item.file.name
+                    publish(force = true)
                 }
             }
         }
@@ -107,18 +151,26 @@ internal class ResilientMigrationTransferManager(
         pool.shutdownNow()
         val duration = (System.currentTimeMillis() - started).coerceAtLeast(1L)
         val failedBytes = failedItems.sumOf { it.size }
-        val finalBytes = (totalBytes - failedBytes).coerceAtLeast(0L)
+        val omittedBytes = omittedItems.sumOf { it.size }
+        val finalBytes = (totalBytes - failedBytes - omittedBytes).coerceAtLeast(0L)
         val report = MigrationReport(
             totalBytes = totalBytes,
             transferredBytes = finalBytes,
-            successCount = (totalItems - failedItems.size).coerceAtLeast(0),
+            successCount = (totalItems - failedItems.size - omittedItems.size).coerceAtLeast(0),
             skippedCount = skippedItems.get(),
             failedCount = failedItems.size,
             durationMs = duration,
-            averageBytesPerSecond = finalBytes * 1000L / duration
+            averageBytesPerSecond = finalBytes * 1000L / duration,
+            notMigratedCount = omittedItems.size
         )
-        publish("")
-        return ResilientBatchResult(report, failedItems.toList(), control.isCancelled())
+        publish(force = true)
+        return ResilientBatchResult(
+            report = report,
+            failedItems = failedItems.toList(),
+            omittedItems = omittedItems.toList(),
+            cancelled = control.isCancelled(),
+            finishedEarly = control.isFinishingEarly()
+        )
     }
 
     private fun normalizeFailure(error: Throwable): String {
@@ -133,5 +185,13 @@ internal class ResilientMigrationTransferManager(
             text.isNotBlank() -> error.message.orEmpty().take(200)
             else -> error::class.java.simpleName
         }
+    }
+
+    companion object {
+        private const val MAX_FILE_CONCURRENCY = 8
+        private const val MAX_CHUNK_STREAMS = 4
+        private const val LARGE_FILE_THRESHOLD = 512L * 1024L * 1024L
+        private const val UI_REFRESH_NANOS = 250_000_000L
+        private const val SPEED_SAMPLE_NANOS = 500_000_000L
     }
 }
