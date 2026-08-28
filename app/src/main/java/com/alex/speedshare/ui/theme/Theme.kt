@@ -165,11 +165,30 @@ fun SpeedShareTheme(
                     )
                 }
 
+                if (migrationState.stage == MigrationStage.SPEED_TEST && !migrationState.speedTesting) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 18.dp)
+                            .clickable { controller.skipSpeedTest() },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tonalElevation = 5.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Text(
+                            text = "跳过测速  ›",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
                 val selecting = migrationState.stage == MigrationStage.SELECTION && migrationState.role == MigrationRole.OLD_PHONE
                 if (
                     selecting &&
-                    MigrationCategory.APPS in migrationState.selectedCategories &&
-                    migrationState.scanResult.apps.isNotEmpty()
+                    MigrationCategory.APPS in migrationState.selectedCategories
                 ) {
                     Surface(
                         modifier = Modifier
@@ -185,7 +204,11 @@ fun SpeedShareTheme(
                         shadowElevation = 5.dp
                     ) {
                         Text(
-                            text = "应用 ${selectedApps.size}/${migrationState.scanResult.apps.size}  ›",
+                            text = if (migrationState.scanResult.apps.isEmpty()) {
+                                "选择应用  ›"
+                            } else {
+                                "应用 ${selectedApps.size}/${migrationState.scanResult.apps.size}  ›"
+                            },
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             fontWeight = FontWeight.Black
                         )
