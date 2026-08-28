@@ -30,6 +30,7 @@ internal object ResilientCommands {
     const val FILE_CHUNK_PLAN = "v2_file_chunk_plan"
     const val FILE_CHUNK_DATA = "v2_file_chunk_data"
     const val FILE_CHUNK_FINALIZE = "v2_file_chunk_finalize"
+    const val CLEANUP_TEMP = "v2_cleanup_temp"
     const val PROGRESS_SYNC = "v2_progress_sync"
     const val REPORT = "v2_report"
 }
@@ -142,6 +143,7 @@ internal class ResilientMigrationPeerServer(
                     ResilientCommands.FILE_CHUNK_PLAN -> handleChunkPlan(output, request)
                     ResilientCommands.FILE_CHUNK_DATA -> handleChunkData(socket, input, output, request)
                     ResilientCommands.FILE_CHUNK_FINALIZE -> handleChunkFinalize(output, request)
+                    ResilientCommands.CLEANUP_TEMP -> handleCleanupTemporary(output, request)
                     ResilientCommands.PROGRESS_SYNC -> {
                         onProgressSync(progressFromJson(request))
                         sendOk(output)
@@ -153,7 +155,7 @@ internal class ResilientMigrationPeerServer(
                     else -> sendError(output, "unknown_command")
                 }
             } catch (_: Throwable) {
-                // Partial files and completed chunk state remain available for the next resume.
+                // Resume files remain in Download/SpeedShareWeb/Temporary for the next attempt.
             }
         }
     }
@@ -295,6 +297,11 @@ internal class ResilientMigrationPeerServer(
             requestedTarget.length() == size &&
             runCatching { MigrationHashCache.sha256(requestedTarget) }.getOrNull() == sourceHash
         if (exactTarget && policy != MigrationDuplicatePolicy.KEEP_BOTH) {
+            MigrationStorageLayout.singlePartFile(migrationId, relativePath, sourceHash)?.let { stale ->
+                MigrationHashCache.invalidate(stale)
+                stale.delete()
+                MigrationStorageLayout.pruneEmptyTemporaryParents(stale, migrationId)
+            }
             MigrationProtocol.writeJson(
                 output,
                 JSONObject().put("ok", true).put("action", "skip").put("offset", size)
@@ -308,8 +315,10 @@ internal class ResilientMigrationPeerServer(
             MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT,
             MigrationDuplicatePolicy.KEEP_BOTH -> if (requestedTarget.exists()) conflictTarget(requestedTarget) else requestedTarget
         }
-        val part = File(finalTarget.parentFile, ".${finalTarget.name}.${sourceHash.take(12)}.speedshare.part")
+        val part = MigrationStorageLayout.singlePartFile(migrationId, relativePath, sourceHash)
+            ?: return sendFileFailure(output, "invalid_temporary_path")
         if (part.length() > size) part.delete()
+        part.parentFile?.mkdirs()
         val offset = part.length().coerceIn(0L, size)
         MigrationProtocol.writeJson(
             output,
@@ -334,6 +343,7 @@ internal class ResilientMigrationPeerServer(
         if (MigrationHashCache.sha256(part) != sourceHash) {
             MigrationHashCache.invalidate(part)
             part.delete()
+            MigrationStorageLayout.pruneEmptyTemporaryParents(part, migrationId)
             return sendFileFailure(output, "hash_mismatch")
         }
         if (policy == MigrationDuplicatePolicy.OVERWRITE && finalTarget.exists()) {
@@ -346,6 +356,7 @@ internal class ResilientMigrationPeerServer(
         }
         MigrationHashCache.invalidate(part)
         MigrationHashCache.invalidate(finalTarget)
+        MigrationStorageLayout.pruneEmptyTemporaryParents(part, migrationId)
         if (modifiedAt > 0L) finalTarget.setLastModified(modifiedAt)
         MigrationProtocol.writeJson(
             output,
@@ -410,6 +421,14 @@ internal class ResilientMigrationPeerServer(
             .onFailure { sendFileFailure(output, it.message ?: "chunk_finalize_failed") }
     }
 
+    private fun handleCleanupTemporary(output: BufferedOutputStream, request: JSONObject) {
+        val migrationId = normalizeId(request.optString("migrationId"))
+            ?: return sendError(output, "invalid_migration_id")
+        val removed = MigrationStorageLayout.cleanupTemporary(migrationId)
+        duplicatePolicies.remove(migrationId)
+        sendOk(output, JSONObject().put("removed", removed))
+    }
+
     private fun applyDuplicatePolicy(request: JSONObject) {
         val migrationId = normalizeId(request.optString("migrationId"))
         val policy = migrationId?.let { duplicatePolicies[it] }
@@ -418,11 +437,10 @@ internal class ResilientMigrationPeerServer(
     }
 
     private fun resolveTarget(migrationId: String, relativePath: String, kind: String): File? {
-        val root = Environment.getExternalStorageDirectory().canonicalFile
         val base = if (kind == "app") {
-            File(root, "Download/SpeedShare/Apps/$migrationId").apply { mkdirs() }.canonicalFile
+            MigrationStorageLayout.appsMigrationDir(migrationId)?.canonicalFile ?: return null
         } else {
-            root
+            Environment.getExternalStorageDirectory().canonicalFile
         }
         val target = File(base, relativePath).canonicalFile
         return target.takeIf { it.path.startsWith(base.path + File.separator) }
