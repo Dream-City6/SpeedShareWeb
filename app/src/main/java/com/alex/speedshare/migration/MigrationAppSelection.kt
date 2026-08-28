@@ -192,25 +192,11 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
         value = withContext(Dispatchers.Default) {
             apps.associate { app ->
                 val base = AppCompatibilityAnalyzer.analyze(context, app, receiver)
-                val receiverVersion = receiverVersions[app.packageName]
-                val result = when {
-                    receiverVersion != null && app.versionCode > 0L && receiverVersion >= app.versionCode -> {
-                        AppCompatibilityResult(
-                            status = AppCompatibilityStatus.COMPATIBLE,
-                            reason = if (receiverVersion > app.versionCode) {
-                                "新手机已安装更高版本，默认不重复迁移；需要旧 APK 时仍可手动勾选"
-                            } else {
-                                "新手机已安装相同版本，默认不重复迁移；仍可手动勾选"
-                            },
-                            alreadyPresent = true
-                        )
-                    }
-                    receiverVersion != null && app.versionCode > 0L && receiverVersion < app.versionCode -> {
-                        base.copy(reason = "新手机已有较旧版本，可迁移更新。${base.reason}")
-                    }
-                    else -> base
-                }
-                app.packageName to result
+                app.packageName to MigrationAppVersionPolicy.merge(
+                    sourceVersionCode = app.versionCode,
+                    receiverVersionCode = receiverVersions[app.packageName],
+                    base = base
+                )
             }
         }
     }
