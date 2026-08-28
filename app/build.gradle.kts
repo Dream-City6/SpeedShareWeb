@@ -15,8 +15,8 @@ android {
         applicationId = "com.alex.speedshare"
         minSdk = 26
         targetSdk = 36
-        versionCode = 28
-        versionName = "1.5.0-beta6"
+        versionCode = 29
+        versionName = "1.5.0-beta7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
