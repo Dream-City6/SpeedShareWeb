@@ -36,7 +36,9 @@ internal class MigrationTaskStore(context: Context) {
     ): PendingMigrationTask {
         val appFiltered = MigrationAppSelectionRegistry.filterTransferItems(items)
         val mediaFiltered = MigrationMediaSelectionRegistry.filterTransferItems(appFiltered)
-        val effectiveItems = MigrationFileSelectionRegistry.filterTransferItems(mediaFiltered)
+        val fileFiltered = MigrationFileSelectionRegistry.filterTransferItems(mediaFiltered)
+        val contacts = listOfNotNull(MigrationContactsRegistry.preparedItem())
+        val effectiveItems = (fileFiltered + contacts).distinctBy { it.relativePath }
         val duplicatePolicy = MigrationDuplicatePolicyRegistry.current.value
         val id = UUID.randomUUID().toString()
         val dir = taskDir(id).apply { mkdirs() }
