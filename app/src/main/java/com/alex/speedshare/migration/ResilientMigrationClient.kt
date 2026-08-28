@@ -89,6 +89,16 @@ internal object ResilientMigrationClient {
         return response.optLong("freeBytes", -1L)
     }
 
+    fun cleanupTemporary(session: MigrationSession, migrationId: String) {
+        val response = command(
+            session,
+            JSONObject()
+                .put("type", ResilientCommands.CLEANUP_TEMP)
+                .put("migrationId", migrationId)
+        )
+        ensureOk(response)
+    }
+
     fun testSpeed(session: MigrationSession): SpeedTestResult {
         val latencySamples = mutableListOf<Long>()
         repeat(3) {
@@ -97,12 +107,13 @@ internal object ResilientMigrationClient {
             latencySamples += (System.nanoTime() - started) / 1_000_000L
         }
 
-        // Keep the optional test short. A small single-stream probe estimates the link, then
-        // four streams run for roughly one second in each direction (about 2-3 seconds total).
+        // Optional and intentionally short: a small probe estimates single-stream throughput,
+        // then four streams run in both directions. The adaptive payload targets roughly 2-3s
+        // on normal Wi-Fi while avoiding the old fixed, long benchmark.
         val warmup = uploadSpeed(session, 4L * 1024L * 1024L)
         val streams = SPEED_TEST_STREAMS
-        val perStreamSize = ((warmup.first * 11L) / 10L / streams)
-            .coerceIn(24L * 1024L * 1024L, 40L * 1024L * 1024L)
+        val perStreamSize = (warmup.first / 3L)
+            .coerceIn(2L * 1024L * 1024L, 24L * 1024L * 1024L)
 
         val upload = multiUploadSpeed(session, perStreamSize, streams)
         val download = multiDownloadSpeed(session, perStreamSize, streams)
