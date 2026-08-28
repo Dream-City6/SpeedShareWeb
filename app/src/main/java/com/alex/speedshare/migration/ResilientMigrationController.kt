@@ -60,7 +60,7 @@ class ResilientMigrationController private constructor(private val context: Cont
                     incomingPairRequest = null,
                     pairing = false,
                     stage = MigrationStage.SPEED_TEST,
-                    status = "已连接 ${peer.name}，等待测速"
+                    status = "已连接 ${peer.name}，可快速测速或直接跳过"
                 )
             }
         },
@@ -174,10 +174,9 @@ class ResilientMigrationController private constructor(private val context: Cont
                     connectedPeer = connected.peer,
                     pairing = false,
                     stage = MigrationStage.SPEED_TEST,
-                    status = "连接成功，正在测试 Wi‑Fi 实际速度…"
+                    status = "连接成功，可快速测速或直接跳过"
                 )
             }
-            runSpeedTest()
         }
     }
 
@@ -207,7 +206,7 @@ class ResilientMigrationController private constructor(private val context: Cont
                 speedTesting = true,
                 stage = MigrationStage.SPEED_TEST,
                 error = null,
-                status = "正在进行多流双向测速，约需 8～12 秒…"
+                status = "正在进行快速多流双向测速，约需 2～3 秒…"
             )
         }
         scope.launch {
@@ -227,10 +226,22 @@ class ResilientMigrationController private constructor(private val context: Cont
                     it.copy(
                         speedTesting = false,
                         error = error.message,
-                        status = "测速失败，可重新测试"
+                        status = "测速失败，可重新测试或直接跳过"
                     )
                 }
             }
+        }
+    }
+
+    fun skipSpeedTest() {
+        if (_state.value.speedTesting) return
+        update {
+            it.copy(
+                stage = MigrationStage.ROLE,
+                speedResult = null,
+                error = null,
+                status = "已跳过测速，请选择这台手机的角色"
+            )
         }
     }
 
@@ -718,7 +729,8 @@ class ResilientMigrationController private constructor(private val context: Cont
     )
 
     private fun recommendedConcurrency(result: SpeedTestResult?): Int {
-        val speed = result?.averageBytesPerSecond ?: 0L
+        if (result == null) return 6
+        val speed = result.averageBytesPerSecond
         return when {
             speed < 10L * 1024L * 1024L -> 2
             speed < 35L * 1024L * 1024L -> 4
