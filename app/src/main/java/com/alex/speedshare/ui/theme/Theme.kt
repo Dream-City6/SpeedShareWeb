@@ -6,16 +6,22 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -120,13 +126,37 @@ fun SpeedShareTheme(
             }
 
             if (context is ResilientMigrationActivity) {
-                val migrationState by ResilientMigrationController.get(context).state.collectAsState()
+                val controller = ResilientMigrationController.get(context)
+                val migrationState by controller.state.collectAsState()
                 val selectedApps by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
+                var showEarlyFinishConfirm by remember { mutableStateOf(false) }
                 LaunchedEffect(migrationState.scanResult.apps) {
                     if (migrationState.scanResult.apps.isNotEmpty()) {
                         MigrationAppSelectionRegistry.sync(migrationState.scanResult.apps)
                     }
                 }
+
+                if (showEarlyFinishConfirm) {
+                    AlertDialog(
+                        onDismissRequest = { showEarlyFinishConfirm = false },
+                        title = { Text("提前结束换机？") },
+                        text = {
+                            Text("已经成功迁移的内容会保留；剩余内容会标记为“未迁移”，本次任务结束后不会再提示继续。")
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    showEarlyFinishConfirm = false
+                                    controller.finishEarlyTransfer()
+                                }
+                            ) { Text("提前结束") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showEarlyFinishConfirm = false }) { Text("继续迁移") }
+                        }
+                    )
+                }
+
                 if (
                     migrationState.stage == MigrationStage.SELECTION &&
                     migrationState.role == MigrationRole.OLD_PHONE &&
@@ -148,6 +178,27 @@ fun SpeedShareTheme(
                     ) {
                         Text(
                             text = "应用 ${selectedApps.size}/${migrationState.scanResult.apps.size}  ›",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                } else if (
+                    migrationState.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING) &&
+                    migrationState.role == MigrationRole.OLD_PHONE
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 16.dp, bottom = 18.dp)
+                            .clickable { showEarlyFinishConfirm = true },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 5.dp
+                    ) {
+                        Text(
+                            text = "提前结束",
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                             fontWeight = FontWeight.Black
                         )
