@@ -1,7 +1,6 @@
 package com.alex.speedshare.migration
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.DocumentsContract
@@ -65,7 +64,7 @@ class MigrationHistoryActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val initial = DocumentsContract.buildDocumentUri(
                 "com.android.externalstorage.documents",
-                "primary:Download/SpeedShare"
+                "primary:Download/SpeedShareWeb"
             )
             intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, initial)
         }
@@ -90,8 +89,13 @@ private fun MigrationHistoryScreen(onClose: () -> Unit, onOpenFolder: () -> Unit
                 Button(onClick = onClose) { Text("返回") }
             }
             OutlinedButton(onClick = onOpenFolder, modifier = Modifier.fillMaxWidth()) {
-                Text("打开 SpeedShare 接收文件夹")
+                Text("打开 Download/SpeedShareWeb")
             }
+            Text(
+                "Apps、Contacts 和 Temporary 都集中在这里。Temporary 是断点工作区，异常残留时你也可以手动删除。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
             if (history.isEmpty()) {
                 Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
