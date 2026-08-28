@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -59,7 +60,8 @@ class MigrationFileSelectionActivity : ComponentActivity() {
 
 @Composable
 private fun MigrationFileSelectionScreen(onClose: () -> Unit) {
-    val controller = remember { ResilientMigrationController.get(thisActivityContext()) }
+    val context = LocalContext.current
+    val controller = remember(context) { ResilientMigrationController.get(context) }
     val state by controller.state.collectAsState()
     val files = state.scanResult.files
     MigrationFileSelectionRegistry.sync(files)
@@ -211,9 +213,6 @@ private fun SortButton(label: String, active: Boolean, modifier: Modifier, onCli
     if (active) Button(onClick = onClick, modifier = modifier) { Text(label) }
     else OutlinedButton(onClick = onClick, modifier = modifier) { Text(label) }
 }
-
-@Composable
-private fun thisActivityContext(): android.content.Context = androidx.compose.ui.platform.LocalContext.current
 
 private fun formatPickerBytes(bytes: Long): String = when {
     bytes >= 1024L * 1024L * 1024L -> String.format(Locale.getDefault(), "%.2f GB", bytes / 1024.0 / 1024.0 / 1024.0)
