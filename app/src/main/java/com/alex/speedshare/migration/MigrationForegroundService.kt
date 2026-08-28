@@ -8,11 +8,15 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 
 class MigrationForegroundService : Service() {
     private var receiverMode = false
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -22,11 +26,13 @@ class MigrationForegroundService : Service() {
                 description = "Phone migration progress"
             }
         )
+        acquireTransferLocks()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        acquireTransferLocks()
         val progress = intent?.getIntExtra(EXTRA_PROGRESS, 0)?.coerceIn(0, 100) ?: 0
         val detail = intent?.getStringExtra(EXTRA_DETAIL).orEmpty()
         if (
@@ -54,10 +60,42 @@ class MigrationForegroundService : Service() {
 
     override fun onDestroy() {
         stopForeground(STOP_FOREGROUND_REMOVE)
+        releaseTransferLocks()
         if (receiverMode) {
             MigrationMediaIndexer.refreshStandardMediaFolders(applicationContext)
         }
         super.onDestroy()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun acquireTransferLocks() {
+        if (wakeLock?.isHeld != true) {
+            wakeLock = runCatching {
+                getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SpeedShare:MigrationWake")
+                    .apply {
+                        setReferenceCounted(false)
+                        acquire()
+                    }
+            }.getOrNull()
+        }
+        if (wifiLock?.isHeld != true) {
+            wifiLock = runCatching {
+                getSystemService(WifiManager::class.java)
+                    .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "SpeedShare:MigrationWifi")
+                    .apply {
+                        setReferenceCounted(false)
+                        acquire()
+                    }
+            }.getOrNull()
+        }
+    }
+
+    private fun releaseTransferLocks() {
+        runCatching { if (wifiLock?.isHeld == true) wifiLock?.release() }
+        runCatching { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        wifiLock = null
+        wakeLock = null
     }
 
     private fun buildNotification(progress: Int, detail: String): Notification {
