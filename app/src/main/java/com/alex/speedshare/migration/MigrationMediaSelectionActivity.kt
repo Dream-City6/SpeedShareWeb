@@ -25,19 +25,23 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,6 +58,7 @@ import com.alex.speedshare.ui.theme.SpeedShareTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -74,9 +79,8 @@ internal object MigrationMediaSelectionRegistry {
     }
 
     fun toggle(path: String) {
-        val next = _selectedPaths.value.toMutableSet()
-        if (!next.add(path)) next.remove(path)
-        _selectedPaths.value = next
+        val current = _selectedPaths.value
+        _selectedPaths.value = if (path in current) current - path else current + path
     }
 
     fun selectCategory(items: List<MigrationFileItem>, category: MigrationCategory, selected: Boolean) {
@@ -130,71 +134,87 @@ private fun MigrationMediaSelectionScreen(onClose: () -> Unit) {
     val visible = remember(media, category) { media.filter { it.category == category } }
     val selectedVisible = visible.count { it.relativePath in selected }
     val selectedBytes = visible.asSequence().filter { it.relativePath in selected }.sumOf { it.size }
+    val gridState = rememberLazyGridState()
+    val scope = rememberCoroutineScope()
+    val showBackToTop by remember { derivedStateOf { gridState.firstVisibleItemIndex > 18 } }
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        Column(
-            Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("选择照片和视频", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-                    Text(
-                        "当前已选 $selectedVisible / ${visible.size} · ${formatMediaBytes(selectedBytes)}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Button(onClick = onClose) { Text("完成") }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MediaTab("照片", category == MigrationCategory.PHOTOS, Modifier.weight(1f)) {
-                    category = MigrationCategory.PHOTOS
-                }
-                MediaTab("视频", category == MigrationCategory.VIDEOS, Modifier.weight(1f)) {
-                    category = MigrationCategory.VIDEOS
-                }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(
-                    onClick = { MigrationMediaSelectionRegistry.selectCategory(media, category, true) },
-                    modifier = Modifier.weight(1f)
-                ) { Text("全选") }
-                OutlinedButton(
-                    onClick = { MigrationMediaSelectionRegistry.selectCategory(media, category, false) },
-                    modifier = Modifier.weight(1f)
-                ) { Text("全不选") }
-                OutlinedButton(
-                    onClick = {
-                        MigrationMediaSelectionRegistry.selectRecent(
-                            media,
-                            category,
-                            System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L
-                        )
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text("近30天") }
-            }
-
-            if (visible.isEmpty()) {
-                Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
-                    Text("没有扫描到此类媒体", Modifier.padding(18.dp))
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(3),
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(visible, key = { it.relativePath }) { item ->
-                        MediaTile(
-                            item = item,
-                            selected = item.relativePath in selected,
-                            onToggle = { MigrationMediaSelectionRegistry.toggle(item.relativePath) }
+        Box(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Column(
+                Modifier.fillMaxSize().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("选择照片和视频", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
+                        Text(
+                            "当前已选 $selectedVisible / ${visible.size} · ${formatMediaBytes(selectedBytes)}",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Button(onClick = onClose) { Text("完成") }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MediaTab("照片", category == MigrationCategory.PHOTOS, Modifier.weight(1f)) {
+                        category = MigrationCategory.PHOTOS
+                    }
+                    MediaTab("视频", category == MigrationCategory.VIDEOS, Modifier.weight(1f)) {
+                        category = MigrationCategory.VIDEOS
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(
+                        onClick = { MigrationMediaSelectionRegistry.selectCategory(media, category, true) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("全选") }
+                    OutlinedButton(
+                        onClick = { MigrationMediaSelectionRegistry.selectCategory(media, category, false) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("全不选") }
+                    OutlinedButton(
+                        onClick = {
+                            MigrationMediaSelectionRegistry.selectRecent(
+                                media,
+                                category,
+                                System.currentTimeMillis() - 30L * 24L * 60L * 60L * 1000L
+                            )
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text("近30天") }
+                }
+
+                if (visible.isEmpty()) {
+                    Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
+                        Text("没有扫描到此类媒体", Modifier.padding(18.dp))
+                    }
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(3),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 82.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(visible, key = { it.relativePath }) { item ->
+                            MediaTile(
+                                item = item,
+                                selected = item.relativePath in selected,
+                                onToggle = { MigrationMediaSelectionRegistry.toggle(item.relativePath) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (showBackToTop) {
+                SmallFloatingActionButton(
+                    onClick = { scope.launch { gridState.animateScrollToItem(0) } },
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp)
+                ) {
+                    Text("↑", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
                 }
             }
         }
