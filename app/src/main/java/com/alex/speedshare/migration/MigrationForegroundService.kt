@@ -87,8 +87,23 @@ class MigrationForegroundService : Service() {
         private const val ACTION_UPDATE = "com.alex.speedshare.migration.UPDATE"
         private const val EXTRA_PROGRESS = "progress"
         private const val EXTRA_DETAIL = "detail"
+        private const val MIN_NOTIFICATION_INTERVAL_MS = 900L
 
+        private var lastNotificationAt = 0L
+
+        @Synchronized
         fun update(context: Context, progress: MigrationProgress, detail: String) {
+            val now = android.os.SystemClock.elapsedRealtime()
+            val urgent = detail.contains("暂停") ||
+                detail.contains("重连") ||
+                detail.contains("中断") ||
+                detail.contains("结束") ||
+                detail.contains("等待") ||
+                detail.contains("准备")
+            if (!urgent && lastNotificationAt > 0L && now - lastNotificationAt < MIN_NOTIFICATION_INTERVAL_MS) {
+                return
+            }
+            lastNotificationAt = now
             val percent = (progress.fraction * 100f).toInt().coerceIn(0, 100)
             val intent = Intent(context, MigrationForegroundService::class.java).apply {
                 action = ACTION_UPDATE
@@ -102,7 +117,9 @@ class MigrationForegroundService : Service() {
             }
         }
 
+        @Synchronized
         fun stop(context: Context) {
+            lastNotificationAt = 0L
             context.stopService(Intent(context, MigrationForegroundService::class.java))
         }
     }
