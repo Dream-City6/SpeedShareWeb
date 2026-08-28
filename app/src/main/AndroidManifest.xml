@@ -63,6 +63,13 @@
             android:windowSoftInputMode="adjustResize" />
 
         <activity
+            android:name=".migration.MigrationConnectionHelpActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".migration.MigrationAppSelectionActivity"
             android:exported="false"
             android:label="@string/app_name"
