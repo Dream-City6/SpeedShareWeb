@@ -65,6 +65,7 @@ internal object MigrationAppSelectionRegistry {
     private var catalog: Set<String>? = null
     private var catalogSource: List<MigrationAppItem>? = null
     private var compatibilityDefaultsPeer: String? = null
+    private var presentDefaultsPeer: String? = null
 
     @Synchronized
     fun sync(apps: List<MigrationAppItem>) {
@@ -74,6 +75,7 @@ internal object MigrationAppSelectionRegistry {
         if (catalog != packages) {
             catalog = packages
             compatibilityDefaultsPeer = null
+            presentDefaultsPeer = null
             _selectedPackages.value = packages
         }
     }
@@ -82,6 +84,13 @@ internal object MigrationAppSelectionRegistry {
     fun removeKnownIncompatible(peerDeviceId: String?, packageNames: Set<String>) {
         if (peerDeviceId.isNullOrBlank() || compatibilityDefaultsPeer == peerDeviceId) return
         compatibilityDefaultsPeer = peerDeviceId
+        _selectedPackages.value = _selectedPackages.value - packageNames
+    }
+
+    @Synchronized
+    fun removeAlreadyPresent(peerDeviceId: String?, packageNames: Set<String>) {
+        if (peerDeviceId.isNullOrBlank() || packageNames.isEmpty() || presentDefaultsPeer == peerDeviceId) return
+        presentDefaultsPeer = peerDeviceId
         _selectedPackages.value = _selectedPackages.value - packageNames
     }
 
@@ -160,21 +169,65 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
         )
     }
 
+    val receiverVersions by produceState<Map<String, Long>>(
+        initialValue = emptyMap(),
+        key1 = apps,
+        key2 = receiver?.deviceId
+    ) {
+        value = if (receiver == null || apps.isEmpty()) {
+            emptyMap()
+        } else {
+            withContext(Dispatchers.IO) {
+                controller.queryReceiverAppVersions(apps.map { it.packageName })
+            }
+        }
+    }
+
     val compatibility by produceState<Map<String, AppCompatibilityResult>>(
         initialValue = emptyMap(),
         key1 = apps,
-        key2 = receiver
+        key2 = receiver,
+        key3 = receiverVersions
     ) {
         value = withContext(Dispatchers.Default) {
-            apps.associate { app -> app.packageName to AppCompatibilityAnalyzer.analyze(context, app, receiver) }
+            apps.associate { app ->
+                val base = AppCompatibilityAnalyzer.analyze(context, app, receiver)
+                val receiverVersion = receiverVersions[app.packageName]
+                val result = when {
+                    receiverVersion != null && app.versionCode > 0L && receiverVersion >= app.versionCode -> {
+                        AppCompatibilityResult(
+                            status = AppCompatibilityStatus.COMPATIBLE,
+                            reason = if (receiverVersion > app.versionCode) {
+                                "新手机已安装更高版本，默认不重复迁移；需要旧 APK 时仍可手动勾选"
+                            } else {
+                                "新手机已安装相同版本，默认不重复迁移；仍可手动勾选"
+                            },
+                            alreadyPresent = true
+                        )
+                    }
+                    receiverVersion != null && app.versionCode > 0L && receiverVersion < app.versionCode -> {
+                        base.copy(reason = "新手机已有较旧版本，可迁移更新。${base.reason}")
+                    }
+                    else -> base
+                }
+                app.packageName to result
+            }
         }
     }
     val incompatible = remember(compatibility) {
         compatibility.filterValues { it.status == AppCompatibilityStatus.INCOMPATIBLE }.keys
     }
+    val alreadyPresent = remember(compatibility) {
+        compatibility.filterValues { it.alreadyPresent }.keys
+    }
     LaunchedEffect(receiver?.deviceId, incompatible) {
         if (compatibility.isNotEmpty()) {
             MigrationAppSelectionRegistry.removeKnownIncompatible(receiver?.deviceId, incompatible)
+        }
+    }
+    LaunchedEffect(receiver?.deviceId, alreadyPresent) {
+        if (alreadyPresent.isNotEmpty()) {
+            MigrationAppSelectionRegistry.removeAlreadyPresent(receiver?.deviceId, alreadyPresent)
         }
     }
 
@@ -187,9 +240,10 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
     }
     val appSizes = remember(apps) { apps.associate { it.packageName to it.totalBytes } }
     val selectedBytes = remember(selected, appSizes) { selected.sumOf { appSizes[it] ?: 0L } }
-    val compatibleCount = compatibility.count { it.value.status == AppCompatibilityStatus.COMPATIBLE }
+    val presentCount = compatibility.count { it.value.alreadyPresent }
+    val compatibleCount = compatibility.count { it.value.status == AppCompatibilityStatus.COMPATIBLE && !it.value.alreadyPresent }
     val reviewCount = compatibility.count { it.value.status == AppCompatibilityStatus.REVIEW }
-    val incompatibleCount = compatibility.size - compatibleCount - reviewCount
+    val incompatibleCount = compatibility.count { it.value.status == AppCompatibilityStatus.INCOMPATIBLE }
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -245,9 +299,9 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                                 Text("新手机：${receiver.name}", fontWeight = FontWeight.Bold)
                                 Text(
                                     if (compatibility.isEmpty() && apps.isNotEmpty()) {
-                                        "正在后台检查应用兼容性…"
+                                        "正在后台检查应用兼容性和新机已有版本…"
                                     } else {
-                                        "兼容 $compatibleCount · 需确认 $reviewCount · 不兼容 $incompatibleCount"
+                                        "可迁移 $compatibleCount · 新机已有 $presentCount · 需确认 $reviewCount · 不兼容 $incompatibleCount"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -287,7 +341,7 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
 
                 item(key = "hint") {
                     Text(
-                        "已明确判断为不兼容的应用默认取消选择；这里只迁移 APK / Split APK，不迁移登录状态和应用私有数据。",
+                        "不兼容应用和新机已经安装相同/更高版本的应用会默认取消选择；你仍然可以手动重新勾选。这里只迁移 APK / Split APK，不迁移登录状态和应用私有数据。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -364,7 +418,7 @@ private fun AppSelectionRow(
                         modifier = Modifier.weight(1f)
                     )
                     Text(
-                        compatibilityLabel(compatibility.status),
+                        compatibilityLabel(compatibility),
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -423,10 +477,11 @@ private fun AppIcon(packageName: String, label: String) {
     }
 }
 
-private fun compatibilityLabel(status: AppCompatibilityStatus): String = when (status) {
-    AppCompatibilityStatus.COMPATIBLE -> "兼容"
-    AppCompatibilityStatus.REVIEW -> "需确认"
-    AppCompatibilityStatus.INCOMPATIBLE -> "不兼容"
+private fun compatibilityLabel(result: AppCompatibilityResult): String = when {
+    result.alreadyPresent -> "新机已有"
+    result.status == AppCompatibilityStatus.COMPATIBLE -> "兼容"
+    result.status == AppCompatibilityStatus.REVIEW -> "需确认"
+    else -> "不兼容"
 }
 
 private fun formatAppBytes(bytes: Long): String = when {
