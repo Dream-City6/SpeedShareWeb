@@ -1,5 +1,6 @@
 package com.alex.speedshare.migration
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -27,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppSettings
@@ -47,17 +49,24 @@ class MigrationPreflightActivity : ComponentActivity() {
 
 @Composable
 private fun MigrationPreflightScreen(onClose: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val controller = remember { ResilientMigrationController.get(context) }
     val state by controller.state.collectAsState()
     val duplicatePolicy by MigrationDuplicatePolicyRegistry.current.collectAsState()
+    val selectedApps by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
+    val selectedMedia by MigrationMediaSelectionRegistry.selectedPaths.collectAsState()
+    val selectedFiles by MigrationFileSelectionRegistry.selectedPaths.collectAsState()
+    val contactsEnabled by MigrationContactsRegistry.enabled.collectAsState()
+    val contactsCount by MigrationContactsRegistry.count.collectAsState()
     val health = remember { MigrationDeviceHealthReader.read(context) }
     val summary = remember(
         state.scanResult,
         state.selectedCategories,
-        MigrationAppSelectionRegistry.selectedPackages.value,
-        MigrationMediaSelectionRegistry.selectedPaths.value,
-        MigrationFileSelectionRegistry.selectedPaths.value
+        selectedApps,
+        selectedMedia,
+        selectedFiles,
+        contactsEnabled,
+        contactsCount
     ) {
         MigrationSelectionCalculator.effectiveItems(state.scanResult, state.selectedCategories)
     }
@@ -90,6 +99,7 @@ private fun MigrationPreflightScreen(onClose: () -> Unit) {
                     PreflightLine("照片", "${summary.photoCount} 张")
                     PreflightLine("视频", "${summary.videoCount} 个")
                     PreflightLine("应用", "${summary.appCount} 个")
+                    if (summary.contactsCount > 0) PreflightLine("联系人", "${summary.contactsCount} 个")
                     free?.let { PreflightLine("新手机可用空间", formatPreflightBytes(it)) }
                     PreflightLine("预计时间", estimatedSeconds?.let(::formatPreflightDuration) ?: "测速已跳过，将在传输中动态计算")
                     Text(
@@ -97,6 +107,26 @@ private fun MigrationPreflightScreen(onClose: () -> Unit) {
                         color = if (enoughSpace) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+
+            Card(shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("联系人（可选）", fontWeight = FontWeight.Black)
+                            Text(
+                                if (contactsEnabled) "已准备 $contactsCount 个联系人，将作为 VCF 一起迁移。" else "不会自动申请权限；需要时由你主动开启。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        OutlinedButton(onClick = {
+                            context.startActivity(Intent(context, MigrationContactsSelectionActivity::class.java))
+                        }) {
+                            Text(if (contactsEnabled) "修改" else "选择")
+                        }
+                    }
                 }
             }
 
@@ -113,6 +143,7 @@ private fun MigrationPreflightScreen(onClose: () -> Unit) {
                             Text("• $recommendation", color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
+                    Text("以上只做建议，不限制开始换机。", style = MaterialTheme.typography.labelSmall)
                 }
             }
 
