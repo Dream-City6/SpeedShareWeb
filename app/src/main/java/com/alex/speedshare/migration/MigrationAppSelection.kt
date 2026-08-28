@@ -63,10 +63,13 @@ internal object MigrationAppSelectionRegistry {
     private val _selectedPackages = MutableStateFlow<Set<String>>(emptySet())
     val selectedPackages = _selectedPackages.asStateFlow()
     private var catalog: Set<String>? = null
+    private var catalogSource: List<MigrationAppItem>? = null
     private var compatibilityDefaultsPeer: String? = null
 
     @Synchronized
     fun sync(apps: List<MigrationAppItem>) {
+        if (catalogSource === apps) return
+        catalogSource = apps
         val packages = apps.mapTo(linkedSetOf()) { it.packageName }
         if (catalog != packages) {
             catalog = packages
