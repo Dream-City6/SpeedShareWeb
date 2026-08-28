@@ -49,7 +49,8 @@ data class MigrationAppItem(
     val label: String,
     val versionName: String,
     val apkFiles: List<File>,
-    val totalBytes: Long
+    val totalBytes: Long,
+    val versionCode: Long = 0L
 )
 
 data class MigrationScanResult(
