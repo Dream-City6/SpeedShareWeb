@@ -134,4 +134,19 @@ class MigrationCoreTest {
         assertTrue(result.any { it.relativePath == "DCIM/photo.jpg" })
         MigrationFileSelectionRegistry.selectAll()
     }
+
+    @Test
+    fun manualEndpoint_acceptsValidIpv4AndPort() {
+        assertEquals("192.168.1.23" to 47999, parseMigrationEndpoint("192.168.1.23:47999"))
+        assertEquals("10.0.0.8" to 12345, parseMigrationEndpoint("http://10.0.0.8:12345/"))
+    }
+
+    @Test
+    fun manualEndpoint_rejectsInvalidIpv4OrPort() {
+        assertNull(parseMigrationEndpoint("192.168.1.23"))
+        assertNull(parseMigrationEndpoint("192.168.1.300:47999"))
+        assertNull(parseMigrationEndpoint("192.168.1.23:0"))
+        assertNull(parseMigrationEndpoint("192.168.1.23:70000"))
+        assertNull(parseMigrationEndpoint("not-an-ip:47999"))
+    }
 }
