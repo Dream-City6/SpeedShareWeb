@@ -7,6 +7,8 @@ import java.io.BufferedOutputStream
 import java.io.RandomAccessFile
 import java.security.SecureRandom
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import kotlin.math.min
 
@@ -88,23 +90,30 @@ internal object ResilientMigrationClient {
 
     fun testSpeed(session: MigrationSession): SpeedTestResult {
         val latencySamples = mutableListOf<Long>()
-        repeat(3) {
+        repeat(5) {
             val started = System.nanoTime()
             command(session, JSONObject().put("type", ResilientCommands.HELLO), public = true)
             latencySamples += (System.nanoTime() - started) / 1_000_000L
         }
 
-        val warmupSize = 4L * 1024L * 1024L
-        runCatching { uploadSpeed(session, warmupSize) }
-        val targetSize = 48L * 1024L * 1024L
-        val upload = uploadSpeed(session, targetSize)
-        val download = downloadSpeed(session, targetSize)
-        val stability = stabilityPercent(upload.second + download.second)
+        // A short single-stream warm-up estimates the link without making the overall test too long.
+        val warmup = uploadSpeed(session, 8L * 1024L * 1024L)
+        val streams = SPEED_TEST_STREAMS
+        val perStreamSize = ((warmup.first * 7L) / streams)
+            .coerceIn(32L * 1024L * 1024L, 96L * 1024L * 1024L)
+
+        val upload = multiUploadSpeed(session, perStreamSize, streams)
+        val download = multiDownloadSpeed(session, perStreamSize, streams)
+        val allSamples = upload.second + download.second
+        val stability = stabilityPercent(allSamples)
         return SpeedTestResult(
             latencyMs = latencySamples.sorted()[latencySamples.size / 2],
             uploadBytesPerSecond = upload.first,
             downloadBytesPerSecond = download.first,
-            stabilityPercent = stability
+            stabilityPercent = stability,
+            singleStreamBytesPerSecond = warmup.first,
+            streamCount = streams,
+            peakBytesPerSecond = allSamples.maxOrNull() ?: max(upload.first, download.first)
         )
     }
 
@@ -117,6 +126,9 @@ internal object ResilientMigrationClient {
                 .put("uploadBps", result.uploadBytesPerSecond)
                 .put("downloadBps", result.downloadBytesPerSecond)
                 .put("stability", result.stabilityPercent)
+                .put("singleStreamBps", result.singleStreamBytesPerSecond)
+                .put("streamCount", result.streamCount)
+                .put("peakBps", result.peakBytesPerSecond)
         )
     }
 
@@ -146,6 +158,7 @@ internal object ResilientMigrationClient {
                 .put("successCount", report.successCount)
                 .put("skippedCount", report.skippedCount)
                 .put("failedCount", report.failedCount)
+                .put("notMigratedCount", report.notMigratedCount)
                 .put("durationMs", report.durationMs)
                 .put("averageBps", report.averageBytesPerSecond)
         )
@@ -157,12 +170,36 @@ internal object ResilientMigrationClient {
         item: MigrationFileItem,
         hash: String,
         control: MigrationTransferControl,
+        onBytes: (Long) -> Unit,
+        parallelStreams: Int = 1
+    ): SendFileResult {
+        return if (item.size >= LARGE_FILE_THRESHOLD && parallelStreams >= 2) {
+            sendFileChunked(
+                session = session,
+                migrationId = migrationId,
+                item = item,
+                hash = hash,
+                control = control,
+                onBytes = onBytes,
+                parallelStreams = parallelStreams.coerceIn(2, MAX_CHUNK_STREAMS)
+            )
+        } else {
+            sendFileSingle(session, migrationId, item, hash, control, onBytes)
+        }
+    }
+
+    private fun sendFileSingle(
+        session: MigrationSession,
+        migrationId: String,
+        item: MigrationFileItem,
+        hash: String,
+        control: MigrationTransferControl,
         onBytes: (Long) -> Unit
     ): SendFileResult {
         MigrationProtocol.connect(session.peer.host, session.peer.port, 15_000).use { socket ->
             socket.soTimeout = 0
-            val output = BufferedOutputStream(socket.getOutputStream(), 1024 * 1024)
-            val input = BufferedInputStream(socket.getInputStream(), 1024 * 1024)
+            val output = BufferedOutputStream(socket.getOutputStream(), NETWORK_BUFFER_BYTES)
+            val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
             MigrationProtocol.writeJson(
                 output,
                 JSONObject()
@@ -184,7 +221,7 @@ internal object ResilientMigrationClient {
             RandomAccessFile(item.file, "r").use { source ->
                 source.seek(offset)
                 var remaining = item.size - offset
-                val buffer = ByteArray(1024 * 1024)
+                val buffer = ByteArray(IO_BLOCK_BYTES)
                 while (remaining > 0L) {
                     control.awaitReady()
                     val read = source.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
@@ -201,11 +238,188 @@ internal object ResilientMigrationClient {
         }
     }
 
+    private fun sendFileChunked(
+        session: MigrationSession,
+        migrationId: String,
+        item: MigrationFileItem,
+        hash: String,
+        control: MigrationTransferControl,
+        onBytes: (Long) -> Unit,
+        parallelStreams: Int
+    ): SendFileResult {
+        val chunkSize = LARGE_FILE_CHUNK_BYTES
+        val chunkCount = ((item.size + chunkSize - 1L) / chunkSize).toInt()
+        val kind = if (item.appPackageName != null) "app" else "file"
+        val plan = command(
+            session,
+            JSONObject()
+                .put("type", ResilientCommands.FILE_CHUNK_PLAN)
+                .put("migrationId", migrationId)
+                .put("path", item.relativePath)
+                .put("size", item.size)
+                .put("modifiedAt", item.modifiedAt)
+                .put("sha256", hash)
+                .put("kind", kind)
+                .put("chunkSize", chunkSize)
+                .put("chunkCount", chunkCount)
+        )
+        ensureOk(plan)
+        if (plan.optString("action") == "skip") return SendFileResult(skipped = true, sentBytes = 0L)
+
+        val completed = plan.optString("completed")
+            .split(',')
+            .mapNotNull { it.toIntOrNull() }
+            .filterTo(mutableSetOf()) { it in 0 until chunkCount }
+        val pending = (0 until chunkCount).filterNot { it in completed }
+        if (pending.isEmpty()) {
+            finalizeChunkedFile(session, migrationId, item, hash, kind, chunkSize, chunkCount)
+            return SendFileResult(skipped = false, sentBytes = 0L)
+        }
+
+        val sent = AtomicLong(0L)
+        val pool = Executors.newFixedThreadPool(parallelStreams.coerceAtMost(pending.size))
+        try {
+            val futures = pending.map { index ->
+                pool.submit {
+                    control.awaitReady()
+                    val offset = index * chunkSize
+                    val length = min(chunkSize, item.size - offset)
+                    sendChunk(
+                        session = session,
+                        migrationId = migrationId,
+                        item = item,
+                        hash = hash,
+                        kind = kind,
+                        chunkSize = chunkSize,
+                        chunkCount = chunkCount,
+                        chunkIndex = index,
+                        offset = offset,
+                        length = length,
+                        control = control
+                    ) { delta ->
+                        sent.addAndGet(delta)
+                        onBytes(delta)
+                    }
+                }
+            }
+            futures.forEach { it.get() }
+        } finally {
+            pool.shutdownNow()
+        }
+        finalizeChunkedFile(session, migrationId, item, hash, kind, chunkSize, chunkCount)
+        return SendFileResult(skipped = false, sentBytes = sent.get())
+    }
+
+    private fun sendChunk(
+        session: MigrationSession,
+        migrationId: String,
+        item: MigrationFileItem,
+        hash: String,
+        kind: String,
+        chunkSize: Long,
+        chunkCount: Int,
+        chunkIndex: Int,
+        offset: Long,
+        length: Long,
+        control: MigrationTransferControl,
+        onBytes: (Long) -> Unit
+    ) {
+        MigrationProtocol.connect(session.peer.host, session.peer.port, 15_000).use { socket ->
+            socket.soTimeout = 0
+            val output = BufferedOutputStream(socket.getOutputStream(), NETWORK_BUFFER_BYTES)
+            val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
+            MigrationProtocol.writeJson(
+                output,
+                JSONObject()
+                    .put("type", ResilientCommands.FILE_CHUNK_DATA)
+                    .put("sessionToken", session.outboundToken)
+                    .put("migrationId", migrationId)
+                    .put("path", item.relativePath)
+                    .put("size", item.size)
+                    .put("sha256", hash)
+                    .put("kind", kind)
+                    .put("chunkSize", chunkSize)
+                    .put("chunkCount", chunkCount)
+                    .put("chunkIndex", chunkIndex)
+                    .put("offset", offset)
+                    .put("length", length)
+            )
+            output.flush()
+            ensureOk(MigrationProtocol.readJson(input))
+            RandomAccessFile(item.file, "r").use { source ->
+                source.seek(offset)
+                var remaining = length
+                val buffer = ByteArray(IO_BLOCK_BYTES)
+                while (remaining > 0L) {
+                    control.awaitReady()
+                    val read = source.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
+                    if (read < 0) error("source_chunk_ended_early")
+                    output.write(buffer, 0, read)
+                    remaining -= read
+                    onBytes(read.toLong())
+                }
+            }
+            output.flush()
+            ensureOk(MigrationProtocol.readJson(input))
+        }
+    }
+
+    private fun finalizeChunkedFile(
+        session: MigrationSession,
+        migrationId: String,
+        item: MigrationFileItem,
+        hash: String,
+        kind: String,
+        chunkSize: Long,
+        chunkCount: Int
+    ) {
+        val response = command(
+            session,
+            JSONObject()
+                .put("type", ResilientCommands.FILE_CHUNK_FINALIZE)
+                .put("migrationId", migrationId)
+                .put("path", item.relativePath)
+                .put("size", item.size)
+                .put("modifiedAt", item.modifiedAt)
+                .put("sha256", hash)
+                .put("kind", kind)
+                .put("chunkSize", chunkSize)
+                .put("chunkCount", chunkCount)
+        )
+        ensureOk(response)
+    }
+
+    private fun multiUploadSpeed(session: MigrationSession, size: Long, streams: Int): Pair<Long, List<Long>> {
+        val pool = Executors.newFixedThreadPool(streams)
+        val started = System.nanoTime()
+        return try {
+            val futures = List(streams) { pool.submit<Pair<Long, List<Long>>> { uploadSpeed(session, size) } }
+            val results = futures.map { it.get() }
+            val elapsed = max(1L, System.nanoTime() - started)
+            bps(size * streams, elapsed) to results.flatMap { it.second }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    private fun multiDownloadSpeed(session: MigrationSession, size: Long, streams: Int): Pair<Long, List<Long>> {
+        val pool = Executors.newFixedThreadPool(streams)
+        val started = System.nanoTime()
+        return try {
+            val futures = List(streams) { pool.submit<Pair<Long, List<Long>>> { downloadSpeed(session, size) } }
+            val results = futures.map { it.get() }
+            val elapsed = max(1L, System.nanoTime() - started)
+            bps(size * streams, elapsed) to results.flatMap { it.second }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
     private fun uploadSpeed(session: MigrationSession, size: Long): Pair<Long, List<Long>> {
         val samples = mutableListOf<Long>()
         MigrationProtocol.connect(session.peer.host, session.peer.port).use { socket ->
-            val output = BufferedOutputStream(socket.getOutputStream(), 1024 * 1024)
-            val input = BufferedInputStream(socket.getInputStream(), 1024 * 1024)
+            val output = BufferedOutputStream(socket.getOutputStream(), NETWORK_BUFFER_BYTES)
+            val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
             MigrationProtocol.writeJson(
                 output,
                 JSONObject()
@@ -213,7 +427,7 @@ internal object ResilientMigrationClient {
                     .put("sessionToken", session.outboundToken)
                     .put("size", size)
             )
-            val buffer = ByteArray(1024 * 1024)
+            val buffer = ByteArray(IO_BLOCK_BYTES)
             var remaining = size
             val started = System.nanoTime()
             var sampleStart = started
@@ -224,7 +438,7 @@ internal object ResilientMigrationClient {
                 remaining -= count
                 sampleBytes += count
                 val now = System.nanoTime()
-                if (now - sampleStart >= 300_000_000L) {
+                if (now - sampleStart >= SPEED_SAMPLE_NANOS) {
                     samples += bps(sampleBytes, now - sampleStart)
                     sampleStart = now
                     sampleBytes = 0L
@@ -241,7 +455,7 @@ internal object ResilientMigrationClient {
         val samples = mutableListOf<Long>()
         MigrationProtocol.connect(session.peer.host, session.peer.port).use { socket ->
             val output = BufferedOutputStream(socket.getOutputStream())
-            val input = BufferedInputStream(socket.getInputStream(), 1024 * 1024)
+            val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
             MigrationProtocol.writeJson(
                 output,
                 JSONObject()
@@ -253,7 +467,7 @@ internal object ResilientMigrationClient {
             val header = MigrationProtocol.readJson(input)
             ensureOk(header)
             var remaining = header.optLong("size", size)
-            val buffer = ByteArray(1024 * 1024)
+            val buffer = ByteArray(IO_BLOCK_BYTES)
             val started = System.nanoTime()
             var sampleStart = started
             var sampleBytes = 0L
@@ -263,7 +477,7 @@ internal object ResilientMigrationClient {
                 remaining -= read
                 sampleBytes += read
                 val now = System.nanoTime()
-                if (now - sampleStart >= 300_000_000L) {
+                if (now - sampleStart >= SPEED_SAMPLE_NANOS) {
                     samples += bps(sampleBytes, now - sampleStart)
                     sampleStart = now
                     sampleBytes = 0L
@@ -299,4 +513,12 @@ internal object ResilientMigrationClient {
         val deviation = values.sumOf { kotlin.math.abs(it - average) } / values.size
         return (100.0 - deviation / average * 100.0).toInt().coerceIn(0, 100)
     }
+
+    private const val SPEED_TEST_STREAMS = 4
+    private const val MAX_CHUNK_STREAMS = 4
+    private const val NETWORK_BUFFER_BYTES = 2 * 1024 * 1024
+    private const val IO_BLOCK_BYTES = 1024 * 1024
+    private const val SPEED_SAMPLE_NANOS = 500_000_000L
+    private const val LARGE_FILE_THRESHOLD = 512L * 1024L * 1024L
+    private const val LARGE_FILE_CHUNK_BYTES = 64L * 1024L * 1024L
 }
