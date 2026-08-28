@@ -39,6 +39,7 @@ class ResilientMigrationController private constructor(private val context: Cont
     private val lastProgressSyncAt = AtomicLong(0L)
 
     private val peerServer = ResilientMigrationPeerServer(
+        context = context,
         localDeviceId = deviceId,
         localDeviceName = deviceName,
         appVersion = appVersion,
@@ -348,6 +349,12 @@ class ResilientMigrationController private constructor(private val context: Cont
             runCatching { ResilientMigrationClient.storageInfo(currentSession) }
                 .onSuccess { storage -> update { it.copy(receiverStorage = storage) } }
         }
+    }
+
+    fun queryReceiverAppVersions(packageNames: Collection<String>): Map<String, Long> {
+        val currentSession = session ?: return emptyMap()
+        return runCatching { ResilientMigrationClient.appVersions(currentSession, packageNames) }
+            .getOrDefault(emptyMap())
     }
 
     fun startTransfer() {
