@@ -88,9 +88,10 @@ internal class ResilientMigrationTransferManager(
 
         val futures = items.map { item ->
             pool.submit {
-                activeNames += item.file.name
+                activeNames += item.file.name.ifBlank { item.relativePath.substringAfterLast('/') }
                 try {
                     control.awaitReady()
+                    MigrationSourceValidator.problem(item)?.let { problem -> error(problem) }
                     val hash = MigrationHashCache.sha256(item.file)
                     control.awaitReady()
                     val chunkStreams = if (
@@ -141,7 +142,7 @@ internal class ResilientMigrationTransferManager(
                         store.markFailed(migrationId, item, normalizeFailure(error))
                     }
                 } finally {
-                    activeNames -= item.file.name
+                    activeNames -= item.file.name.ifBlank { item.relativePath.substringAfterLast('/') }
                     publish(force = true)
                 }
             }
@@ -176,6 +177,7 @@ internal class ResilientMigrationTransferManager(
     private fun normalizeFailure(error: Throwable): String {
         val text = error.message.orEmpty().lowercase()
         return when {
+            "旧手机源文件" in error.message.orEmpty() -> error.message.orEmpty().take(200)
             "insufficient_space" in text -> "新手机空间不足"
             "receiver_storage_permission_required" in text -> "新手机缺少存储权限"
             "hash_mismatch" in text -> "完整性校验失败"
