@@ -83,6 +83,7 @@ internal object ResilientMigrationClient {
                 .put("migrationId", migrationId)
                 .put("totalBytes", totalBytes.coerceAtLeast(0L))
                 .put("totalItems", totalItems.coerceAtLeast(0))
+                .put("duplicatePolicy", MigrationDuplicatePolicyRegistry.current.value.name)
         )
         ensureOk(response)
         return response.optLong("freeBytes", -1L)
