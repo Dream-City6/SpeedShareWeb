@@ -31,9 +31,9 @@ import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppThemeMode
 import com.alex.speedshare.MainActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
+import com.alex.speedshare.migration.MigrationConnectionHelpActivity
 import com.alex.speedshare.migration.MigrationMediaSelectionRegistry
 import com.alex.speedshare.migration.MigrationResultDetailsActivity
-import com.alex.speedshare.migration.MigrationRole
 import com.alex.speedshare.migration.MigrationStage
 import com.alex.speedshare.migration.ResilientMigrationActivity
 import com.alex.speedshare.migration.ResilientMigrationController
@@ -145,7 +145,7 @@ fun SpeedShareTheme(
                         onDismissRequest = { showEarlyFinishConfirm = false },
                         title = { Text("提前结束换机？") },
                         text = {
-                            Text("已经成功迁移的内容会保留；剩余内容会标记为“未迁移”，本次任务结束后不会再提示继续。")
+                            Text("已经成功迁移的内容会保留；剩余内容会标记为“未迁移”。接收端本次换机的 Temporary 断点文件也会清理。")
                         },
                         confirmButton = {
                             Button(
@@ -161,9 +161,30 @@ fun SpeedShareTheme(
                     )
                 }
 
+                if (migrationState.stage == MigrationStage.DISCOVERY && migrationState.peers.isEmpty()) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 16.dp, bottom = 18.dp)
+                            .clickable {
+                                context.startActivity(Intent(context, MigrationConnectionHelpActivity::class.java))
+                            },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tonalElevation = 5.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Text(
+                            text = "搜不到？连接帮助  ›",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
                 if (
-                    migrationState.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING) &&
-                    migrationState.role == MigrationRole.OLD_PHONE
+                    migrationState.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)
                 ) {
                     Surface(
                         modifier = Modifier
