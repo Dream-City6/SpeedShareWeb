@@ -36,6 +36,7 @@ internal object ChunkedFileReceiver {
     fun plan(request: JSONObject): JSONObject {
         val meta = parseMeta(request)
         if (isExactTarget(meta)) {
+            cleanupPartial(meta)
             return JSONObject().put("ok", true).put("action", "skip")
         }
         val part = partFile(meta)
@@ -113,6 +114,7 @@ internal object ChunkedFileReceiver {
                 MigrationHashCache.invalidate(part)
                 part.delete()
                 stateFile.delete()
+                MigrationStorageLayout.pruneEmptyTemporaryParents(part, meta.migrationId)
                 error("hash_mismatch")
             }
 
@@ -139,6 +141,7 @@ internal object ChunkedFileReceiver {
             MigrationHashCache.invalidate(target)
             if (meta.modifiedAt > 0L) target.setLastModified(meta.modifiedAt)
             locks.remove(part.absolutePath)
+            MigrationStorageLayout.pruneEmptyTemporaryParents(part, meta.migrationId)
             return JSONObject().put("ok", true).put("action", "complete").put("path", meta.relativePath)
         }
     }
@@ -196,6 +199,7 @@ internal object ChunkedFileReceiver {
         MigrationHashCache.invalidate(part)
         part.delete()
         stateFile.delete()
+        part.parentFile?.mkdirs()
         RandomAccessFile(part, "rw").use { it.setLength(meta.size) }
         atomicWrite(
             stateFile,
@@ -212,9 +216,11 @@ internal object ChunkedFileReceiver {
 
     private fun cleanupPartial(meta: Meta) {
         val part = partFile(meta)
+        MigrationHashCache.invalidate(part)
         part.delete()
         stateFile(part).delete()
         locks.remove(part.absolutePath)
+        MigrationStorageLayout.pruneEmptyTemporaryParents(part, meta.migrationId)
     }
 
     private fun readCompleted(stateFile: File): Set<Int> = readState(stateFile)
@@ -226,6 +232,7 @@ internal object ChunkedFileReceiver {
     private fun readState(stateFile: File): JSONObject = JSONObject(stateFile.readText())
 
     private fun atomicWrite(file: File, text: String) {
+        file.parentFile?.mkdirs()
         val temp = File(file.parentFile, file.name + ".tmp")
         temp.writeText(text)
         if (!temp.renameTo(file)) {
@@ -234,20 +241,18 @@ internal object ChunkedFileReceiver {
         }
     }
 
-    private fun partFile(meta: Meta): File = File(
-        meta.requestedTarget.parentFile,
-        ".${meta.requestedTarget.name}.${meta.hash.take(12)}.speedshare.chunked.part"
-    )
+    private fun partFile(meta: Meta): File =
+        MigrationStorageLayout.chunkPartFile(meta.migrationId, meta.relativePath, meta.hash)
+            ?: error("invalid_temporary_path")
 
-    private fun stateFile(part: File): File = File(part.parentFile, part.name + ".chunks.json")
+    private fun stateFile(part: File): File = MigrationStorageLayout.chunkStateFile(part)
     private fun lockFor(part: File): Any = locks.computeIfAbsent(part.absolutePath) { Any() }
 
     private fun resolveTarget(migrationId: String, relativePath: String, kind: String): File? {
-        val root = android.os.Environment.getExternalStorageDirectory().canonicalFile
         val base = if (kind == "app") {
-            File(root, "Download/SpeedShare/Apps/$migrationId").apply { mkdirs() }.canonicalFile
+            MigrationStorageLayout.appsMigrationDir(migrationId)?.canonicalFile ?: return null
         } else {
-            root
+            android.os.Environment.getExternalStorageDirectory().canonicalFile
         }
         val target = File(base, relativePath).canonicalFile
         return target.takeIf { it.path.startsWith(base.path + File.separator) }
