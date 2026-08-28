@@ -34,6 +34,7 @@ import com.alex.speedshare.migration.MigrationAppSelectionRegistry
 import com.alex.speedshare.migration.MigrationConnectionHelpActivity
 import com.alex.speedshare.migration.MigrationMediaSelectionRegistry
 import com.alex.speedshare.migration.MigrationResultDetailsActivity
+import com.alex.speedshare.migration.MigrationRole
 import com.alex.speedshare.migration.MigrationStage
 import com.alex.speedshare.migration.ResilientMigrationActivity
 import com.alex.speedshare.migration.ResilientMigrationController
@@ -184,7 +185,8 @@ fun SpeedShareTheme(
                 }
 
                 if (
-                    migrationState.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)
+                    migrationState.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING) &&
+                    migrationState.role == MigrationRole.OLD_PHONE
                 ) {
                     Surface(
                         modifier = Modifier
