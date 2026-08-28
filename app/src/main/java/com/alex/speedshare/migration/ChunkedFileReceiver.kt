@@ -26,7 +26,8 @@ internal object ChunkedFileReceiver {
         val kind: String,
         val chunkSize: Long,
         val chunkCount: Int,
-        val requestedTarget: File
+        val requestedTarget: File,
+        val duplicatePolicy: MigrationDuplicatePolicy
     )
 
     private val locks = ConcurrentHashMap<String, Any>()
@@ -115,10 +116,22 @@ internal object ChunkedFileReceiver {
                 error("hash_mismatch")
             }
 
-            val target = if (meta.requestedTarget.exists()) conflictTarget(meta.requestedTarget) else meta.requestedTarget
+            val target = when (meta.duplicatePolicy) {
+                MigrationDuplicatePolicy.OVERWRITE -> meta.requestedTarget
+                MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT,
+                MigrationDuplicatePolicy.KEEP_BOTH -> if (meta.requestedTarget.exists()) {
+                    conflictTarget(meta.requestedTarget)
+                } else {
+                    meta.requestedTarget
+                }
+            }
             target.parentFile?.mkdirs()
+            if (meta.duplicatePolicy == MigrationDuplicatePolicy.OVERWRITE && target.exists()) {
+                MigrationHashCache.invalidate(target)
+                require(target.delete()) { "overwrite_delete_failed" }
+            }
             if (!part.renameTo(target)) {
-                part.copyTo(target, overwrite = false)
+                part.copyTo(target, overwrite = meta.duplicatePolicy == MigrationDuplicatePolicy.OVERWRITE)
                 part.delete()
             }
             stateFile.delete()
@@ -141,16 +154,31 @@ internal object ChunkedFileReceiver {
         val kind = request.optString("kind", "file")
         val chunkSize = request.optLong("chunkSize", -1L)
         val chunkCount = request.optInt("chunkCount", -1)
+        val duplicatePolicy = runCatching {
+            MigrationDuplicatePolicy.valueOf(request.optString("duplicatePolicy"))
+        }.getOrDefault(MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT)
         require(size > 0L && hash.matches(hashRegex)) { "invalid_file" }
         require(chunkSize in MIN_CHUNK_BYTES..MAX_CHUNK_BYTES) { "invalid_chunk_size" }
         require(chunkCount > 0 && chunkCount.toLong() == (size + chunkSize - 1L) / chunkSize) { "invalid_chunk_count" }
         val target = resolveTarget(migrationId, relativePath, kind) ?: error("invalid_target")
         target.parentFile?.mkdirs()
-        return Meta(migrationId, relativePath, size, modifiedAt, hash, kind, chunkSize, chunkCount, target)
+        return Meta(
+            migrationId,
+            relativePath,
+            size,
+            modifiedAt,
+            hash,
+            kind,
+            chunkSize,
+            chunkCount,
+            target,
+            duplicatePolicy
+        )
     }
 
     private fun isExactTarget(meta: Meta): Boolean =
-        meta.requestedTarget.isFile &&
+        meta.duplicatePolicy != MigrationDuplicatePolicy.KEEP_BOTH &&
+            meta.requestedTarget.isFile &&
             meta.requestedTarget.length() == meta.size &&
             runCatching { MigrationHashCache.sha256(meta.requestedTarget) }.getOrNull() == meta.hash
 
@@ -161,6 +189,7 @@ internal object ChunkedFileReceiver {
             current.optLong("size") == meta.size &&
             current.optLong("chunkSize") == meta.chunkSize &&
             current.optInt("chunkCount") == meta.chunkCount &&
+            current.optString("duplicatePolicy") == meta.duplicatePolicy.name &&
             part.isFile && part.length() == meta.size
         if (valid) return
 
@@ -175,6 +204,7 @@ internal object ChunkedFileReceiver {
                 .put("size", meta.size)
                 .put("chunkSize", meta.chunkSize)
                 .put("chunkCount", meta.chunkCount)
+                .put("duplicatePolicy", meta.duplicatePolicy.name)
                 .put("completed", "")
                 .toString()
         )
