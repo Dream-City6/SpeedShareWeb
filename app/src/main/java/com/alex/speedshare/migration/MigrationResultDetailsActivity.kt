@@ -90,6 +90,9 @@ private fun MigrationResultDetailsScreen(onClose: () -> Unit) {
                         DetailLine("总数据", formatDetailBytes(report.totalBytes))
                         DetailLine("已完成", formatDetailBytes(report.transferredBytes))
                         DetailLine("成功项目", report.successCount.toString())
+                        if (report.notMigratedCount > 0) {
+                            DetailLine("用户未迁移", report.notMigratedCount.toString())
+                        }
                         DetailLine("失败 / 待续传", report.failedCount.toString())
                         DetailLine("平均速度", "${formatDetailBytes(report.averageBytesPerSecond)}/s")
                     } else if (task != null) {
@@ -130,8 +133,10 @@ private fun MigrationResultDetailsScreen(onClose: () -> Unit) {
                         }
                     }
                 }
-                Button(onClick = controller::resumePendingTask, modifier = Modifier.fillMaxWidth()) {
-                    Text("重新传输失败项目")
+                if (task != null) {
+                    Button(onClick = controller::resumePendingTask, modifier = Modifier.fillMaxWidth()) {
+                        Text("重新传输失败项目")
+                    }
                 }
             }
 
@@ -190,7 +195,11 @@ private fun MigrationResultDetailsScreen(onClose: () -> Unit) {
 
             if (failures.isEmpty() && packages.isEmpty()) {
                 Text(
-                    "没有失败项目，也没有待安装应用。",
+                    if ((report?.notMigratedCount ?: 0) > 0) {
+                        "本次换机由用户提前结束，没有失败项目。"
+                    } else {
+                        "没有失败项目，也没有待安装应用。"
+                    },
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
