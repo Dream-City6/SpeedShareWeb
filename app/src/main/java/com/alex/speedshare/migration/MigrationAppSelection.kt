@@ -1,15 +1,20 @@
 package com.alex.speedshare.migration
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -26,18 +31,24 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppSettings
 import com.alex.speedshare.ui.theme.SpeedShareTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 
 internal object MigrationAppSelectionRegistry {
     private val _selectedPackages = MutableStateFlow<Set<String>>(emptySet())
@@ -195,8 +206,10 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                 Card(shape = RoundedCornerShape(16.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        AppIcon(app.packageName, app.label)
                         Checkbox(
                             checked = app.packageName in selected,
                             onCheckedChange = { MigrationAppSelectionRegistry.toggle(app.packageName) }
@@ -211,7 +224,7 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                                 )
                             }
                             Text(
-                                "${app.versionName.ifBlank { "未知版本" }} · ${formatAppBytes(app.totalBytes)} · ${app.apkFiles.size} 个 APK",
+                                "${app.versionName.ifBlank { "未知版本" }} · ${formatAppBytes(app.totalBytes)} · ${app.apkFiles.size} 个 APK组件",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -235,6 +248,34 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun AppIcon(packageName: String, label: String) {
+    val context = LocalContext.current
+    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = packageName) {
+        value = withContext(Dispatchers.IO) {
+            MigrationAppVisualResolver.installedIcon(context, packageName, 128)
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = label,
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Fit
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(label.take(1).uppercase(), fontWeight = FontWeight.Black)
         }
     }
 }
