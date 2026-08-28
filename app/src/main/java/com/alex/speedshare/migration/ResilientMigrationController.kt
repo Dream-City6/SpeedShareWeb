@@ -106,6 +106,7 @@ class ResilientMigrationController private constructor(private val context: Cont
             MigrationForegroundService.update(context, progress, "正在接收 ${progress.currentName}")
         },
         onReport = { report ->
+            val totalItems = report.successCount + report.failedCount + report.notMigratedCount
             update {
                 it.copy(
                     stage = MigrationStage.COMPLETE,
@@ -113,11 +114,16 @@ class ResilientMigrationController private constructor(private val context: Cont
                     progress = it.progress.copy(
                         totalBytes = report.totalBytes,
                         transferredBytes = report.transferredBytes,
-                        totalItems = report.successCount + report.failedCount,
-                        completedItems = report.successCount + report.failedCount,
-                        failedItems = report.failedCount
+                        totalItems = totalItems,
+                        completedItems = totalItems,
+                        failedItems = report.failedCount,
+                        currentName = ""
                     ),
-                    status = if (report.failedCount == 0) "换机完成" else "完成，但有 ${report.failedCount} 项失败"
+                    status = when {
+                        report.notMigratedCount > 0 -> "对方已提前结束，${report.notMigratedCount} 项未迁移"
+                        report.failedCount == 0 -> "换机完成"
+                        else -> "完成，但有 ${report.failedCount} 项失败"
+                    }
                 )
             }
             MigrationForegroundService.stop(context)
@@ -201,7 +207,7 @@ class ResilientMigrationController private constructor(private val context: Cont
                 speedTesting = true,
                 stage = MigrationStage.SPEED_TEST,
                 error = null,
-                status = "正在双向测速…"
+                status = "正在进行多流双向测速，约需 8～12 秒…"
             )
         }
         scope.launch {
@@ -233,7 +239,7 @@ class ResilientMigrationController private constructor(private val context: Cont
         update {
             it.copy(
                 stage = MigrationStage.ROLE,
-                status = "已选择当前 Wi‑Fi · 平均 ${formatRate(result.averageBytesPerSecond)}"
+                status = "已选择当前 Wi‑Fi · 多流平均 ${formatRate(result.averageBytesPerSecond)}"
             )
         }
     }
@@ -395,6 +401,17 @@ class ResilientMigrationController private constructor(private val context: Cont
         update { it.copy(paused = false, status = "正在继续换机…") }
     }
 
+    fun finishEarlyTransfer() {
+        transferControl?.finishEarly()
+        update {
+            it.copy(
+                paused = false,
+                status = "正在提前结束；已完成内容会保留，剩余内容不再迁移"
+            )
+        }
+        MigrationForegroundService.update(context, _state.value.progress, "正在提前结束换机")
+    }
+
     fun cancelTransfer() {
         transferControl?.cancel()
         update { it.copy(paused = false, status = "正在停止；已完成进度会保留") }
@@ -453,7 +470,7 @@ class ResilientMigrationController private constructor(private val context: Cont
                 status = if (initialCompletedItems > 0) {
                     "继续换机：已完成 $initialCompletedItems / $totalItems 项"
                 } else {
-                    "开始换机，共 $totalItems 项"
+                    "开始换机，共 $totalItems 项 · $concurrency 路并发"
                 }
             )
         }
@@ -483,7 +500,12 @@ class ResilientMigrationController private constructor(private val context: Cont
         var totalDuration = 0L
         var lastFailed = pending
         var attempt = 0
-        while (lastFailed.isNotEmpty() && attempt < MAX_TRANSFER_ATTEMPTS && !control.isCancelled()) {
+        while (
+            lastFailed.isNotEmpty() &&
+            attempt < MAX_TRANSFER_ATTEMPTS &&
+            !control.isCancelled() &&
+            !control.isFinishingEarly()
+        ) {
             val latestTask = taskStore.loadLatestIncomplete()?.takeIf { it.migrationId == task.migrationId }
             val completedBytes = latestTask?.completedBytes ?: (totalBytes - lastFailed.sumOf { it.size })
             val completedItems = latestTask?.completedPaths?.size ?: (totalItems - lastFailed.size)
@@ -501,6 +523,7 @@ class ResilientMigrationController private constructor(private val context: Cont
             )
             totalDuration += result.report.durationMs
             lastFailed = result.failedItems
+            if (result.finishedEarly || control.isFinishingEarly()) break
             if (control.isCancelled() || lastFailed.isEmpty()) break
 
             attempt++
@@ -548,6 +571,46 @@ class ResilientMigrationController private constructor(private val context: Cont
             return
         }
 
+        if (control.isFinishingEarly()) {
+            val latest = taskStore.loadLatestIncomplete()?.takeIf { it.migrationId == task.migrationId }
+            val completedBytes = latest?.completedBytes ?: _state.value.progress.transferredBytes
+            val omittedCount = latest?.pendingItems?.size ?: (totalItems - _state.value.progress.completedItems).coerceAtLeast(0)
+            val successCount = (totalItems - omittedCount).coerceAtLeast(0)
+            val duration = totalDuration.coerceAtLeast(1L)
+            val report = MigrationReport(
+                totalBytes = totalBytes,
+                transferredBytes = completedBytes.coerceIn(0L, totalBytes),
+                successCount = successCount,
+                skippedCount = _state.value.progress.skippedItems,
+                failedCount = 0,
+                durationMs = duration,
+                averageBytesPerSecond = completedBytes.coerceAtLeast(0L) * 1000L / duration,
+                notMigratedCount = omittedCount
+            )
+            taskStore.markComplete(task.migrationId)
+            update {
+                it.copy(
+                    stage = MigrationStage.COMPLETE,
+                    report = report,
+                    progress = it.progress.copy(
+                        totalBytes = totalBytes,
+                        transferredBytes = report.transferredBytes,
+                        totalItems = totalItems,
+                        completedItems = totalItems,
+                        failedItems = 0,
+                        currentName = ""
+                    ),
+                    paused = false,
+                    reconnecting = false,
+                    pendingTask = null,
+                    status = "已提前结束：保留已完成内容，$omittedCount 项未迁移"
+                )
+            }
+            MigrationForegroundService.stop(context)
+            runCatching { ResilientMigrationClient.sendReport(activeSession, report) }
+            return
+        }
+
         val finalTask = taskStore.loadLatestIncomplete()?.takeIf { it.migrationId == task.migrationId }
         val finalFailed = finalTask?.pendingItems ?: emptyList()
         val failedBytes = finalFailed.sumOf { it.size }
@@ -559,7 +622,8 @@ class ResilientMigrationController private constructor(private val context: Cont
             skippedCount = _state.value.progress.skippedItems,
             failedCount = finalFailed.size,
             durationMs = totalDuration.coerceAtLeast(1L),
-            averageBytesPerSecond = completedBytes * 1000L / totalDuration.coerceAtLeast(1L)
+            averageBytesPerSecond = completedBytes * 1000L / totalDuration.coerceAtLeast(1L),
+            notMigratedCount = 0
         )
         if (finalFailed.isEmpty()) taskStore.markComplete(task.migrationId)
         update {
@@ -657,8 +721,9 @@ class ResilientMigrationController private constructor(private val context: Cont
         val speed = result?.averageBytesPerSecond ?: 0L
         return when {
             speed < 10L * 1024L * 1024L -> 2
-            speed < 50L * 1024L * 1024L -> 4
-            else -> 6
+            speed < 35L * 1024L * 1024L -> 4
+            speed < 70L * 1024L * 1024L -> 6
+            else -> 8
         }
     }
 
@@ -674,8 +739,14 @@ class ResilientMigrationController private constructor(private val context: Cont
         MigrationRole.UNSET -> "请选择这台手机的角色"
     }
 
-    private fun speedSummary(result: SpeedTestResult) =
-        "测速完成：发送 ${formatRate(result.uploadBytesPerSecond)}，接收 ${formatRate(result.downloadBytesPerSecond)}，延迟 ${result.latencyMs} ms"
+    private fun speedSummary(result: SpeedTestResult): String {
+        val single = if (result.singleStreamBytesPerSecond > 0L) {
+            "，单流 ${formatRate(result.singleStreamBytesPerSecond)}"
+        } else {
+            ""
+        }
+        return "${result.streamCount} 路测速：发送 ${formatRate(result.uploadBytesPerSecond)}，接收 ${formatRate(result.downloadBytesPerSecond)}$single，延迟 ${result.latencyMs} ms"
+    }
 
     private fun transferStatus(progress: MigrationProgress) = when {
         _state.value.paused -> "换机已暂停"
