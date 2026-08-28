@@ -7,6 +7,7 @@ import java.io.BufferedOutputStream
 import java.io.RandomAccessFile
 import java.security.SecureRandom
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
@@ -14,6 +15,7 @@ import kotlin.math.min
 
 internal object ResilientMigrationClient {
     private val random = SecureRandom()
+    private val migrationIdsByToken = ConcurrentHashMap<String, String>()
 
     fun newInboundToken(): String {
         val bytes = ByteArray(32)
@@ -86,6 +88,7 @@ internal object ResilientMigrationClient {
                 .put("duplicatePolicy", MigrationDuplicatePolicyRegistry.current.value.name)
         )
         ensureOk(response)
+        migrationIdsByToken[session.outboundToken] = migrationId
         return response.optLong("freeBytes", -1L)
     }
 
@@ -97,6 +100,7 @@ internal object ResilientMigrationClient {
                 .put("migrationId", migrationId)
         )
         ensureOk(response)
+        migrationIdsByToken.remove(session.outboundToken, migrationId)
     }
 
     fun testSpeed(session: MigrationSession): SpeedTestResult {
@@ -175,6 +179,11 @@ internal object ResilientMigrationClient {
                 .put("durationMs", report.durationMs)
                 .put("averageBps", report.averageBytesPerSecond)
         )
+        if (report.failedCount == 0) {
+            migrationIdsByToken[session.outboundToken]?.let { migrationId ->
+                runCatching { cleanupTemporary(session, migrationId) }
+            }
+        }
     }
 
     fun sendFile(
