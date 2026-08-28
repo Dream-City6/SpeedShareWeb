@@ -27,6 +27,9 @@ internal object ResilientCommands {
     const val STORAGE_INFO = "v2_storage_info"
     const val TRANSFER_PLAN = "v2_transfer_plan"
     const val FILE_OFFER = "v2_file_offer"
+    const val FILE_CHUNK_PLAN = "v2_file_chunk_plan"
+    const val FILE_CHUNK_DATA = "v2_file_chunk_data"
+    const val FILE_CHUNK_FINALIZE = "v2_file_chunk_finalize"
     const val PROGRESS_SYNC = "v2_progress_sync"
     const val REPORT = "v2_report"
 }
@@ -104,11 +107,11 @@ internal class ResilientMigrationPeerServer(
         raw.use { socket ->
             try {
                 socket.tcpNoDelay = true
-                socket.sendBufferSize = 1024 * 1024
-                socket.receiveBufferSize = 1024 * 1024
+                socket.sendBufferSize = NETWORK_BUFFER_BYTES
+                socket.receiveBufferSize = NETWORK_BUFFER_BYTES
                 socket.soTimeout = 120_000
-                val input = BufferedInputStream(socket.getInputStream(), 1024 * 1024)
-                val output = BufferedOutputStream(socket.getOutputStream(), 1024 * 1024)
+                val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
+                val output = BufferedOutputStream(socket.getOutputStream(), NETWORK_BUFFER_BYTES)
                 val request = MigrationProtocol.readJson(input)
                 val type = request.optString("type")
                 if (type !in PUBLIC_COMMANDS && request.optString("sessionToken") !in acceptedTokens) {
@@ -133,6 +136,9 @@ internal class ResilientMigrationPeerServer(
                     ResilientCommands.STORAGE_INFO -> handleStorageInfo(output)
                     ResilientCommands.TRANSFER_PLAN -> handleTransferPlan(output, request)
                     ResilientCommands.FILE_OFFER -> handleFileOffer(socket, input, output, request)
+                    ResilientCommands.FILE_CHUNK_PLAN -> handleChunkPlan(output, request)
+                    ResilientCommands.FILE_CHUNK_DATA -> handleChunkData(socket, input, output, request)
+                    ResilientCommands.FILE_CHUNK_FINALIZE -> handleChunkFinalize(output, request)
                     ResilientCommands.PROGRESS_SYNC -> {
                         onProgressSync(progressFromJson(request))
                         sendOk(output)
@@ -144,7 +150,7 @@ internal class ResilientMigrationPeerServer(
                     else -> sendError(output, "unknown_command")
                 }
             } catch (_: Throwable) {
-                // A partial file remains available for the next resume connection.
+                // Partial files and completed chunk state remain available for the next resume.
             }
         }
     }
@@ -228,7 +234,7 @@ internal class ResilientMigrationPeerServer(
         request: JSONObject
     ) {
         val size = request.optLong("size").coerceIn(1L, MAX_SPEED_TEST_BYTES)
-        val buffer = ByteArray(1024 * 1024)
+        val buffer = ByteArray(IO_BLOCK_BYTES)
         var remaining = size
         val started = System.nanoTime()
         while (remaining > 0) {
@@ -243,7 +249,7 @@ internal class ResilientMigrationPeerServer(
     private fun handleSpeedDownload(output: BufferedOutputStream, request: JSONObject) {
         val size = request.optLong("size").coerceIn(1L, MAX_SPEED_TEST_BYTES)
         MigrationProtocol.writeJson(output, JSONObject().put("ok", true).put("size", size))
-        val buffer = ByteArray(1024 * 1024)
+        val buffer = ByteArray(IO_BLOCK_BYTES)
         var remaining = size
         while (remaining > 0) {
             val count = min(buffer.size.toLong(), remaining).toInt()
@@ -298,12 +304,11 @@ internal class ResilientMigrationPeerServer(
         )
         output.flush()
 
-        // Sender pause can intentionally keep the socket idle for a long time.
         socket.soTimeout = 0
         RandomAccessFile(part, "rw").use { destination ->
             destination.seek(offset)
             var remaining = size - offset
-            val buffer = ByteArray(1024 * 1024)
+            val buffer = ByteArray(IO_BLOCK_BYTES)
             while (remaining > 0) {
                 val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
                 if (read < 0) error("transfer_ended")
@@ -330,6 +335,59 @@ internal class ResilientMigrationPeerServer(
             JSONObject().put("ok", true).put("action", "complete").put("path", relativePath)
         )
         output.flush()
+    }
+
+    private fun handleChunkPlan(output: BufferedOutputStream, request: JSONObject) {
+        if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        runCatching { ChunkedFileReceiver.plan(request) }
+            .onSuccess {
+                MigrationProtocol.writeJson(output, it)
+                output.flush()
+            }
+            .onFailure { sendFileFailure(output, it.message ?: "chunk_plan_failed") }
+    }
+
+    private fun handleChunkData(
+        socket: Socket,
+        input: BufferedInputStream,
+        output: BufferedOutputStream,
+        request: JSONObject
+    ) {
+        if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        val plan = runCatching { ChunkedFileReceiver.prepareChunk(request) }
+            .getOrElse { return sendFileFailure(output, it.message ?: "chunk_prepare_failed") }
+        if (plan.alreadyComplete) {
+            sendOk(output, JSONObject().put("action", "skip"))
+            return
+        }
+        sendOk(output, JSONObject().put("action", "send"))
+        socket.soTimeout = 0
+        runCatching {
+            ChunkedFileReceiver.writeChunk(plan) { destination ->
+                var remaining = plan.length
+                val buffer = ByteArray(IO_BLOCK_BYTES)
+                while (remaining > 0L) {
+                    val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
+                    if (read < 0) error("chunk_ended_early")
+                    destination.write(buffer, 0, read)
+                    remaining -= read
+                }
+            }
+        }.onSuccess {
+            sendOk(output, JSONObject().put("chunkIndex", plan.chunkIndex))
+        }.onFailure {
+            sendFileFailure(output, it.message ?: "chunk_write_failed")
+        }
+    }
+
+    private fun handleChunkFinalize(output: BufferedOutputStream, request: JSONObject) {
+        if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        runCatching { ChunkedFileReceiver.finalize(request) }
+            .onSuccess {
+                MigrationProtocol.writeJson(output, it)
+                output.flush()
+            }
+            .onFailure { sendFileFailure(output, it.message ?: "chunk_finalize_failed") }
     }
 
     private fun resolveTarget(migrationId: String, relativePath: String, kind: String): File? {
@@ -382,6 +440,8 @@ internal class ResilientMigrationPeerServer(
     companion object {
         private val PUBLIC_COMMANDS = setOf(ResilientCommands.HELLO, ResilientCommands.PAIR)
         private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
+        private const val NETWORK_BUFFER_BYTES = 2 * 1024 * 1024
+        private const val IO_BLOCK_BYTES = 1024 * 1024
         private const val MAX_SPEED_TEST_BYTES = 96L * 1024L * 1024L
         private const val STORAGE_RESERVE_BYTES = 256L * 1024L * 1024L
     }
@@ -391,7 +451,10 @@ private fun speedFromJson(json: JSONObject) = SpeedTestResult(
     latencyMs = json.optLong("latencyMs"),
     uploadBytesPerSecond = json.optLong("uploadBps"),
     downloadBytesPerSecond = json.optLong("downloadBps"),
-    stabilityPercent = json.optInt("stability", 100).coerceIn(0, 100)
+    stabilityPercent = json.optInt("stability", 100).coerceIn(0, 100),
+    singleStreamBytesPerSecond = json.optLong("singleStreamBps"),
+    streamCount = json.optInt("streamCount", 1).coerceAtLeast(1),
+    peakBytesPerSecond = json.optLong("peakBps")
 )
 
 private fun progressFromJson(json: JSONObject) = MigrationProgress(
@@ -412,5 +475,6 @@ private fun reportFromJsonV2(json: JSONObject) = MigrationReport(
     skippedCount = json.optInt("skippedCount"),
     failedCount = json.optInt("failedCount"),
     durationMs = json.optLong("durationMs"),
-    averageBytesPerSecond = json.optLong("averageBps")
+    averageBytesPerSecond = json.optLong("averageBps"),
+    notMigratedCount = json.optInt("notMigratedCount")
 )
