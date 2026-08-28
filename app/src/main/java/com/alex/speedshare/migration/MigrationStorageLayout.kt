@@ -47,13 +47,25 @@ internal object MigrationStorageLayout {
     fun chunkStateFile(part: File): File = File(part.parentFile, part.name + ".chunks.json")
 
     fun cleanupTemporary(migrationId: String): Boolean {
-        val dir = temporaryMigrationDir(migrationId) ?: return false
+        val id = normalizeMigrationId(migrationId) ?: return false
+        val dir = File(temporaryRoot(), id)
         if (!dir.exists()) return true
         return dir.deleteRecursively()
     }
 
+    fun cleanupAllTemporary(): Boolean {
+        val root = temporaryRoot()
+        if (!root.exists()) return true
+        val removed = root.deleteRecursively()
+        if (removed) root.mkdirs()
+        return removed
+    }
+
+    fun temporaryBytes(): Long = directoryBytes(temporaryRoot())
+
     fun pruneEmptyTemporaryParents(file: File, migrationId: String) {
-        val stop = temporaryMigrationDir(migrationId)?.canonicalFile ?: return
+        val id = normalizeMigrationId(migrationId) ?: return
+        val stop = File(temporaryRoot(), id).canonicalFile
         var current = file.parentFile
         while (current != null) {
             val canonical = runCatching { current.canonicalFile }.getOrNull() ?: return
@@ -82,11 +94,24 @@ internal object MigrationStorageLayout {
         return target
     }
 
-    private fun downloadsRoot(): File = if (Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS) != null) {
-        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    } else {
-        File(Environment.getExternalStorageDirectory(), "Download")
+    private fun directoryBytes(root: File): Long {
+        if (!root.exists()) return 0L
+        var total = 0L
+        val stack = ArrayDeque<File>()
+        stack.add(root)
+        while (stack.isNotEmpty()) {
+            val current = stack.removeLast()
+            current.listFiles()?.forEach { child ->
+                if (child.isDirectory) stack.add(child) else if (child.isFile) total += child.length().coerceAtLeast(0L)
+            }
+        }
+        return total
     }
+
+    @Suppress("DEPRECATION")
+    private fun downloadsRoot(): File =
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            ?: File(Environment.getExternalStorageDirectory(), "Download")
 
     private fun normalizeMigrationId(value: String): String? = value.takeIf {
         it.length in 8..80 && it.all { c -> c.isLetterOrDigit() || c == '-' || c == '_' }
