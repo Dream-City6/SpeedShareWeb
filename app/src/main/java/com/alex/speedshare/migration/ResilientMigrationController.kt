@@ -324,31 +324,27 @@ class ResilientMigrationController private constructor(private val context: Cont
         val currentSession = session ?: return
         if (current.role != MigrationRole.OLD_PHONE || current.scanning) return
 
-        val normal = current.scanResult.files.filter { it.category in current.selectedCategories }
-        val apps = if (MigrationCategory.APPS in current.selectedCategories) {
-            MigrationScannerV2.appTransferItems(current.scanResult.apps)
-        } else {
-            emptyList()
-        }
-        val items = normal + apps
-        if (items.isEmpty()) {
+        val summary = MigrationSelectionCalculator.effectiveItems(
+            current.scanResult,
+            current.selectedCategories
+        )
+        if (summary.items.isEmpty()) {
             update { it.copy(status = "没有选择可迁移内容") }
             return
         }
 
-        val selectedBytes = items.sumOf { it.size }
         val free = current.receiverStorage?.freeBytes
-        if (free != null && selectedBytes + STORAGE_RESERVE_BYTES > free) {
+        if (free != null && summary.totalBytes + STORAGE_RESERVE_BYTES > free) {
             update {
                 it.copy(
-                    error = "新手机空间不足：需要约 ${formatBytes(selectedBytes)}，可用 ${formatBytes(free)}",
+                    error = "新手机空间不足：需要约 ${formatBytes(summary.totalBytes)}，可用 ${formatBytes(free)}",
                     status = "无法开始换机"
                 )
             }
             return
         }
 
-        val task = taskStore.create(currentSession.peer, items, current.selectedCategories)
+        val task = taskStore.create(currentSession.peer, summary.items, current.selectedCategories)
         update {
             it.copy(
                 pendingTask = task,
@@ -446,6 +442,7 @@ class ResilientMigrationController private constructor(private val context: Cont
 
     private suspend fun runTask(task: PendingMigrationTask, initialSession: MigrationSession) {
         var activeSession = initialSession
+        MigrationDuplicatePolicyRegistry.set(task.duplicatePolicy)
         val pending = task.pendingItems
         if (pending.isEmpty()) {
             taskStore.markComplete(task.migrationId)
