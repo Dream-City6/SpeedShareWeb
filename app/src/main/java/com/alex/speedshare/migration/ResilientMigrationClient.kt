@@ -1,6 +1,7 @@
 package com.alex.speedshare.migration
 
 import android.os.Build
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -75,6 +76,28 @@ internal object ResilientMigrationClient {
             freeBytes = response.optLong("freeBytes").coerceAtLeast(0L),
             totalBytes = response.optLong("totalBytes").coerceAtLeast(0L)
         )
+    }
+
+    fun appVersions(session: MigrationSession, packageNames: Collection<String>): Map<String, Long> {
+        if (packageNames.isEmpty()) return emptyMap()
+        val packages = JSONArray()
+        packageNames.asSequence().distinct().take(MAX_APP_VERSION_QUERY).forEach(packages::put)
+        val response = command(
+            session,
+            JSONObject()
+                .put("type", ResilientCommands.APP_VERSIONS)
+                .put("packages", packages)
+        )
+        ensureOk(response)
+        val json = response.optJSONObject("versions") ?: return emptyMap()
+        val result = linkedMapOf<String, Long>()
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val version = json.optLong(key, -1L)
+            if (version >= 0L) result[key] = version
+        }
+        return result
     }
 
     fun sendTransferPlan(session: MigrationSession, migrationId: String, totalBytes: Long, totalItems: Int): Long {
@@ -536,6 +559,7 @@ internal object ResilientMigrationClient {
         return (100.0 - deviation / average * 100.0).toInt().coerceIn(0, 100)
     }
 
+    private const val MAX_APP_VERSION_QUERY = 1000
     private const val SPEED_TEST_STREAMS = 4
     private const val MAX_CHUNK_STREAMS = 4
     private const val NETWORK_BUFFER_BYTES = 2 * 1024 * 1024
