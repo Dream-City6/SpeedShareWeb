@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.provider.Settings
 import java.io.File
 import java.io.FileInputStream
@@ -37,7 +36,7 @@ object AppPackageInstaller {
     private var currentPackagePath: String? = null
 
     fun receivedPackages(migrationId: String? = null): List<File> {
-        val root = File(Environment.getExternalStorageDirectory(), "Download/SpeedShare/Apps")
+        val root = MigrationStorageLayout.appsRoot()
         val searchRoot = migrationId?.takeIf { it.isNotBlank() }?.let { File(root, it) } ?: root
         if (!searchRoot.isDirectory) return emptyList()
         val direct = searchRoot.listFiles()
