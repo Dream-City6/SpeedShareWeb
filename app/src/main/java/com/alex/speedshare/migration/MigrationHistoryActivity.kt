@@ -16,14 +16,19 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -76,6 +81,29 @@ class MigrationHistoryActivity : ComponentActivity() {
 private fun MigrationHistoryScreen(onClose: () -> Unit, onOpenFolder: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val history = remember { MigrationHistoryReader.read(context) }
+    var temporaryBytes by remember { mutableStateOf(MigrationStorageLayout.temporaryBytes()) }
+    var showCleanupConfirm by remember { mutableStateOf(false) }
+
+    if (showCleanupConfirm) {
+        AlertDialog(
+            onDismissRequest = { showCleanupConfirm = false },
+            title = { Text("清理临时文件？") },
+            text = {
+                Text(
+                    "这只会删除 Download/SpeedShareWeb/Temporary 中的断点文件。已经迁移完成的照片、视频、APK 和联系人不会被删除。未完成的换机将失去对应断点。"
+                )
+            },
+            confirmButton = {
+                Button(onClick = {
+                    MigrationStorageLayout.cleanupAllTemporary()
+                    temporaryBytes = MigrationStorageLayout.temporaryBytes()
+                    showCleanupConfirm = false
+                }) { Text("清理") }
+            },
+            dismissButton = { TextButton(onClick = { showCleanupConfirm = false }) { Text("取消") } }
+        )
+    }
+
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(
             Modifier.fillMaxSize().safeDrawingPadding().padding(14.dp),
@@ -96,6 +124,11 @@ private fun MigrationHistoryScreen(onClose: () -> Unit, onOpenFolder: () -> Unit
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (temporaryBytes > 0L) {
+                OutlinedButton(onClick = { showCleanupConfirm = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text("清理临时文件 · ${formatHistoryBytes(temporaryBytes)}")
+                }
+            }
 
             if (history.isEmpty()) {
                 Card(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
