@@ -95,6 +95,7 @@ internal object MigrationScannerV2 {
         if (path.isBlank()) return false
         return path == "android/data" || path.startsWith("android/data/") ||
             path == "android/obb" || path.startsWith("android/obb/") ||
+            path == "download/speedshareweb" || path.startsWith("download/speedshareweb/") ||
             path.startsWith("download/speedshare/apps") ||
             path.contains("/.speedshare-trash") || path.startsWith(".speedshare-trash")
     }
