@@ -42,6 +42,7 @@ class PeerDiscoveryManager(
     @Synchronized
     fun start() {
         if (registrationListener != null || discoveryListener != null || fallbackRunning) return
+        MigrationLocalEndpointRegistry.update(servicePort)
         acquireMulticastLock()
         registerService()
         discoverServices()
@@ -62,6 +63,7 @@ class PeerDiscoveryManager(
         lastSeen.clear()
         multicastLock?.let { lock -> if (lock.isHeld) runCatching { lock.release() } }
         multicastLock = null
+        MigrationLocalEndpointRegistry.clear(servicePort)
         onPeersChanged(emptyList())
     }
 
