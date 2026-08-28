@@ -1,6 +1,7 @@
 package com.alex.speedshare.migration
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -103,5 +104,34 @@ class MigrationCoreTest {
             file.delete()
             MigrationHashCache.clear()
         }
+    }
+
+    @Test
+    fun recommendedPreset_keepsImportantContentButSkipsCatchAllBuckets() {
+        val recommended = MigrationSelectionCalculator.presetCategories(MigrationSelectionPreset.RECOMMENDED)
+        assertTrue(MigrationCategory.PHOTOS in recommended)
+        assertTrue(MigrationCategory.VIDEOS in recommended)
+        assertTrue(MigrationCategory.DOCUMENTS in recommended)
+        assertTrue(MigrationCategory.DOWNLOADS in recommended)
+        assertTrue(MigrationCategory.APPS in recommended)
+        assertFalse(MigrationCategory.MUSIC in recommended)
+        assertFalse(MigrationCategory.OTHER in recommended)
+        assertEquals(MigrationCategory.entries.toSet(), MigrationSelectionCalculator.presetCategories(MigrationSelectionPreset.ALL))
+    }
+
+    @Test
+    fun fileSelectionRegistry_canExcludeIndividualDocumentWithoutAffectingOtherCategories() {
+        val files = listOf(
+            MigrationFileItem(File("keep.pdf"), "Documents/keep.pdf", 10, 0, MigrationCategory.DOCUMENTS),
+            MigrationFileItem(File("drop.pdf"), "Documents/drop.pdf", 20, 0, MigrationCategory.DOCUMENTS),
+            MigrationFileItem(File("photo.jpg"), "DCIM/photo.jpg", 30, 0, MigrationCategory.PHOTOS)
+        )
+        MigrationFileSelectionRegistry.sync(files)
+        MigrationFileSelectionRegistry.toggle("Documents/drop.pdf")
+        val result = MigrationFileSelectionRegistry.filterTransferItems(files)
+        assertTrue(result.any { it.relativePath == "Documents/keep.pdf" })
+        assertFalse(result.any { it.relativePath == "Documents/drop.pdf" })
+        assertTrue(result.any { it.relativePath == "DCIM/photo.jpg" })
+        MigrationFileSelectionRegistry.selectAll()
     }
 }
