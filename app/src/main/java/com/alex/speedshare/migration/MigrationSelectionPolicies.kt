@@ -84,7 +84,8 @@ data class MigrationSelectionSummary(
     val totalItems: Int,
     val appCount: Int,
     val photoCount: Int,
-    val videoCount: Int
+    val videoCount: Int,
+    val contactsCount: Int
 )
 
 internal object MigrationSelectionCalculator {
@@ -100,15 +101,18 @@ internal object MigrationSelectionCalculator {
         } else {
             emptyList()
         }
-        val items = fileFiltered + apps
+        val contacts = listOfNotNull(MigrationContactsRegistry.preparedItem())
+        val items = fileFiltered + apps + contacts
         val selectedPackages = MigrationAppSelectionRegistry.selectedPackages.value
+        val contactsCount = if (contacts.isEmpty()) 0 else MigrationContactsRegistry.count.value
         return MigrationSelectionSummary(
             items = items,
             totalBytes = items.sumOf { it.size },
             totalItems = items.size,
             appCount = if (MigrationCategory.APPS in selectedCategories) selectedPackages.size else 0,
             photoCount = fileFiltered.count { it.category == MigrationCategory.PHOTOS },
-            videoCount = fileFiltered.count { it.category == MigrationCategory.VIDEOS }
+            videoCount = fileFiltered.count { it.category == MigrationCategory.VIDEOS },
+            contactsCount = contactsCount
         )
     }
 
