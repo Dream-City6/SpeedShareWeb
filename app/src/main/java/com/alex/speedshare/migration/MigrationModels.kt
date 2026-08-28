@@ -26,7 +26,10 @@ data class SpeedTestResult(
     val latencyMs: Long,
     val uploadBytesPerSecond: Long,
     val downloadBytesPerSecond: Long,
-    val stabilityPercent: Int
+    val stabilityPercent: Int,
+    val singleStreamBytesPerSecond: Long = 0L,
+    val streamCount: Int = 1,
+    val peakBytesPerSecond: Long = 0L
 ) {
     val averageBytesPerSecond: Long
         get() = ((uploadBytesPerSecond + downloadBytesPerSecond) / 2L).coerceAtLeast(0L)
@@ -85,7 +88,8 @@ data class MigrationReport(
     val skippedCount: Int,
     val failedCount: Int,
     val durationMs: Long,
-    val averageBytesPerSecond: Long
+    val averageBytesPerSecond: Long,
+    val notMigratedCount: Int = 0
 )
 
 data class MigrationUiState(
