@@ -167,20 +167,23 @@ internal class MigrationTaskStore(context: Context) {
             val json = runCatching { JSONObject(line) }.getOrNull() ?: return@forEachLine
             val absolute = json.optString("absolutePath")
             val relative = normalizeRelativePath(json.optString("relativePath")) ?: return@forEachLine
-            val file = File(absolute)
-            if (!file.isFile || !file.canRead()) return@forEachLine
             val expectedSize = json.optLong("size", -1L)
-            if (expectedSize < 0L || file.length() != expectedSize) return@forEachLine
+            if (absolute.isBlank() || expectedSize < 0L) return@forEachLine
+            val file = File(absolute)
             val category = runCatching { MigrationCategory.valueOf(json.optString("category")) }.getOrNull()
                 ?: return@forEachLine
-            items += MigrationFileItem(
+            val item = MigrationFileItem(
                 file = file,
                 relativePath = relative,
                 size = expectedSize,
-                modifiedAt = json.optLong("modifiedAt", file.lastModified()),
+                modifiedAt = json.optLong("modifiedAt", 0L),
                 category = category,
                 appPackageName = json.optString("appPackageName").takeIf { it.isNotBlank() && it != "null" }
             )
+            items += item
+            if (relative !in completed) {
+                MigrationSourceValidator.problem(item)?.let { problem -> failures[relative] = problem }
+            }
         }
         if (items.isEmpty()) return null
         val categories = meta.optString("selectedCategories")
