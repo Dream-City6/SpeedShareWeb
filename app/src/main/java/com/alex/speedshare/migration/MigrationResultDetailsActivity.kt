@@ -1,16 +1,21 @@
 package com.alex.speedshare.migration
 
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -23,15 +28,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppSettings
 import com.alex.speedshare.ui.theme.SpeedShareTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MigrationResultDetailsActivity : ComponentActivity() {
@@ -144,7 +155,7 @@ private fun MigrationResultDetailsScreen(onClose: () -> Unit) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("收到的应用", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
-                        Text("${packages.size} 个应用 · 按顺序交给 Android 系统安装", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("${packages.size} 个应用 · base / split APK 会作为一个应用安装", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Button(
                         enabled = activity != null,
@@ -157,39 +168,19 @@ private fun MigrationResultDetailsScreen(onClose: () -> Unit) {
 
                 packages.forEach { directory ->
                     val installStatus = installStatuses[directory.absolutePath] ?: MigrationAppInstallStatus()
-                    Card(shape = RoundedCornerShape(16.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(directory.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(
-                                    installStateLabel(installStatus),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = when (installStatus.state) {
-                                        MigrationAppInstallState.INSTALLED -> MaterialTheme.colorScheme.primary
-                                        MigrationAppInstallState.FAILED -> MaterialTheme.colorScheme.error
-                                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
-                            OutlinedButton(
-                                enabled = activity != null && installStatus.state !in setOf(
-                                    MigrationAppInstallState.PREPARING,
-                                    MigrationAppInstallState.WAITING_CONFIRMATION,
-                                    MigrationAppInstallState.INSTALLED
-                                ),
-                                onClick = {
-                                    val result = activity?.let { AppPackageInstaller.requestInstall(it, directory) }
-                                    Toast.makeText(context, installStartMessage(result), Toast.LENGTH_LONG).show()
-                                }
-                            ) {
-                                Text(if (installStatus.state == MigrationAppInstallState.FAILED) "重试" else "安装")
-                            }
-                        }
-                    }
+                    ReceivedAppCard(
+                        directory = directory,
+                        installStatus = installStatus,
+                        onInstall = {
+                            val result = activity?.let { AppPackageInstaller.requestInstall(it, directory) }
+                            Toast.makeText(context, installStartMessage(result), Toast.LENGTH_LONG).show()
+                        },
+                        installEnabled = activity != null && installStatus.state !in setOf(
+                            MigrationAppInstallState.PREPARING,
+                            MigrationAppInstallState.WAITING_CONFIRMATION,
+                            MigrationAppInstallState.INSTALLED
+                        )
+                    )
                 }
             }
 
@@ -203,6 +194,94 @@ private fun MigrationResultDetailsScreen(onClose: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ReceivedAppCard(
+    directory: File,
+    installStatus: MigrationAppInstallStatus,
+    onInstall: () -> Unit,
+    installEnabled: Boolean
+) {
+    val context = LocalContext.current
+    val visual by produceState<MigrationArchiveVisual?>(initialValue = null, key1 = directory.absolutePath) {
+        value = withContext(Dispatchers.IO) {
+            MigrationAppVisualResolver.archive(context, directory, 128)
+        }
+    }
+    val apkCount = remember(directory) {
+        directory.listFiles()?.count { it.isFile && it.extension.equals("apk", true) } ?: 0
+    }
+    Card(shape = RoundedCornerShape(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ArchiveIcon(visual?.icon, visual?.label ?: directory.name)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    visual?.label ?: directory.name,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    listOfNotNull(
+                        visual?.versionName?.takeIf { it.isNotBlank() },
+                        "$apkCount 个 APK组件"
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                visual?.packageName?.takeIf { it.isNotBlank() }?.let {
+                    Text(
+                        it,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Text(
+                    installStateLabel(installStatus),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = when (installStatus.state) {
+                        MigrationAppInstallState.INSTALLED -> MaterialTheme.colorScheme.primary
+                        MigrationAppInstallState.FAILED -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+            OutlinedButton(enabled = installEnabled, onClick = onInstall) {
+                Text(if (installStatus.state == MigrationAppInstallState.FAILED) "重试" else "安装")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArchiveIcon(bitmap: Bitmap?, label: String) {
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = label,
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)),
+            contentScale = ContentScale.Fit
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.secondaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(label.take(1).uppercase(), fontWeight = FontWeight.Black)
         }
     }
 }
