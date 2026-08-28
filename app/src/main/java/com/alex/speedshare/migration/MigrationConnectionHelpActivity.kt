@@ -198,7 +198,7 @@ private fun MigrationConnectionHelpScreen(onClose: () -> Unit) {
     }
 }
 
-private fun parseEndpoint(text: String): Pair<String, Int>? {
+internal fun parseMigrationEndpoint(text: String): Pair<String, Int>? {
     val value = text.trim().removePrefix("http://").removePrefix("https://").trimEnd('/')
     val colon = value.lastIndexOf(':')
     if (colon <= 0 || colon == value.lastIndex) return null
@@ -206,9 +206,11 @@ private fun parseEndpoint(text: String): Pair<String, Int>? {
     val port = value.substring(colon + 1).toIntOrNull() ?: return null
     if (port !in 1..65535) return null
     val octets = host.split('.')
-    if (octets.size != 4 || octets.any { it.toIntOrNull() !in 0..255 }) return null
+    if (octets.size != 4 || octets.any { octet -> octet.toIntOrNull()?.let { it in 0..255 } != true }) return null
     return host to port
 }
+
+private fun parseEndpoint(text: String): Pair<String, Int>? = parseMigrationEndpoint(text)
 
 private fun openSettings(context: Context, action: String) {
     val launched = runCatching {
