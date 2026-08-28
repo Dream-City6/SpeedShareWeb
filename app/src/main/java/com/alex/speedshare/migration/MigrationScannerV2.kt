@@ -33,7 +33,7 @@ internal object MigrationScannerV2 {
                 }
             }
         }
-        val apps = scanApps(context)
+        val apps = scanAppsOnly(context)
         MigrationAppSelectionRegistry.sync(apps)
         return MigrationScanResult(files = files, apps = apps)
     }
@@ -58,7 +58,7 @@ internal object MigrationScannerV2 {
             .toList()
     }
 
-    private fun scanApps(context: Context): List<MigrationAppItem> {
+    internal fun scanAppsOnly(context: Context): List<MigrationAppItem> {
         val pm = context.packageManager
         val packages = if (Build.VERSION.SDK_INT >= 33) {
             pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(0L))
