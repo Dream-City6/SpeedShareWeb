@@ -32,7 +32,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -155,7 +154,7 @@ private fun ResilientMigrationScreen(onClose: () -> Unit) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text("可靠换机", fontWeight = FontWeight.Bold)
                     Text(
-                        "已启用任务持久化、Session Token、断点续传、自动重连和新机空间检查。当前传输内容仍未做 TLS 加密，建议在可信 Wi‑Fi 下使用。",
+                        "局域网直传，不上传到 SpeedShare 服务器。已启用任务持久化、Session Token、断点续传、自动重连、Wi‑Fi/CPU保活和空间检查。当前内容仍未做 TLS/E2E 加密，请使用可信 Wi‑Fi。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -168,17 +167,21 @@ private fun ResilientMigrationScreen(onClose: () -> Unit) {
 
 @Composable
 private fun HeaderV2(state: ResilientMigrationState, onClose: () -> Unit) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column {
+        Column(Modifier.weight(1f)) {
             Text("SpeedShare 换机", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
             Text("可靠续传 · 自动重连 · 空间检查", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        TextButton(onClick = { context.startActivity(Intent(context, MigrationHistoryActivity::class.java)) }) {
+            Text("历史")
+        }
         TextButton(onClick = onClose) {
-            Text(if (state.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)) "后台运行" else "返回")
+            Text(if (state.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)) "后台" else "返回")
         }
     }
 }
@@ -353,7 +356,7 @@ private fun DiscoveryV2(state: ResilientMigrationState, controller: ResilientMig
 
 @Composable
 private fun SpeedV2(state: ResilientMigrationState, controller: ResilientMigrationController) {
-    SectionV2("连接质量", "使用真实双向数据测试 Wi‑Fi 速度和稳定性。")
+    SectionV2("连接质量（可跳过）", "测速只用于估算时间和自动选择并发，约 2～3 秒；不测速也可以直接换机。")
     if (state.speedTesting) LinearProgressIndicator(Modifier.fillMaxWidth())
     state.speedResult?.let { result ->
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,8 +371,13 @@ private fun SpeedV2(state: ResilientMigrationState, controller: ResilientMigrati
             Text("使用当前 Wi‑Fi，继续")
         }
     }
-    OutlinedButton(onClick = controller::runSpeedTest, enabled = !state.speedTesting, modifier = Modifier.fillMaxWidth()) {
-        Text(if (state.speedResult == null) "开始测速" else "重新测速")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = controller::runSpeedTest, enabled = !state.speedTesting, modifier = Modifier.weight(1f)) {
+            Text(if (state.speedResult == null) "快速测速" else "重新测速")
+        }
+        OutlinedButton(onClick = controller::skipSpeedTest, enabled = !state.speedTesting, modifier = Modifier.weight(1f)) {
+            Text("跳过测速")
+        }
     }
 }
 
@@ -392,26 +400,51 @@ private fun RoleV2(controller: ResilientMigrationController) {
 
 @Composable
 private fun SelectionV2(state: ResilientMigrationState, controller: ResilientMigrationController, storageAccess: Boolean) {
+    val context = LocalContext.current
+    val health = remember(state.role) { MigrationDeviceHealthReader.read(context) }
     if (state.role == MigrationRole.NEW_PHONE) {
         SectionV2("新手机已准备", "保持页面或切到后台即可，系统会通过前台服务保持任务。")
         state.receiverStorage?.let { storage ->
             MetricV2("本机可用空间", formatBytesV2(storage.freeBytes), Modifier.fillMaxWidth())
         }
+        HealthRecommendationCardV2(health)
         return
     }
 
-    val selectedBytes = state.selectedCategories.sumOf { state.scanResult.bytes(it) }
-    val selectedCount = state.selectedCategories.sumOf { state.scanResult.count(it) }
-    SectionV2("选择迁移内容", "开始前会再次检查新手机空间是否足够。")
+    MigrationFileSelectionRegistry.sync(state.scanResult.files)
+    val selectedApps by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
+    val selectedMedia by MigrationMediaSelectionRegistry.selectedPaths.collectAsState()
+    val selectedFiles by MigrationFileSelectionRegistry.selectedPaths.collectAsState()
+    val summary = remember(state.scanResult, state.selectedCategories, selectedApps, selectedMedia, selectedFiles) {
+        MigrationSelectionCalculator.effectiveItems(state.scanResult, state.selectedCategories)
+    }
+
+    SectionV2("选择迁移内容", "先快速选择方案，也可以进入每一类逐项挑选。")
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedButton(
+            onClick = { applyPresetV2(MigrationSelectionPreset.ALL, state, controller) },
+            modifier = Modifier.weight(1f)
+        ) { Text("全部") }
+        OutlinedButton(
+            onClick = { applyPresetV2(MigrationSelectionPreset.RECOMMENDED, state, controller) },
+            modifier = Modifier.weight(1f)
+        ) { Text("推荐") }
+        OutlinedButton(
+            onClick = { /* 保留当前勾选，下面逐项改 */ },
+            modifier = Modifier.weight(1f)
+        ) { Text("自定义") }
+    }
+
     Card(shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            MetricLineV2("已选择", "${formatBytesV2(selectedBytes)} · $selectedCount 项")
+            MetricLineV2("实际已选择", "${formatBytesV2(summary.totalBytes)} · ${summary.totalItems} 个文件/组件")
+            MetricLineV2("其中应用", "${summary.appCount} 个")
             val receiver = state.receiverStorage
             if (receiver != null) {
                 MetricLineV2("新手机可用", formatBytesV2(receiver.freeBytes))
-                val enough = receiver.freeBytes >= selectedBytes + 256L * 1024L * 1024L
+                val enough = receiver.freeBytes >= summary.totalBytes + 256L * 1024L * 1024L
                 Text(
-                    if (enough) "空间充足，可以开始" else "空间不足，请减少选择或清理新手机空间",
+                    if (enough) "空间充足，可以继续" else "空间不足，请减少选择或清理新手机空间",
                     color = if (enough) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold
                 )
@@ -420,29 +453,107 @@ private fun SelectionV2(state: ResilientMigrationState, controller: ResilientMig
             }
         }
     }
+
+    HealthRecommendationCardV2(health)
     if (state.scanning) LinearProgressIndicator(Modifier.fillMaxWidth())
+
     MigrationCategory.entries.forEach { category ->
+        val detailIntent = when (category) {
+            MigrationCategory.PHOTOS, MigrationCategory.VIDEOS -> Intent(context, MigrationMediaSelectionActivity::class.java)
+            MigrationCategory.DOCUMENTS, MigrationCategory.DOWNLOADS, MigrationCategory.OTHER -> Intent(context, MigrationFileSelectionActivity::class.java)
+            MigrationCategory.APPS -> Intent(context, MigrationAppSelectionActivity::class.java)
+            MigrationCategory.MUSIC -> null
+        }
         Card(shape = RoundedCornerShape(16.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = category in state.selectedCategories, onCheckedChange = { controller.toggleCategory(category) })
                 Column(Modifier.weight(1f)) {
                     Text(categoryLabelV2(category), fontWeight = FontWeight.Bold)
                     Text(
-                        "${state.scanResult.count(category)} 项 · ${formatBytesV2(state.scanResult.bytes(category))}",
+                        categorySelectionSubtitleV2(category, state, selectedApps, selectedMedia, selectedFiles),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (detailIntent != null) {
+                    TextButton(onClick = { context.startActivity(detailIntent) }) { Text("选择 ›") }
+                }
             }
         }
     }
+
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = controller::scanContent, enabled = !state.scanning, modifier = Modifier.weight(1f)) { Text("重新扫描") }
         Button(
-            onClick = controller::startTransfer,
-            enabled = !state.scanning && storageAccess && selectedCount > 0,
+            onClick = { context.startActivity(Intent(context, MigrationPreflightActivity::class.java)) },
+            enabled = !state.scanning && storageAccess && summary.totalItems > 0,
             modifier = Modifier.weight(1f)
-        ) { Text("开始换机") }
+        ) { Text("下一步") }
+    }
+}
+
+@Composable
+private fun HealthRecommendationCardV2(health: MigrationDeviceHealth) {
+    val recommendations = health.recommendations()
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (recommendations.isEmpty()) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                "本机 ${health.batteryLabel}${if (health.charging) " · 充电中" else ""} · ${health.temperatureLabel}",
+                fontWeight = FontWeight.Bold
+            )
+            if (recommendations.isEmpty()) {
+                Text("设备状态正常。长时间迁移仍建议接上电源。", style = MaterialTheme.typography.bodySmall)
+            } else {
+                recommendations.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+            Text("这里只做建议，不限制继续换机。", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+private fun applyPresetV2(
+    preset: MigrationSelectionPreset,
+    state: ResilientMigrationState,
+    controller: ResilientMigrationController
+) {
+    if (preset == MigrationSelectionPreset.CUSTOM) return
+    val target = MigrationSelectionCalculator.presetCategories(preset)
+    MigrationCategory.entries.forEach { category ->
+        if ((category in state.selectedCategories) != (category in target)) controller.toggleCategory(category)
+    }
+    MigrationAppSelectionRegistry.selectAll()
+    MigrationFileSelectionRegistry.selectAll()
+    state.scanResult.files.let { files ->
+        MigrationMediaSelectionRegistry.selectCategory(files, MigrationCategory.PHOTOS, true)
+        MigrationMediaSelectionRegistry.selectCategory(files, MigrationCategory.VIDEOS, true)
+    }
+}
+
+private fun categorySelectionSubtitleV2(
+    category: MigrationCategory,
+    state: ResilientMigrationState,
+    selectedApps: Set<String>,
+    selectedMedia: Set<String>,
+    selectedFiles: Set<String>
+): String {
+    return when (category) {
+        MigrationCategory.APPS -> "已选 ${selectedApps.size} / ${state.scanResult.apps.size} 个应用"
+        MigrationCategory.PHOTOS, MigrationCategory.VIDEOS -> {
+            val total = state.scanResult.files.count { it.category == category }
+            val chosen = state.scanResult.files.count { it.category == category && it.relativePath in selectedMedia }
+            "已选 $chosen / $total 项 · ${formatBytesV2(state.scanResult.bytes(category))}"
+        }
+        MigrationCategory.DOCUMENTS, MigrationCategory.DOWNLOADS, MigrationCategory.OTHER -> {
+            val total = state.scanResult.files.count { it.category == category }
+            val chosen = state.scanResult.files.count { it.category == category && it.relativePath in selectedFiles }
+            "已选 $chosen / $total 项 · ${formatBytesV2(state.scanResult.bytes(category))}"
+        }
+        MigrationCategory.MUSIC -> "${state.scanResult.count(category)} 项 · ${formatBytesV2(state.scanResult.bytes(category))}"
     }
 }
 
@@ -489,6 +600,8 @@ private fun ReportV2(state: ResilientMigrationState, controller: ResilientMigrat
             report?.let {
                 MetricLineV2("总数据", formatBytesV2(it.totalBytes))
                 MetricLineV2("成功", it.successCount.toString())
+                MetricLineV2("重复跳过", it.skippedCount.toString())
+                if (it.notMigratedCount > 0) MetricLineV2("用户未迁移", it.notMigratedCount.toString())
                 MetricLineV2("失败/待续传", it.failedCount.toString())
                 MetricLineV2("平均速度", formatRateV2(it.averageBytesPerSecond))
             }
@@ -509,7 +622,7 @@ private fun ReportV2(state: ResilientMigrationState, controller: ResilientMigrat
             Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("本次收到 ${packageDirs.size} 个应用", fontWeight = FontWeight.Black)
                 Text("每次换机使用独立目录，不会把上次留下的 split APK 混入本次安装。", style = MaterialTheme.typography.bodySmall)
-                packageDirs.forEach { directory ->
+                packageDirs.take(5).forEach { directory ->
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(directory.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         OutlinedButton(
@@ -521,13 +634,20 @@ private fun ReportV2(state: ResilientMigrationState, controller: ResilientMigrat
                         ) { Text("安装") }
                     }
                 }
+                if (packageDirs.size > 5) Text("其余应用请在详细报告中安装。", style = MaterialTheme.typography.bodySmall)
             }
         }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(
+            onClick = { context.startActivity(Intent(context, MigrationHistoryActivity::class.java)) },
+            modifier = Modifier.weight(1f)
+        ) { Text("换机历史") }
+        OutlinedButton(onClick = controller::reset, modifier = Modifier.weight(1f)) { Text("返回设备列表") }
     }
     state.pendingTask?.let {
         Button(onClick = controller::resumePendingTask, modifier = Modifier.fillMaxWidth()) { Text("继续剩余 ${it.pendingItems.size} 项") }
     }
-    OutlinedButton(onClick = controller::reset, modifier = Modifier.fillMaxWidth()) { Text("返回设备列表") }
 }
 
 @Composable
@@ -581,7 +701,7 @@ private fun stepIndexV2(stage: MigrationStage) = when (stage) {
 private fun stageLabelV2(stage: MigrationStage) = when (stage) {
     MigrationStage.DISCOVERY -> "发现设备"
     MigrationStage.PAIRING -> "建立连接"
-    MigrationStage.SPEED_TEST -> "测速"
+    MigrationStage.SPEED_TEST -> "可选测速"
     MigrationStage.ROLE -> "选择角色"
     MigrationStage.SELECTION -> "选择内容"
     MigrationStage.TRANSFERRING -> "迁移中"
