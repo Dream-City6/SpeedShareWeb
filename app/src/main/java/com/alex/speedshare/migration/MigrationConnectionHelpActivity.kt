@@ -129,7 +129,7 @@ private fun MigrationConnectionHelpScreen(onClose: () -> Unit) {
                     Text("一台手机开启热点，另一台连接这个热点，然后返回 SpeedShare。通常会自动重新发现设备。")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
-                            onClick = { openSettings(context, Settings.ACTION_TETHER_SETTINGS) },
+                            onClick = { openSettings(context, "android.settings.TETHER_SETTINGS") },
                             modifier = Modifier.weight(1f)
                         ) { Text("热点设置") }
                         OutlinedButton(
@@ -165,7 +165,7 @@ private fun MigrationConnectionHelpScreen(onClose: () -> Unit) {
                     )
                     Button(
                         onClick = {
-                            val parsed = parseEndpoint(manual)
+                            val parsed = parseMigrationEndpoint(manual)
                             if (parsed == null) {
                                 error = "请输入正确的 IPv4:端口"
                             } else {
@@ -209,8 +209,6 @@ internal fun parseMigrationEndpoint(text: String): Pair<String, Int>? {
     if (octets.size != 4 || octets.any { octet -> octet.toIntOrNull()?.let { it in 0..255 } != true }) return null
     return host to port
 }
-
-private fun parseEndpoint(text: String): Pair<String, Int>? = parseMigrationEndpoint(text)
 
 private fun openSettings(context: Context, action: String) {
     val launched = runCatching {
