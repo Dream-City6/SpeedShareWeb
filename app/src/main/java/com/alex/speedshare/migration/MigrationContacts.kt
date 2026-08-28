@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Environment
 import android.provider.ContactsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -95,7 +94,7 @@ internal object MigrationContactsRegistry {
         val file = preparedFile?.takeIf { it.isFile && it.canRead() } ?: return null
         return MigrationFileItem(
             file = file,
-            relativePath = "Download/SpeedShare/Contacts/${file.name}",
+            relativePath = "Download/SpeedShareWeb/Contacts/${file.name}",
             size = file.length(),
             modifiedAt = file.lastModified(),
             category = MigrationCategory.DOCUMENTS
@@ -284,7 +283,7 @@ private fun MigrationContactsSelectionScreen(onClose: () -> Unit) {
 
 internal object MigrationContactsImporter {
     fun findLatestReceived(): File? {
-        val dir = File(Environment.getExternalStorageDirectory(), "Download/SpeedShare/Contacts")
+        val dir = MigrationStorageLayout.contactsDir()
         return dir.listFiles()?.filter { it.isFile && it.extension.equals("vcf", true) }?.maxByOrNull { it.lastModified() }
     }
 
