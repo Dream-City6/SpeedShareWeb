@@ -33,6 +33,8 @@ import com.alex.speedshare.MainActivity
 import com.alex.speedshare.migration.MigrationAppSelectionActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
 import com.alex.speedshare.migration.MigrationCategory
+import com.alex.speedshare.migration.MigrationMediaSelectionActivity
+import com.alex.speedshare.migration.MigrationMediaSelectionRegistry
 import com.alex.speedshare.migration.MigrationResultDetailsActivity
 import com.alex.speedshare.migration.MigrationRole
 import com.alex.speedshare.migration.MigrationStage
@@ -129,10 +131,16 @@ fun SpeedShareTheme(
                 val controller = ResilientMigrationController.get(context)
                 val migrationState by controller.state.collectAsState()
                 val selectedApps by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
+                val selectedMedia by MigrationMediaSelectionRegistry.selectedPaths.collectAsState()
                 var showEarlyFinishConfirm by remember { mutableStateOf(false) }
                 LaunchedEffect(migrationState.scanResult.apps) {
                     if (migrationState.scanResult.apps.isNotEmpty()) {
                         MigrationAppSelectionRegistry.sync(migrationState.scanResult.apps)
+                    }
+                }
+                LaunchedEffect(migrationState.scanResult.files) {
+                    if (migrationState.scanResult.files.isNotEmpty()) {
+                        MigrationMediaSelectionRegistry.sync(migrationState.scanResult.files)
                     }
                 }
 
@@ -157,9 +165,9 @@ fun SpeedShareTheme(
                     )
                 }
 
+                val selecting = migrationState.stage == MigrationStage.SELECTION && migrationState.role == MigrationRole.OLD_PHONE
                 if (
-                    migrationState.stage == MigrationStage.SELECTION &&
-                    migrationState.role == MigrationRole.OLD_PHONE &&
+                    selecting &&
                     MigrationCategory.APPS in migrationState.selectedCategories &&
                     migrationState.scanResult.apps.isNotEmpty()
                 ) {
@@ -182,7 +190,38 @@ fun SpeedShareTheme(
                             fontWeight = FontWeight.Black
                         )
                     }
-                } else if (
+                }
+
+                val mediaTotal = migrationState.scanResult.files.count {
+                    it.category == MigrationCategory.PHOTOS || it.category == MigrationCategory.VIDEOS
+                }
+                if (
+                    selecting &&
+                    mediaTotal > 0 &&
+                    (MigrationCategory.PHOTOS in migrationState.selectedCategories || MigrationCategory.VIDEOS in migrationState.selectedCategories)
+                ) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 16.dp, bottom = 18.dp)
+                            .clickable {
+                                context.startActivity(Intent(context, MigrationMediaSelectionActivity::class.java))
+                            },
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        tonalElevation = 6.dp,
+                        shadowElevation = 5.dp
+                    ) {
+                        Text(
+                            text = "照片/视频 ${selectedMedia.size}/$mediaTotal  ›",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            fontWeight = FontWeight.Black
+                        )
+                    }
+                }
+
+                if (
                     migrationState.stage in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING) &&
                     migrationState.role == MigrationRole.OLD_PHONE
                 ) {
