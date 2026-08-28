@@ -7,7 +7,8 @@ enum class AppCompatibilityStatus { COMPATIBLE, REVIEW, INCOMPATIBLE }
 
 data class AppCompatibilityResult(
     val status: AppCompatibilityStatus,
-    val reason: String
+    val reason: String,
+    val alreadyPresent: Boolean = false
 )
 
 internal object AppCompatibilityAnalyzer {
