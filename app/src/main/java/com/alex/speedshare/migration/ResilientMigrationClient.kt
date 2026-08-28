@@ -90,17 +90,18 @@ internal object ResilientMigrationClient {
 
     fun testSpeed(session: MigrationSession): SpeedTestResult {
         val latencySamples = mutableListOf<Long>()
-        repeat(5) {
+        repeat(3) {
             val started = System.nanoTime()
             command(session, JSONObject().put("type", ResilientCommands.HELLO), public = true)
             latencySamples += (System.nanoTime() - started) / 1_000_000L
         }
 
-        // A short single-stream warm-up estimates the link without making the overall test too long.
-        val warmup = uploadSpeed(session, 8L * 1024L * 1024L)
+        // Keep the optional test short. A small single-stream probe estimates the link, then
+        // four streams run for roughly one second in each direction (about 2-3 seconds total).
+        val warmup = uploadSpeed(session, 4L * 1024L * 1024L)
         val streams = SPEED_TEST_STREAMS
-        val perStreamSize = ((warmup.first * 7L) / streams)
-            .coerceIn(32L * 1024L * 1024L, 96L * 1024L * 1024L)
+        val perStreamSize = ((warmup.first * 11L) / 10L / streams)
+            .coerceIn(24L * 1024L * 1024L, 40L * 1024L * 1024L)
 
         val upload = multiUploadSpeed(session, perStreamSize, streams)
         val download = multiDownloadSpeed(session, perStreamSize, streams)
