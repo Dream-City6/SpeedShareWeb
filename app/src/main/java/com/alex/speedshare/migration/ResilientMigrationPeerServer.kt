@@ -1,5 +1,7 @@
 package com.alex.speedshare.migration
 
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Environment
 import org.json.JSONObject
@@ -25,6 +27,7 @@ internal object ResilientCommands {
     const val SPEED_DOWNLOAD = "v2_speed_download"
     const val SPEED_RESULT = "v2_speed_result"
     const val STORAGE_INFO = "v2_storage_info"
+    const val APP_VERSIONS = "v2_app_versions"
     const val TRANSFER_PLAN = "v2_transfer_plan"
     const val FILE_OFFER = "v2_file_offer"
     const val FILE_CHUNK_PLAN = "v2_file_chunk_plan"
@@ -36,6 +39,7 @@ internal object ResilientCommands {
 }
 
 internal class ResilientMigrationPeerServer(
+    private val context: Context,
     private val localDeviceId: String,
     private val localDeviceName: String,
     private val appVersion: String,
@@ -138,6 +142,7 @@ internal class ResilientMigrationPeerServer(
                         sendOk(output)
                     }
                     ResilientCommands.STORAGE_INFO -> handleStorageInfo(output)
+                    ResilientCommands.APP_VERSIONS -> handleAppVersions(output, request)
                     ResilientCommands.TRANSFER_PLAN -> handleTransferPlan(output, request)
                     ResilientCommands.FILE_OFFER -> handleFileOffer(socket, input, output, request)
                     ResilientCommands.FILE_CHUNK_PLAN -> handleChunkPlan(output, request)
@@ -214,6 +219,36 @@ internal class ResilientMigrationPeerServer(
                 .put("freeBytes", root.usableSpace.coerceAtLeast(0L))
                 .put("totalBytes", root.totalSpace.coerceAtLeast(0L))
         )
+    }
+
+    private fun handleAppVersions(output: BufferedOutputStream, request: JSONObject) {
+        val requested = request.optJSONArray("packages")
+            ?: return sendError(output, "invalid_app_version_query")
+        val versions = JSONObject()
+        val count = min(requested.length(), MAX_APP_VERSION_QUERY)
+        for (index in 0 until count) {
+            val packageName = requested.optString(index).trim()
+            if (!PACKAGE_NAME_REGEX.matches(packageName)) continue
+            val info = runCatching {
+                if (Build.VERSION.SDK_INT >= 33) {
+                    context.packageManager.getPackageInfo(
+                        packageName,
+                        PackageManager.PackageInfoFlags.of(0L)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.packageManager.getPackageInfo(packageName, 0)
+                }
+            }.getOrNull() ?: continue
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                info.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                info.versionCode.toLong()
+            }
+            versions.put(packageName, versionCode)
+        }
+        sendOk(output, JSONObject().put("versions", versions))
     }
 
     private fun handleTransferPlan(output: BufferedOutputStream, request: JSONObject) {
@@ -485,9 +520,11 @@ internal class ResilientMigrationPeerServer(
     companion object {
         private val PUBLIC_COMMANDS = setOf(ResilientCommands.HELLO, ResilientCommands.PAIR)
         private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
+        private val PACKAGE_NAME_REGEX = Regex("^[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+$")
         private const val NETWORK_BUFFER_BYTES = 2 * 1024 * 1024
         private const val IO_BLOCK_BYTES = 1024 * 1024
         private const val MAX_SPEED_TEST_BYTES = 96L * 1024L * 1024L
+        private const val MAX_APP_VERSION_QUERY = 1000
         private const val STORAGE_RESERVE_BYTES = 256L * 1024L * 1024L
     }
 }
