@@ -37,8 +37,9 @@ internal object MigrationProtocol {
     fun connect(host: String, port: Int, timeoutMs: Int = 8_000): Socket =
         Socket().apply {
             tcpNoDelay = true
-            sendBufferSize = 1024 * 1024
-            receiveBufferSize = 1024 * 1024
+            keepAlive = true
+            sendBufferSize = 4 * 1024 * 1024
+            receiveBufferSize = 4 * 1024 * 1024
             connect(java.net.InetSocketAddress(host, port), timeoutMs)
             soTimeout = 90_000
         }
