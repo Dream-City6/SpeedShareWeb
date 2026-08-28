@@ -83,7 +83,13 @@ internal object MigrationScannerV2 {
                     label = runCatching { pm.getApplicationLabel(app).toString() }.getOrDefault(info.packageName),
                     versionName = info.versionName.orEmpty(),
                     apkFiles = apkPaths,
-                    totalBytes = apkPaths.sumOf { it.length() }
+                    totalBytes = apkPaths.sumOf { it.length() },
+                    versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        info.longVersionCode
+                    } else {
+                        @Suppress("DEPRECATION")
+                        info.versionCode.toLong()
+                    }
                 )
             }
             .sortedBy { it.label.lowercase() }
