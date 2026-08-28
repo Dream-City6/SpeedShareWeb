@@ -30,10 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppThemeMode
 import com.alex.speedshare.MainActivity
-import com.alex.speedshare.migration.MigrationAppSelectionActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
-import com.alex.speedshare.migration.MigrationCategory
-import com.alex.speedshare.migration.MigrationMediaSelectionActivity
 import com.alex.speedshare.migration.MigrationMediaSelectionRegistry
 import com.alex.speedshare.migration.MigrationResultDetailsActivity
 import com.alex.speedshare.migration.MigrationRole
@@ -130,9 +127,8 @@ fun SpeedShareTheme(
             if (context is ResilientMigrationActivity) {
                 val controller = ResilientMigrationController.get(context)
                 val migrationState by controller.state.collectAsState()
-                val selectedApps by MigrationAppSelectionRegistry.selectedPackages.collectAsState()
-                val selectedMedia by MigrationMediaSelectionRegistry.selectedPaths.collectAsState()
                 var showEarlyFinishConfirm by remember { mutableStateOf(false) }
+
                 LaunchedEffect(migrationState.scanResult.apps) {
                     if (migrationState.scanResult.apps.isNotEmpty()) {
                         MigrationAppSelectionRegistry.sync(migrationState.scanResult.apps)
@@ -163,85 +159,6 @@ fun SpeedShareTheme(
                             TextButton(onClick = { showEarlyFinishConfirm = false }) { Text("继续迁移") }
                         }
                     )
-                }
-
-                if (migrationState.stage == MigrationStage.SPEED_TEST && !migrationState.speedTesting) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 18.dp)
-                            .clickable { controller.skipSpeedTest() },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        tonalElevation = 5.dp,
-                        shadowElevation = 4.dp
-                    ) {
-                        Text(
-                            text = "跳过测速  ›",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
-
-                val selecting = migrationState.stage == MigrationStage.SELECTION && migrationState.role == MigrationRole.OLD_PHONE
-                if (
-                    selecting &&
-                    MigrationCategory.APPS in migrationState.selectedCategories
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 18.dp)
-                            .clickable {
-                                context.startActivity(Intent(context, MigrationAppSelectionActivity::class.java))
-                            },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 5.dp
-                    ) {
-                        Text(
-                            text = if (migrationState.scanResult.apps.isEmpty()) {
-                                "选择应用  ›"
-                            } else {
-                                "应用 ${selectedApps.size}/${migrationState.scanResult.apps.size}  ›"
-                            },
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
-
-                val mediaTotal = migrationState.scanResult.files.count {
-                    it.category == MigrationCategory.PHOTOS || it.category == MigrationCategory.VIDEOS
-                }
-                if (
-                    selecting &&
-                    mediaTotal > 0 &&
-                    (MigrationCategory.PHOTOS in migrationState.selectedCategories || MigrationCategory.VIDEOS in migrationState.selectedCategories)
-                ) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(start = 16.dp, bottom = 18.dp)
-                            .clickable {
-                                context.startActivity(Intent(context, MigrationMediaSelectionActivity::class.java))
-                            },
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                        tonalElevation = 6.dp,
-                        shadowElevation = 5.dp
-                    ) {
-                        Text(
-                            text = "照片/视频 ${selectedMedia.size}/$mediaTotal  ›",
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                            fontWeight = FontWeight.Black
-                        )
-                    }
                 }
 
                 if (
