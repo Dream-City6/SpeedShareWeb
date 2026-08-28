@@ -303,6 +303,37 @@ class ResilientMigrationController private constructor(private val context: Cont
         }
     }
 
+    fun refreshAppsOnly() {
+        if (_state.value.scanning) return
+        update {
+            it.copy(
+                scanning = true,
+                status = "正在读取已安装应用…"
+            )
+        }
+        scope.launch {
+            try {
+                val apps = MigrationScannerV2.scanAppsOnly(context)
+                MigrationAppSelectionRegistry.sync(apps)
+                update { current ->
+                    current.copy(
+                        scanning = false,
+                        scanResult = current.scanResult.copy(apps = apps),
+                        status = "已读取 ${apps.size} 个可迁移应用"
+                    )
+                }
+            } catch (error: Throwable) {
+                update {
+                    it.copy(
+                        scanning = false,
+                        error = error.message,
+                        status = "读取应用列表失败"
+                    )
+                }
+            }
+        }
+    }
+
     fun toggleCategory(category: MigrationCategory) {
         update { current ->
             val next = current.selectedCategories.toMutableSet()
