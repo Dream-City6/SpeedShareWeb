@@ -136,7 +136,7 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
     }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         permissionGranted = granted || InstalledAppsPermission.isGranted(context)
-        if (permissionGranted) controller.scanContent()
+        if (permissionGranted) controller.refreshAppsOnly()
     }
 
     if (showPermissionDialog) {
@@ -226,7 +226,7 @@ private fun MigrationAppSelectionScreen(onClose: () -> Unit) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                                 Text("应用列表权限未开启", fontWeight = FontWeight.Black)
                                 Text(
-                                    "当前系统可能只返回少量应用。授权后会自动重新扫描；不授权也可以继续迁移其他内容。",
+                                    "当前系统可能只返回少量应用。授权后只重新读取应用，不会再次扫描整台手机；不授权也可以继续迁移其他内容。",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
