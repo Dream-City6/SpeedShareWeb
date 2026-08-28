@@ -13,7 +13,8 @@ data class PendingMigrationTask(
     val selectedCategories: Set<MigrationCategory>,
     val allItems: List<MigrationFileItem>,
     val completedPaths: Set<String>,
-    val failedReasons: Map<String, String> = emptyMap()
+    val failedReasons: Map<String, String> = emptyMap(),
+    val duplicatePolicy: MigrationDuplicatePolicy = MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT
 ) {
     val pendingItems: List<MigrationFileItem>
         get() = allItems.filterNot { it.relativePath in completedPaths }
@@ -34,7 +35,9 @@ internal class MigrationTaskStore(context: Context) {
         selectedCategories: Set<MigrationCategory>
     ): PendingMigrationTask {
         val appFiltered = MigrationAppSelectionRegistry.filterTransferItems(items)
-        val effectiveItems = MigrationMediaSelectionRegistry.filterTransferItems(appFiltered)
+        val mediaFiltered = MigrationMediaSelectionRegistry.filterTransferItems(appFiltered)
+        val effectiveItems = MigrationFileSelectionRegistry.filterTransferItems(mediaFiltered)
+        val duplicatePolicy = MigrationDuplicatePolicyRegistry.current.value
         val id = UUID.randomUUID().toString()
         val dir = taskDir(id).apply { mkdirs() }
         val metadata = JSONObject()
@@ -43,6 +46,7 @@ internal class MigrationTaskStore(context: Context) {
             .put("peerName", peer.name)
             .put("createdAt", System.currentTimeMillis())
             .put("complete", false)
+            .put("duplicatePolicy", duplicatePolicy.name)
             .put("selectedCategories", selectedCategories.joinToString(",") { it.name })
         File(dir, META_FILE).writeText(metadata.toString())
         File(dir, MANIFEST_FILE).bufferedWriter().use { writer ->
@@ -68,7 +72,8 @@ internal class MigrationTaskStore(context: Context) {
             selectedCategories = selectedCategories,
             allItems = effectiveItems,
             completedPaths = emptySet(),
-            failedReasons = emptyMap()
+            failedReasons = emptyMap(),
+            duplicatePolicy = duplicatePolicy
         )
     }
 
@@ -110,12 +115,16 @@ internal class MigrationTaskStore(context: Context) {
     }
 
     @Synchronized
-    fun loadLatestIncomplete(): PendingMigrationTask? = root.listFiles()
-        ?.asSequence()
-        ?.filter { it.isDirectory }
-        ?.mapNotNull(::readTask)
-        ?.filter { it.pendingItems.isNotEmpty() }
-        ?.maxByOrNull { it.createdAt }
+    fun loadLatestIncomplete(): PendingMigrationTask? {
+        val task = root.listFiles()
+            ?.asSequence()
+            ?.filter { it.isDirectory }
+            ?.mapNotNull(::readTask)
+            ?.filter { it.pendingItems.isNotEmpty() }
+            ?.maxByOrNull { it.createdAt }
+        task?.let { MigrationDuplicatePolicyRegistry.set(it.duplicatePolicy) }
+        return task
+    }
 
     private fun appendEvent(migrationId: String, event: JSONObject) {
         val dir = taskDir(migrationId)
@@ -176,6 +185,9 @@ internal class MigrationTaskStore(context: Context) {
             .split(',')
             .mapNotNull { runCatching { MigrationCategory.valueOf(it) }.getOrNull() }
             .toSet()
+        val duplicatePolicy = runCatching {
+            MigrationDuplicatePolicy.valueOf(meta.optString("duplicatePolicy"))
+        }.getOrDefault(MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT)
         return PendingMigrationTask(
             migrationId = meta.optString("migrationId", dir.name),
             peerDeviceId = meta.optString("peerDeviceId"),
@@ -184,7 +196,8 @@ internal class MigrationTaskStore(context: Context) {
             selectedCategories = categories,
             allItems = items,
             completedPaths = completed,
-            failedReasons = failures.filterKeys { it !in completed }
+            failedReasons = failures.filterKeys { it !in completed },
+            duplicatePolicy = duplicatePolicy
         )
     }
 
