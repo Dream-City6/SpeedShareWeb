@@ -149,4 +149,41 @@ class MigrationCoreTest {
         assertNull(parseMigrationEndpoint("192.168.1.23:70000"))
         assertNull(parseMigrationEndpoint("not-an-ip:47999"))
     }
+
+    @Test
+    fun sourceValidator_reportsDeletedAndChangedFiles() {
+        val file = Files.createTempFile("speedshare-source", ".bin").toFile()
+        try {
+            file.writeBytes(ByteArray(32) { it.toByte() })
+            val snapshot = MigrationFileItem(
+                file = file,
+                relativePath = "Download/source.bin",
+                size = file.length(),
+                modifiedAt = file.lastModified(),
+                category = MigrationCategory.DOWNLOADS
+            )
+            assertNull(MigrationSourceValidator.problem(snapshot))
+
+            file.appendBytes(byteArrayOf(1, 2, 3))
+            assertEquals("旧手机源文件大小已变化", MigrationSourceValidator.problem(snapshot))
+
+            file.delete()
+            assertEquals("旧手机源文件已删除", MigrationSourceValidator.problem(snapshot))
+        } finally {
+            file.delete()
+        }
+    }
+
+    @Test
+    fun appVersionPolicy_skipsSameOrNewerReceiverButKeepsOlderReceiver() {
+        val base = AppCompatibilityResult(AppCompatibilityStatus.COMPATIBLE, "兼容")
+        val same = MigrationAppVersionPolicy.merge(100L, 100L, base)
+        val newer = MigrationAppVersionPolicy.merge(100L, 101L, base)
+        val older = MigrationAppVersionPolicy.merge(100L, 99L, base)
+
+        assertTrue(same.alreadyPresent)
+        assertTrue(newer.alreadyPresent)
+        assertFalse(older.alreadyPresent)
+        assertTrue(older.reason.contains("较旧版本"))
+    }
 }
