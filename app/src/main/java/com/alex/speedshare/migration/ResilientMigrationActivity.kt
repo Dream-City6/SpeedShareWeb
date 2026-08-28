@@ -58,7 +58,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.alex.speedshare.AppSettings
 import com.alex.speedshare.ui.theme.SpeedShareTheme
-import java.io.File
 import java.util.Locale
 
 class ResilientMigrationActivity : ComponentActivity() {
@@ -608,14 +607,8 @@ private fun ReportV2(state: ResilientMigrationState, controller: ResilientMigrat
         }
     }
 
-    val appRoot = remember(state.activeMigrationId, state.report) {
-        state.activeMigrationId?.let { migrationId ->
-            File(Environment.getExternalStorageDirectory(), "Download/SpeedShare/Apps/$migrationId")
-        }
-    }
-    val packageDirs = remember(appRoot, state.report) {
-        appRoot?.listFiles()?.filter { dir -> dir.isDirectory && dir.listFiles()?.any { it.extension.equals("apk", true) } == true }
-            ?.sortedBy { it.name.lowercase() }.orEmpty()
+    val packageDirs = remember(state.activeMigrationId, state.report) {
+        AppPackageInstaller.receivedPackages(state.activeMigrationId)
     }
     if (packageDirs.isNotEmpty()) {
         Card(shape = RoundedCornerShape(20.dp)) {
