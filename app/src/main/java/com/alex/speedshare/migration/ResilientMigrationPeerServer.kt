@@ -57,6 +57,7 @@ internal class ResilientMigrationPeerServer(
     }
     private val pendingPairs = ConcurrentHashMap<String, PendingPair>()
     private val acceptedTokens = ConcurrentHashMap.newKeySet<String>()
+    private val duplicatePolicies = ConcurrentHashMap<String, MigrationDuplicatePolicy>()
     private var serverSocket: ServerSocket? = null
     @Volatile private var running = false
 
@@ -90,6 +91,7 @@ internal class ResilientMigrationPeerServer(
 
     fun clearSessions() {
         acceptedTokens.clear()
+        duplicatePolicies.clear()
     }
 
     @Synchronized
@@ -100,6 +102,7 @@ internal class ResilientMigrationPeerServer(
         pendingPairs.values.forEach { it.decision.complete(false) }
         pendingPairs.clear()
         acceptedTokens.clear()
+        duplicatePolicies.clear()
         executor.shutdownNow()
     }
 
@@ -213,17 +216,22 @@ internal class ResilientMigrationPeerServer(
 
     private fun handleTransferPlan(output: BufferedOutputStream, request: JSONObject) {
         if (!hasStorageAccess()) return sendError(output, "receiver_storage_permission_required")
-        val migrationId = request.optString("migrationId")
+        val migrationId = normalizeId(request.optString("migrationId"))
+            ?: return sendError(output, "invalid_transfer_plan")
         val totalBytes = request.optLong("totalBytes", -1L)
         val totalItems = request.optInt("totalItems", -1)
         val root = Environment.getExternalStorageDirectory()
         val free = root.usableSpace.coerceAtLeast(0L)
-        if (migrationId.isBlank() || totalBytes < 0L || totalItems < 0) {
+        if (totalBytes < 0L || totalItems < 0) {
             return sendError(output, "invalid_transfer_plan")
         }
         if (free < totalBytes + STORAGE_RESERVE_BYTES) {
             return sendError(output, "insufficient_space", JSONObject().put("freeBytes", free))
         }
+        val policy = runCatching {
+            MigrationDuplicatePolicy.valueOf(request.optString("duplicatePolicy"))
+        }.getOrDefault(MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT)
+        duplicatePolicies[migrationId] = policy
         onTransferPlan(migrationId, totalBytes, totalItems)
         sendOk(output, JSONObject().put("freeBytes", free))
     }
@@ -280,12 +288,13 @@ internal class ResilientMigrationPeerServer(
         val requestedTarget = resolveTarget(migrationId, relativePath, kind)
             ?: return sendFileFailure(output, "invalid_target")
         requestedTarget.parentFile?.mkdirs()
+        val policy = duplicatePolicies[migrationId]
+            ?: MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT
 
-        if (
-            requestedTarget.isFile &&
+        val exactTarget = requestedTarget.isFile &&
             requestedTarget.length() == size &&
             runCatching { MigrationHashCache.sha256(requestedTarget) }.getOrNull() == sourceHash
-        ) {
+        if (exactTarget && policy != MigrationDuplicatePolicy.KEEP_BOTH) {
             MigrationProtocol.writeJson(
                 output,
                 JSONObject().put("ok", true).put("action", "skip").put("offset", size)
@@ -294,7 +303,11 @@ internal class ResilientMigrationPeerServer(
             return
         }
 
-        val finalTarget = if (requestedTarget.exists()) conflictTarget(requestedTarget) else requestedTarget
+        val finalTarget = when (policy) {
+            MigrationDuplicatePolicy.OVERWRITE -> requestedTarget
+            MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT,
+            MigrationDuplicatePolicy.KEEP_BOTH -> if (requestedTarget.exists()) conflictTarget(requestedTarget) else requestedTarget
+        }
         val part = File(finalTarget.parentFile, ".${finalTarget.name}.${sourceHash.take(12)}.speedshare.part")
         if (part.length() > size) part.delete()
         val offset = part.length().coerceIn(0L, size)
@@ -323,8 +336,12 @@ internal class ResilientMigrationPeerServer(
             part.delete()
             return sendFileFailure(output, "hash_mismatch")
         }
+        if (policy == MigrationDuplicatePolicy.OVERWRITE && finalTarget.exists()) {
+            MigrationHashCache.invalidate(finalTarget)
+            if (!finalTarget.delete()) return sendFileFailure(output, "overwrite_delete_failed")
+        }
         if (!part.renameTo(finalTarget)) {
-            part.copyTo(finalTarget, overwrite = false)
+            part.copyTo(finalTarget, overwrite = policy == MigrationDuplicatePolicy.OVERWRITE)
             part.delete()
         }
         MigrationHashCache.invalidate(part)
@@ -339,6 +356,7 @@ internal class ResilientMigrationPeerServer(
 
     private fun handleChunkPlan(output: BufferedOutputStream, request: JSONObject) {
         if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        applyDuplicatePolicy(request)
         runCatching { ChunkedFileReceiver.plan(request) }
             .onSuccess {
                 MigrationProtocol.writeJson(output, it)
@@ -354,6 +372,7 @@ internal class ResilientMigrationPeerServer(
         request: JSONObject
     ) {
         if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        applyDuplicatePolicy(request)
         val plan = runCatching { ChunkedFileReceiver.prepareChunk(request) }
             .getOrElse { return sendFileFailure(output, it.message ?: "chunk_prepare_failed") }
         if (plan.alreadyComplete) {
@@ -382,12 +401,20 @@ internal class ResilientMigrationPeerServer(
 
     private fun handleChunkFinalize(output: BufferedOutputStream, request: JSONObject) {
         if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        applyDuplicatePolicy(request)
         runCatching { ChunkedFileReceiver.finalize(request) }
             .onSuccess {
                 MigrationProtocol.writeJson(output, it)
                 output.flush()
             }
             .onFailure { sendFileFailure(output, it.message ?: "chunk_finalize_failed") }
+    }
+
+    private fun applyDuplicatePolicy(request: JSONObject) {
+        val migrationId = normalizeId(request.optString("migrationId"))
+        val policy = migrationId?.let { duplicatePolicies[it] }
+            ?: MigrationDuplicatePolicy.SKIP_IDENTICAL_KEEP_CONFLICT
+        request.put("duplicatePolicy", policy.name)
     }
 
     private fun resolveTarget(migrationId: String, relativePath: String, kind: String): File? {
