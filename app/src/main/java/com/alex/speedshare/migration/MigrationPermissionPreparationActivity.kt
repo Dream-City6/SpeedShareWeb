@@ -43,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.alex.speedshare.AppSettings
 import com.alex.speedshare.ui.theme.SpeedShareTheme
 
@@ -142,11 +141,14 @@ internal object MigrationPermissionRequirements {
 
     fun allFilesIntent(context: Context): Intent? {
         if (Build.VERSION.SDK_INT < 30 || Environment.isExternalStorageManager()) return null
-        return runCatching {
-            Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                data = Uri.parse("package:${context.packageName}")
-            }
-        }.getOrElse { Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION) }
+        val appSpecific = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
+            data = Uri.parse("package:${context.packageName}")
+        }
+        return if (appSpecific.resolveActivity(context.packageManager) != null) {
+            appSpecific
+        } else {
+            Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+        }
     }
 
     fun appDetailsIntent(context: Context): Intent =
@@ -158,7 +160,7 @@ internal object MigrationPermissionRequirements {
 @Composable
 private fun PermissionPreparationScreen(onReady: () -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
+    val activity = context as? ComponentActivity
     var snapshot by remember { mutableStateOf(MigrationPermissionRequirements.snapshot(context)) }
 
     val allFilesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -179,20 +181,20 @@ private fun PermissionPreparationScreen(onReady: () -> Unit, onCancel: () -> Uni
         if (snapshot.coreReady) onReady()
     }
 
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) snapshot = MigrationPermissionRequirements.snapshot(context)
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
     }
 
     fun requestEverything() {
         val runtime = MigrationPermissionRequirements.runtimePermissions(context)
+        val special = MigrationPermissionRequirements.allFilesIntent(context)
         when {
             runtime.isNotEmpty() -> runtimeLauncher.launch(runtime.toTypedArray())
-            MigrationPermissionRequirements.allFilesIntent(context) != null ->
-                allFilesLauncher.launch(MigrationPermissionRequirements.allFilesIntent(context)!!)
+            special != null -> allFilesLauncher.launch(special)
             snapshot.coreReady -> onReady()
             else -> settingsLauncher.launch(MigrationPermissionRequirements.appDetailsIntent(context))
         }
@@ -213,8 +215,12 @@ private fun PermissionPreparationScreen(onReady: () -> Unit, onCancel: () -> Uni
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            PermissionRow("照片 / 视频 / 音乐", "读取媒体文件和生成缩略图；需要完整媒体权限。", snapshot.media,
-                if (snapshot.partialVisualMedia) "当前只允许了部分照片，请改为允许全部" else null)
+            PermissionRow(
+                "照片 / 视频 / 音乐",
+                "读取媒体文件和生成缩略图；需要完整媒体权限。",
+                snapshot.media,
+                if (snapshot.partialVisualMedia) "当前只允许了部分照片，请改为允许全部" else null
+            )
             PermissionRow("文件与下载", "扫描 Download、Documents、DCIM 等共享存储，并在新手机恢复原目录。", snapshot.storage)
             PermissionRow("应用列表", "识别已安装 App、版本、图标以及 base/split APK。小米/HyperOS 可能单独弹出“获取应用列表”。", snapshot.apps)
             PermissionRow("联系人（可选）", "只有迁移联系人时使用，用于导出标准 VCF。拒绝不会影响照片和文件换机。", snapshot.contacts, optional = true)
