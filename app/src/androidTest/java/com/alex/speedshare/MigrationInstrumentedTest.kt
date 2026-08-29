@@ -1,5 +1,6 @@
 package com.alex.speedshare
 
+import android.Manifest
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.alex.speedshare.migration.MigrationPeer
@@ -27,7 +28,7 @@ class MigrationInstrumentedTest {
     }
 
     @Test
-    fun debugLauncher_targetsResilientMigration() {
+    fun debugLauncher_targetsMainFileSharingScreen() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
         requireNotNull(launchIntent) { "debug app has no launcher intent" }
@@ -35,7 +36,24 @@ class MigrationInstrumentedTest {
         requireNotNull(resolved) { "debug launcher cannot be resolved" }
         val info = resolved.activityInfo
         val target = info.targetActivity ?: info.name
-        assertTrue("launcher target was $target", target.endsWith("ResilientMigrationActivity"))
+        assertTrue("launcher target was $target", target.endsWith("MainActivity"))
+    }
+
+    @Test
+    fun migrationScanPermissions_areDeclared() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val info = context.packageManager.getPackageInfo(
+            context.packageName,
+            android.content.pm.PackageManager.GET_PERMISSIONS
+        )
+        val requested = info.requestedPermissions?.toSet().orEmpty()
+        assertTrue(Manifest.permission.MANAGE_EXTERNAL_STORAGE in requested)
+        assertTrue(Manifest.permission.READ_MEDIA_IMAGES in requested)
+        assertTrue(Manifest.permission.READ_MEDIA_VIDEO in requested)
+        assertTrue(Manifest.permission.READ_MEDIA_AUDIO in requested)
+        assertTrue(Manifest.permission.READ_CONTACTS in requested)
+        assertTrue("android.permission.QUERY_ALL_PACKAGES" in requested)
+        assertTrue("com.android.permission.GET_INSTALLED_APPS" in requested)
     }
 
     @Test
