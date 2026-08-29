@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppThemeMode
 import com.alex.speedshare.MainActivity
+import com.alex.speedshare.TransferPerformanceSettingsActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
 import com.alex.speedshare.migration.MigrationConnectionHelpActivity
 import com.alex.speedshare.migration.MigrationCryptoSessionRegistry
@@ -106,6 +107,26 @@ fun SpeedShareTheme(
         Box {
             content()
             if (context is MainActivity) {
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 16.dp, bottom = 18.dp)
+                        .clickable {
+                            context.startActivity(Intent(context, TransferPerformanceSettingsActivity::class.java))
+                        },
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    tonalElevation = 5.dp,
+                    shadowElevation = 4.dp
+                ) {
+                    Text(
+                        text = "⚙  传输性能  ›",
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                        fontWeight = FontWeight.Black
+                    )
+                }
+
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
