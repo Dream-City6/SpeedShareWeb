@@ -32,6 +32,7 @@ import com.alex.speedshare.AppThemeMode
 import com.alex.speedshare.MainActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
 import com.alex.speedshare.migration.MigrationConnectionHelpActivity
+import com.alex.speedshare.migration.MigrationCryptoSessionRegistry
 import com.alex.speedshare.migration.MigrationMediaSelectionRegistry
 import com.alex.speedshare.migration.MigrationPermissionPreparationActivity
 import com.alex.speedshare.migration.MigrationResultDetailsActivity
@@ -130,6 +131,10 @@ fun SpeedShareTheme(
                 val controller = ResilientMigrationController.get(context)
                 val migrationState by controller.state.collectAsState()
                 var showEarlyFinishConfirm by remember { mutableStateOf(false) }
+                var showSecurityInfo by remember { mutableStateOf(false) }
+                val cryptoInfo = migrationState.connectedPeer?.let { peer ->
+                    MigrationCryptoSessionRegistry.infoForPeer(peer.deviceId)
+                }
 
                 LaunchedEffect(migrationState.scanResult.apps) {
                     if (migrationState.scanResult.apps.isNotEmpty()) {
@@ -161,6 +166,57 @@ fun SpeedShareTheme(
                             TextButton(onClick = { showEarlyFinishConfirm = false }) { Text("继续迁移") }
                         }
                     )
+                }
+
+                if (showSecurityInfo && migrationState.connectedPeer != null) {
+                    AlertDialog(
+                        onDismissRequest = { showSecurityInfo = false },
+                        title = { Text(if (cryptoInfo != null) "文件内容已加密" else "当前使用旧协议") },
+                        text = {
+                            Text(
+                                if (cryptoInfo != null) {
+                                    "本次照片、视频、文件和 APK 内容使用临时 ECDH 会话密钥与 AES-256-GCM 加密。两台手机应显示相同安全码 ${cryptoInfo.securityCode}；如果安全码不同，请结束连接。文件名、大小和部分控制元数据目前仍可能在局域网中可见。"
+                                } else {
+                                    "对方版本没有建立本次 AES-GCM 加密会话，文件内容将按旧协议传输。建议只在可信 Wi-Fi 使用；升级两台设备到支持加密的版本后重新连接即可启用。"
+                                }
+                            )
+                        },
+                        confirmButton = {
+                            Button(onClick = { showSecurityInfo = false }) { Text("知道了") }
+                        }
+                    )
+                }
+
+                if (migrationState.connectedPeer != null) {
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 76.dp)
+                            .clickable { showSecurityInfo = true },
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (cryptoInfo != null) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.errorContainer
+                        },
+                        contentColor = if (cryptoInfo != null) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onErrorContainer
+                        },
+                        tonalElevation = 5.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Text(
+                            text = if (cryptoInfo != null) {
+                                "文件内容已加密 · 安全码 ${cryptoInfo.securityCode}"
+                            } else {
+                                "旧协议 · 文件内容未加密"
+                            },
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 if (migrationState.stage == MigrationStage.DISCOVERY && migrationState.peers.isEmpty()) {
