@@ -146,6 +146,11 @@ fun SpeedShareTheme(
                         MigrationMediaSelectionRegistry.sync(migrationState.scanResult.files)
                     }
                 }
+                LaunchedEffect(migrationState.connectedPeer?.deviceId, cryptoInfo?.securityCode) {
+                    if (migrationState.connectedPeer != null) {
+                        showSecurityInfo = true
+                    }
+                }
 
                 if (showEarlyFinishConfirm) {
                     AlertDialog(
@@ -170,19 +175,33 @@ fun SpeedShareTheme(
 
                 if (showSecurityInfo && migrationState.connectedPeer != null) {
                     AlertDialog(
-                        onDismissRequest = { showSecurityInfo = false },
-                        title = { Text(if (cryptoInfo != null) "文件内容已加密" else "当前使用旧协议") },
+                        onDismissRequest = {},
+                        title = {
+                            Text(if (cryptoInfo != null) "确认加密安全码" else "当前使用旧协议")
+                        },
                         text = {
                             Text(
                                 if (cryptoInfo != null) {
-                                    "本次照片、视频、文件和 APK 内容使用临时 ECDH 会话密钥与 AES-256-GCM 加密。两台手机应显示相同安全码 ${cryptoInfo.securityCode}；如果安全码不同，请结束连接。文件名、大小和部分控制元数据目前仍可能在局域网中可见。"
+                                    "本次照片、视频、文件和 APK 内容使用临时 ECDH 会话密钥与 AES-256-GCM 加密。请确认两台手机都显示安全码 ${cryptoInfo.securityCode}。如果不同，请结束连接。文件名、大小和部分控制元数据目前仍可能在局域网中可见。"
                                 } else {
-                                    "对方版本没有建立本次 AES-GCM 加密会话，文件内容将按旧协议传输。建议只在可信 Wi-Fi 使用；升级两台设备到支持加密的版本后重新连接即可启用。"
+                                    "对方版本没有建立 AES-GCM 加密会话，文件内容将按旧协议传输。建议只在可信 Wi-Fi 使用。你可以继续旧协议，也可以结束连接并升级另一台设备后重试。"
                                 }
                             )
                         },
                         confirmButton = {
-                            Button(onClick = { showSecurityInfo = false }) { Text("知道了") }
+                            Button(onClick = { showSecurityInfo = false }) {
+                                Text(if (cryptoInfo != null) "安全码一致，继续" else "继续旧协议")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = {
+                                    showSecurityInfo = false
+                                    controller.reset()
+                                }
+                            ) {
+                                Text(if (cryptoInfo != null) "安全码不同，结束" else "结束连接")
+                            }
                         }
                     )
                 }
