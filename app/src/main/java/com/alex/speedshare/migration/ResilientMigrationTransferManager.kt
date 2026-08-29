@@ -96,14 +96,14 @@ internal class ResilientMigrationTransferManager(
                     MigrationSourceValidator.problem(item)?.let { problem -> error(problem) }
                     val hash = MigrationHashCache.sha256(item.file)
                     control.awaitReady()
-                    val desiredChunkStreams = if (
-                        item.size >= LARGE_FILE_THRESHOLD &&
-                        items.size <= 2 &&
-                        effectiveConcurrency >= 2
-                    ) {
-                        min(MAX_CHUNK_STREAMS, effectiveConcurrency)
-                    } else {
-                        1
+                    val desiredChunkStreams = when {
+                        item.size < LARGE_FILE_THRESHOLD || effectiveConcurrency < 2 -> 1
+                        items.size == 1 -> min(MAX_CHUNK_STREAMS, effectiveConcurrency)
+                        items.size == 2 -> min(
+                            MAX_CHUNK_STREAMS_PER_FILE_WHEN_TWO_ACTIVE,
+                            (effectiveConcurrency / 2).coerceAtLeast(2)
+                        )
+                        else -> 1
                     }
                     val chunkStreams = thermalLimiter.chunkStreams(desiredChunkStreams)
                     val result = ResilientMigrationClient.sendFile(
@@ -195,8 +195,9 @@ internal class ResilientMigrationTransferManager(
 
     companion object {
         private const val MAX_FILE_CONCURRENCY = 8
-        private const val MAX_CHUNK_STREAMS = 4
-        private const val LARGE_FILE_THRESHOLD = 512L * 1024L * 1024L
+        private const val MAX_CHUNK_STREAMS = 6
+        private const val MAX_CHUNK_STREAMS_PER_FILE_WHEN_TWO_ACTIVE = 3
+        private const val LARGE_FILE_THRESHOLD = 128L * 1024L * 1024L
         private const val UI_REFRESH_NANOS = 250_000_000L
         private const val SPEED_SAMPLE_NANOS = 500_000_000L
     }
