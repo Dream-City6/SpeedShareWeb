@@ -51,6 +51,13 @@
             android:theme="@style/Theme.SpeedShare.Transparent" />
 
         <activity
+            android:name=".TransferPerformanceSettingsActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".migration.MigrationActivity"
             android:exported="false"
             android:label="@string/migration_shortcut_short"
