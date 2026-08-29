@@ -7,6 +7,7 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.RandomAccessFile
 import java.security.SecureRandom
+import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -25,6 +26,8 @@ internal object ResilientMigrationClient {
     }
 
     fun requestPair(local: MigrationPeer, peer: MigrationPeer, inboundToken: String): PairSessionResult {
+        val localKeyPair = MigrationCrypto.generateEphemeralKeyPair()
+        val localPublicKey = MigrationCrypto.encodePublicKey(localKeyPair.public)
         MigrationProtocol.connect(peer.host, peer.port).use { socket ->
             val output = BufferedOutputStream(socket.getOutputStream())
             val input = BufferedInputStream(socket.getInputStream())
@@ -41,6 +44,8 @@ internal object ResilientMigrationClient {
                     .put("returnToken", inboundToken)
                     .put("sdk", Build.VERSION.SDK_INT)
                     .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
+                    .put("cryptoVersion", CRYPTO_VERSION)
+                    .put("cryptoPublicKey", Base64.getEncoder().encodeToString(localPublicKey))
             )
             output.flush()
             val response = MigrationProtocol.readJson(input)
@@ -57,10 +62,33 @@ internal object ResilientMigrationClient {
                     .filter { it.isNotBlank() }
                     .ifEmpty { peer.supportedAbis }
             )
+            val outboundToken = response.optString("sessionToken")
+            if (accepted && response.optInt("cryptoVersion", 0) == CRYPTO_VERSION) {
+                val peerPublicEncoded = runCatching {
+                    Base64.getDecoder().decode(response.getString("cryptoPublicKey"))
+                }.getOrElse { error("invalid_crypto_public_key") }
+                val transcript = MigrationCrypto.transcript(
+                    local.deviceId,
+                    resolvedPeer.deviceId,
+                    localPublicKey,
+                    peerPublicEncoded
+                )
+                val key = MigrationCrypto.deriveSessionKey(
+                    localKeyPair.private,
+                    MigrationCrypto.decodePublicKey(peerPublicEncoded),
+                    transcript
+                )
+                val info = MigrationCryptoSessionRegistry.register(outboundToken, resolvedPeer.deviceId, key)
+                val remoteCode = response.optString("securityCode")
+                if (remoteCode.isNotBlank() && remoteCode != info.securityCode) {
+                    MigrationCryptoSessionRegistry.remove(outboundToken)
+                    error("security_code_mismatch")
+                }
+            }
             return PairSessionResult(
                 accepted = accepted,
                 peer = resolvedPeer,
-                outboundToken = response.optString("sessionToken")
+                outboundToken = outboundToken
             )
         }
     }
@@ -134,9 +162,6 @@ internal object ResilientMigrationClient {
             latencySamples += (System.nanoTime() - started) / 1_000_000L
         }
 
-        // Optional and intentionally short: a small probe estimates single-stream throughput,
-        // then four streams run in both directions. The adaptive payload targets roughly 2-3s
-        // on normal Wi-Fi while avoiding the old fixed, long benchmark.
         val warmup = uploadSpeed(session, 4L * 1024L * 1024L)
         val streams = SPEED_TEST_STREAMS
         val perStreamSize = (warmup.first / 3L)
@@ -245,6 +270,7 @@ internal object ResilientMigrationClient {
             socket.soTimeout = 0
             val output = BufferedOutputStream(socket.getOutputStream(), NETWORK_BUFFER_BYTES)
             val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
+            val cryptoKey = MigrationCryptoSessionRegistry.key(session.outboundToken)
             MigrationProtocol.writeJson(
                 output,
                 JSONObject()
@@ -256,6 +282,7 @@ internal object ResilientMigrationClient {
                     .put("modifiedAt", item.modifiedAt)
                     .put("sha256", hash)
                     .put("kind", if (item.appPackageName != null) "app" else "file")
+                    .put("encrypted", cryptoKey != null)
             )
             output.flush()
             val ready = MigrationProtocol.readJson(input)
@@ -266,13 +293,27 @@ internal object ResilientMigrationClient {
             RandomAccessFile(item.file, "r").use { source ->
                 source.seek(offset)
                 var remaining = item.size - offset
+                var absoluteOffset = offset
                 val buffer = ByteArray(IO_BLOCK_BYTES)
                 while (remaining > 0L) {
                     control.awaitReady()
                     val read = source.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
                     if (read < 0) error("source_ended_early")
-                    output.write(buffer, 0, read)
+                    if (cryptoKey != null) {
+                        MigrationEncryptedTransport.writeFrame(
+                            output,
+                            cryptoKey,
+                            migrationId,
+                            item.relativePath,
+                            absoluteOffset,
+                            buffer,
+                            read
+                        )
+                    } else {
+                        output.write(buffer, 0, read)
+                    }
                     remaining -= read
+                    absoluteOffset += read
                     onBytes(read.toLong())
                 }
             }
@@ -373,6 +414,7 @@ internal object ResilientMigrationClient {
             socket.soTimeout = 0
             val output = BufferedOutputStream(socket.getOutputStream(), NETWORK_BUFFER_BYTES)
             val input = BufferedInputStream(socket.getInputStream(), NETWORK_BUFFER_BYTES)
+            val cryptoKey = MigrationCryptoSessionRegistry.key(session.outboundToken)
             MigrationProtocol.writeJson(
                 output,
                 JSONObject()
@@ -388,19 +430,34 @@ internal object ResilientMigrationClient {
                     .put("chunkIndex", chunkIndex)
                     .put("offset", offset)
                     .put("length", length)
+                    .put("encrypted", cryptoKey != null)
             )
             output.flush()
             ensureOk(MigrationProtocol.readJson(input))
             RandomAccessFile(item.file, "r").use { source ->
                 source.seek(offset)
                 var remaining = length
+                var absoluteOffset = offset
                 val buffer = ByteArray(IO_BLOCK_BYTES)
                 while (remaining > 0L) {
                     control.awaitReady()
                     val read = source.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
                     if (read < 0) error("source_chunk_ended_early")
-                    output.write(buffer, 0, read)
+                    if (cryptoKey != null) {
+                        MigrationEncryptedTransport.writeFrame(
+                            output,
+                            cryptoKey,
+                            migrationId,
+                            item.relativePath,
+                            absoluteOffset,
+                            buffer,
+                            read
+                        )
+                    } else {
+                        output.write(buffer, 0, read)
+                    }
                     remaining -= read
+                    absoluteOffset += read
                     onBytes(read.toLong())
                 }
             }
@@ -559,6 +616,7 @@ internal object ResilientMigrationClient {
         return (100.0 - deviation / average * 100.0).toInt().coerceIn(0, 100)
     }
 
+    private const val CRYPTO_VERSION = 1
     private const val MAX_APP_VERSION_QUERY = 1000
     private const val SPEED_TEST_STREAMS = 4
     private const val MAX_CHUNK_STREAMS = 4
