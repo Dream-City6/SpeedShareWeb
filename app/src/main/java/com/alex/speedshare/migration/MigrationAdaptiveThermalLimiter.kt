@@ -2,6 +2,7 @@ package com.alex.speedshare.migration
 
 import android.content.Context
 import android.os.PowerManager
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.min
 
 /**
@@ -10,6 +11,7 @@ import kotlin.math.min
  */
 internal class MigrationAdaptiveThermalLimiter(context: Context) {
     private val appContext = context.applicationContext
+    private val bytesSinceThrottle = AtomicLong(0L)
     @Volatile private var nextRefreshAt = 0L
     @Volatile private var concurrencyCap = 8
     @Volatile private var chunkStreamCap = 4
@@ -25,7 +27,11 @@ internal class MigrationAdaptiveThermalLimiter(context: Context) {
         return min(requested.coerceAtLeast(1), chunkStreamCap).coerceAtLeast(1)
     }
 
-    fun onMegabyteTransferred() {
+    fun onBytesTransferred(deltaBytes: Long) {
+        if (deltaBytes <= 0L) return
+        val total = bytesSinceThrottle.addAndGet(deltaBytes)
+        if (total < ONE_MIB) return
+        bytesSinceThrottle.addAndGet(-ONE_MIB)
         refresh()
         val delay = delayPerMegabyteMs
         if (delay > 0L) {
@@ -68,5 +74,9 @@ internal class MigrationAdaptiveThermalLimiter(context: Context) {
                 delayPerMegabyteMs = 0L
             }
         }
+    }
+
+    companion object {
+        private const val ONE_MIB = 1024L * 1024L
     }
 }
