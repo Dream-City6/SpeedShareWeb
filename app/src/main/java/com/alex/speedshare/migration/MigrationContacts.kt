@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.BufferedWriter
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -102,11 +103,37 @@ internal object MigrationContactsRegistry {
     }
 
     private data class PreparedContacts(val file: File, val count: Int)
+    private data class StructuredName(
+        val family: String = "",
+        val given: String = "",
+        val middle: String = "",
+        val prefix: String = "",
+        val suffix: String = ""
+    )
+    private data class OrganizationRecord(
+        val company: String,
+        val title: String,
+        val department: String
+    )
+    private data class PostalRecord(
+        val street: String,
+        val city: String,
+        val region: String,
+        val postcode: String,
+        val country: String
+    )
     private data class ContactRecord(
         val id: Long,
         var name: String,
+        var structuredName: StructuredName? = null,
         val phones: LinkedHashSet<String> = linkedSetOf(),
-        val emails: LinkedHashSet<String> = linkedSetOf()
+        val emails: LinkedHashSet<String> = linkedSetOf(),
+        val organizations: LinkedHashSet<OrganizationRecord> = linkedSetOf(),
+        val addresses: LinkedHashSet<PostalRecord> = linkedSetOf(),
+        val birthdays: LinkedHashSet<String> = linkedSetOf(),
+        val notes: LinkedHashSet<String> = linkedSetOf(),
+        val websites: LinkedHashSet<String> = linkedSetOf(),
+        val nicknames: LinkedHashSet<String> = linkedSetOf()
     )
 
     private fun exportContacts(context: Context): PreparedContacts {
@@ -164,6 +191,95 @@ internal object MigrationContactsRegistry {
             }
         }
 
+        val dataProjection = arrayOf(
+            ContactsContract.Data.CONTACT_ID,
+            ContactsContract.Data.MIMETYPE,
+            ContactsContract.Data.DATA1,
+            ContactsContract.Data.DATA2,
+            ContactsContract.Data.DATA3,
+            ContactsContract.Data.DATA4,
+            ContactsContract.Data.DATA5,
+            ContactsContract.Data.DATA6,
+            ContactsContract.Data.DATA7,
+            ContactsContract.Data.DATA8,
+            ContactsContract.Data.DATA9,
+            ContactsContract.Data.DATA10
+        )
+        val richMimeTypes = arrayOf(
+            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE
+        )
+        val placeholders = richMimeTypes.joinToString(",") { "?" }
+        resolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            dataProjection,
+            "${ContactsContract.Data.MIMETYPE} IN ($placeholders)",
+            richMimeTypes,
+            null
+        )?.use { cursor ->
+            val contactIdIndex = cursor.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
+            val mimeIndex = cursor.getColumnIndexOrThrow(ContactsContract.Data.MIMETYPE)
+            fun string(column: String): String {
+                val index = cursor.getColumnIndex(column)
+                return if (index >= 0) cursor.getString(index).orEmpty().trim() else ""
+            }
+            while (cursor.moveToNext()) {
+                val contact = contacts[cursor.getLong(contactIdIndex)] ?: continue
+                when (cursor.getString(mimeIndex)) {
+                    ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE -> {
+                        contact.structuredName = StructuredName(
+                            family = string(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME),
+                            given = string(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME),
+                            middle = string(ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME),
+                            prefix = string(ContactsContract.CommonDataKinds.StructuredName.PREFIX),
+                            suffix = string(ContactsContract.CommonDataKinds.StructuredName.SUFFIX)
+                        )
+                    }
+                    ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE -> {
+                        val company = string(ContactsContract.CommonDataKinds.Organization.COMPANY)
+                        val title = string(ContactsContract.CommonDataKinds.Organization.TITLE)
+                        val department = string(ContactsContract.CommonDataKinds.Organization.DEPARTMENT)
+                        if (company.isNotBlank() || title.isNotBlank() || department.isNotBlank()) {
+                            contact.organizations += OrganizationRecord(company, title, department)
+                        }
+                    }
+                    ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> {
+                        val postal = PostalRecord(
+                            street = string(ContactsContract.CommonDataKinds.StructuredPostal.STREET),
+                            city = string(ContactsContract.CommonDataKinds.StructuredPostal.CITY),
+                            region = string(ContactsContract.CommonDataKinds.StructuredPostal.REGION),
+                            postcode = string(ContactsContract.CommonDataKinds.StructuredPostal.POSTCODE),
+                            country = string(ContactsContract.CommonDataKinds.StructuredPostal.COUNTRY)
+                        )
+                        if (listOf(postal.street, postal.city, postal.region, postal.postcode, postal.country).any { it.isNotBlank() }) {
+                            contact.addresses += postal
+                        }
+                    }
+                    ContactsContract.CommonDataKinds.Event.CONTENT_ITEM_TYPE -> {
+                        val type = string(ContactsContract.CommonDataKinds.Event.TYPE).toIntOrNull()
+                        val value = string(ContactsContract.CommonDataKinds.Event.START_DATE)
+                        if (type == ContactsContract.CommonDataKinds.Event.TYPE_BIRTHDAY && value.isNotBlank()) {
+                            contact.birthdays += value
+                        }
+                    }
+                    ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> {
+                        string(ContactsContract.CommonDataKinds.Note.NOTE).takeIf { it.isNotBlank() }?.let(contact.notes::add)
+                    }
+                    ContactsContract.CommonDataKinds.Website.CONTENT_ITEM_TYPE -> {
+                        string(ContactsContract.CommonDataKinds.Website.URL).takeIf { it.isNotBlank() }?.let(contact.websites::add)
+                    }
+                    ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE -> {
+                        string(ContactsContract.CommonDataKinds.Nickname.NAME).takeIf { it.isNotBlank() }?.let(contact.nicknames::add)
+                    }
+                }
+            }
+        }
+
         val root = File(context.filesDir, "migration_generated").apply { mkdirs() }
         root.listFiles()?.filter { it.name.startsWith("contacts-") && it.extension == "vcf" }?.forEach { old ->
             if (System.currentTimeMillis() - old.lastModified() > 24L * 60L * 60L * 1000L) old.delete()
@@ -172,15 +288,56 @@ internal object MigrationContactsRegistry {
         val file = File(root, "contacts-$stamp.vcf")
         file.bufferedWriter(Charsets.UTF_8).use { writer ->
             contacts.values.forEach { contact ->
-                writer.appendLine("BEGIN:VCARD")
-                writer.appendLine("VERSION:3.0")
-                writer.appendLine("FN:${escapeVCard(contact.name)}")
-                contact.phones.forEach { writer.appendLine("TEL:${escapeVCard(it)}") }
-                contact.emails.forEach { writer.appendLine("EMAIL:${escapeVCard(it)}") }
-                writer.appendLine("END:VCARD")
+                appendVCardLine(writer, "BEGIN:VCARD")
+                appendVCardLine(writer, "VERSION:3.0")
+                appendVCardLine(writer, "FN:${escapeVCard(contact.name)}")
+                contact.structuredName?.let { name ->
+                    if (listOf(name.family, name.given, name.middle, name.prefix, name.suffix).any { it.isNotBlank() }) {
+                        appendVCardLine(
+                            writer,
+                            "N:${escapeVCard(name.family)};${escapeVCard(name.given)};${escapeVCard(name.middle)};${escapeVCard(name.prefix)};${escapeVCard(name.suffix)}"
+                        )
+                    }
+                }
+                contact.nicknames.forEach { appendVCardLine(writer, "NICKNAME:${escapeVCard(it)}") }
+                contact.phones.forEach { appendVCardLine(writer, "TEL:${escapeVCard(it)}") }
+                contact.emails.forEach { appendVCardLine(writer, "EMAIL:${escapeVCard(it)}") }
+                contact.organizations.forEach { org ->
+                    if (org.company.isNotBlank() || org.department.isNotBlank()) {
+                        appendVCardLine(writer, "ORG:${escapeVCard(org.company)};${escapeVCard(org.department)}")
+                    }
+                    if (org.title.isNotBlank()) appendVCardLine(writer, "TITLE:${escapeVCard(org.title)}")
+                }
+                contact.addresses.forEach { address ->
+                    appendVCardLine(
+                        writer,
+                        "ADR:;;${escapeVCard(address.street)};${escapeVCard(address.city)};${escapeVCard(address.region)};${escapeVCard(address.postcode)};${escapeVCard(address.country)}"
+                    )
+                }
+                contact.birthdays.firstOrNull()?.let { appendVCardLine(writer, "BDAY:${escapeVCard(it)}") }
+                contact.websites.forEach { appendVCardLine(writer, "URL:${escapeVCard(it)}") }
+                contact.notes.forEach { appendVCardLine(writer, "NOTE:${escapeVCard(it)}") }
+                appendVCardLine(writer, "END:VCARD")
             }
         }
         return PreparedContacts(file, contacts.size)
+    }
+
+    private fun appendVCardLine(writer: BufferedWriter, line: String) {
+        if (line.length <= 72) {
+            writer.appendLine(line)
+            return
+        }
+        var offset = 0
+        var first = true
+        while (offset < line.length) {
+            val end = (offset + if (first) 72 else 71).coerceAtMost(line.length)
+            if (!first) writer.append(' ')
+            writer.append(line, offset, end)
+            writer.newLine()
+            offset = end
+            first = false
+        }
     }
 
     private fun escapeVCard(value: String): String = value
@@ -272,7 +429,7 @@ private fun MigrationContactsSelectionScreen(onClose: () -> Unit) {
 
             Card(shape = RoundedCornerShape(18.dp)) {
                 Text(
-                    "SpeedShare 不会直接修改新手机通讯录。VCF 到达新手机后，你可以在换机报告中点“导入联系人”，由系统联系人应用完成最终导入。",
+                    "姓名、电话、邮箱、结构化姓名、公司/职位/部门、地址、生日、备注、网站和昵称会写入 VCF。SpeedShare 不会直接修改新手机通讯录；到达后由系统联系人应用完成最终导入。",
                     Modifier.padding(15.dp),
                     style = MaterialTheme.typography.bodySmall
                 )
