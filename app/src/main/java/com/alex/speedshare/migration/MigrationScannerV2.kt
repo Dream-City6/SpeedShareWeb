@@ -9,6 +9,10 @@ import java.io.File
 
 internal object MigrationScannerV2 {
     fun scan(context: Context): MigrationScanResult {
+        val permissions = MigrationPermissionRequirements.snapshot(context)
+        check(permissions.coreReady) {
+            "换机权限未准备完整，请返回 SpeedShareWeb 主页重新进入“一键换机”并完成统一授权"
+        }
         val root = Environment.getExternalStorageDirectory()
         val files = mutableListOf<MigrationFileItem>()
         val stack = ArrayDeque<File>()
@@ -59,6 +63,9 @@ internal object MigrationScannerV2 {
     }
 
     internal fun scanAppsOnly(context: Context): List<MigrationAppItem> {
+        check(InstalledAppsPermission.isGranted(context)) {
+            "应用列表权限未授权，请返回换机权限准备页完成授权"
+        }
         val pm = context.packageManager
         val packages = if (Build.VERSION.SDK_INT >= 33) {
             pm.getInstalledPackages(PackageManager.PackageInfoFlags.of(0L))
