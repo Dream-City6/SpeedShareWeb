@@ -14,7 +14,7 @@ internal class MigrationAdaptiveThermalLimiter(context: Context) {
     private val bytesSinceThrottle = AtomicLong(0L)
     @Volatile private var nextRefreshAt = 0L
     @Volatile private var concurrencyCap = 8
-    @Volatile private var chunkStreamCap = 4
+    @Volatile private var chunkStreamCap = 6
     @Volatile private var delayPerMegabyteMs = 0L
 
     fun initialConcurrency(requested: Int): Int {
@@ -65,12 +65,12 @@ internal class MigrationAdaptiveThermalLimiter(context: Context) {
             }
             temp >= 42f || thermal >= PowerManager.THERMAL_STATUS_MODERATE -> {
                 concurrencyCap = 6
-                chunkStreamCap = 3
+                chunkStreamCap = 4
                 delayPerMegabyteMs = 1L
             }
             else -> {
                 concurrencyCap = 8
-                chunkStreamCap = 4
+                chunkStreamCap = 6
                 delayPerMegabyteMs = 0L
             }
         }
