@@ -178,19 +178,13 @@ private fun TransferPerformanceSettingsScreen(onBack: () -> Unit) {
                         onMinus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customSpeedShareMaxClients = previousFrom(
-                                    settings.customSpeedShareMaxClients,
-                                    listOf(4, 8, 12, 16, 24, 32)
-                                )
+                                customSpeedShareMaxClients = previousFrom(settings.customSpeedShareMaxClients, listOf(4, 8, 12, 16, 24, 32))
                             ))
                         },
                         onPlus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customSpeedShareMaxClients = nextFrom(
-                                    settings.customSpeedShareMaxClients,
-                                    listOf(4, 8, 12, 16, 24, 32)
-                                )
+                                customSpeedShareMaxClients = nextFrom(settings.customSpeedShareMaxClients, listOf(4, 8, 12, 16, 24, 32))
                             ))
                         }
                     )
@@ -200,19 +194,13 @@ private fun TransferPerformanceSettingsScreen(onBack: () -> Unit) {
                         onMinus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customSpeedShareSocketBufferMb = previousFrom(
-                                    settings.customSpeedShareSocketBufferMb,
-                                    listOf(1, 2, 4, 8)
-                                )
+                                customSpeedShareSocketBufferMb = previousFrom(settings.customSpeedShareSocketBufferMb, listOf(1, 2, 4, 8))
                             ))
                         },
                         onPlus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customSpeedShareSocketBufferMb = nextFrom(
-                                    settings.customSpeedShareSocketBufferMb,
-                                    listOf(1, 2, 4, 8)
-                                )
+                                customSpeedShareSocketBufferMb = nextFrom(settings.customSpeedShareSocketBufferMb, listOf(1, 2, 4, 8))
                             ))
                         }
                     )
@@ -247,7 +235,7 @@ private fun TransferPerformanceSettingsScreen(onBack: () -> Unit) {
                         onPlus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customMigrationMaxChunkStreams = (settings.customMigrationMaxChunkStreams + 1).coerceAtMost(8)
+                                customMigrationMaxChunkStreams = (settings.customMigrationMaxChunkStreams + 1).coerceAtMost(6)
                             ))
                         }
                     )
@@ -257,19 +245,13 @@ private fun TransferPerformanceSettingsScreen(onBack: () -> Unit) {
                         onMinus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customMigrationLargeFileThresholdMb = previousFrom(
-                                    settings.customMigrationLargeFileThresholdMb,
-                                    listOf(64, 128, 256, 512)
-                                )
+                                customMigrationLargeFileThresholdMb = previousFrom(settings.customMigrationLargeFileThresholdMb, listOf(128, 256, 512))
                             ))
                         },
                         onPlus = {
                             save(settings.copy(
                                 preset = TransferPerformancePreset.CUSTOM,
-                                customMigrationLargeFileThresholdMb = nextFrom(
-                                    settings.customMigrationLargeFileThresholdMb,
-                                    listOf(64, 128, 256, 512)
-                                )
+                                customMigrationLargeFileThresholdMb = nextFrom(settings.customMigrationLargeFileThresholdMb, listOf(128, 256, 512))
                             ))
                         }
                     )
