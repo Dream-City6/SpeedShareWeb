@@ -12,6 +12,8 @@ import java.util.Locale
 internal object MigrationDiagnosticsExporter {
     fun export(context: Context): Result<File> = runCatching {
         val appInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        @Suppress("DEPRECATION")
+        val versionCode = if (Build.VERSION.SDK_INT >= 28) appInfo.longVersionCode else appInfo.versionCode.toLong()
         val health = MigrationDeviceHealthReader.read(context)
         val permissions = MigrationPermissionRequirements.snapshot(context)
         val root = File(
@@ -55,7 +57,7 @@ internal object MigrationDiagnosticsExporter {
             writer.appendLine("generatedAt=${System.currentTimeMillis()}")
             writer.appendLine("package=${context.packageName}")
             writer.appendLine("versionName=${appInfo.versionName.orEmpty()}")
-            writer.appendLine("versionCode=${appInfo.longVersionCode}")
+            writer.appendLine("versionCode=$versionCode")
             writer.appendLine("device=${Build.MANUFACTURER} ${Build.MODEL}")
             writer.appendLine("android=${Build.VERSION.RELEASE} sdk=${Build.VERSION.SDK_INT}")
             writer.appendLine("abis=${Build.SUPPORTED_ABIS.joinToString(",")}")
