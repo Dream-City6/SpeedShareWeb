@@ -13,6 +13,7 @@ import java.security.spec.ECGenParameterSpec
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
 import javax.crypto.KeyAgreement
+import javax.crypto.Mac
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
@@ -23,11 +24,11 @@ internal data class MigrationEncryptedFrame(
 )
 
 /**
- * Crypto primitives for the next migration protocol revision.
+ * Ephemeral migration-session cryptography.
  *
- * The transport integration will exchange only ephemeral public keys, derive an ECDH secret,
- * show the same short verification code on both devices, then protect each resumable frame with
- * AES-256-GCM. No long-term migration key is stored on disk.
+ * Peers exchange P-256 ECDH public keys, derive a 256-bit AES key through HKDF-SHA256,
+ * display the same short verification code, then authenticate each resumable payload frame with
+ * AES-256-GCM. No migration content key is persisted to disk.
  */
 internal object MigrationCrypto {
     private val random = SecureRandom()
@@ -51,13 +52,30 @@ internal object MigrationCrypto {
         agreement.init(privateKey)
         agreement.doPhase(peerPublicKey, true)
         val sharedSecret = agreement.generateSecret()
-        val digest = MessageDigest.getInstance("SHA-256")
-        digest.update(DOMAIN)
-        digest.update(sharedSecret)
-        digest.update(transcript)
-        val keyBytes = digest.digest()
-        sharedSecret.fill(0)
-        return SecretKeySpec(keyBytes, "AES")
+        try {
+            val saltDigest = MessageDigest.getInstance("SHA-256")
+            saltDigest.update(DOMAIN)
+            saltDigest.update(transcript)
+            val salt = saltDigest.digest()
+
+            val extract = Mac.getInstance("HmacSHA256")
+            extract.init(SecretKeySpec(salt, "HmacSHA256"))
+            val prk = extract.doFinal(sharedSecret)
+            salt.fill(0)
+            try {
+                val expand = Mac.getInstance("HmacSHA256")
+                expand.init(SecretKeySpec(prk, "HmacSHA256"))
+                expand.update(DOMAIN)
+                expand.update(transcript)
+                expand.update(1.toByte())
+                val keyBytes = expand.doFinal()
+                return SecretKeySpec(keyBytes, "AES")
+            } finally {
+                prk.fill(0)
+            }
+        } finally {
+            sharedSecret.fill(0)
+        }
     }
 
     fun securityCode(key: SecretKey): String {
