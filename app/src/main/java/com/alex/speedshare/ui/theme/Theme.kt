@@ -33,6 +33,7 @@ import com.alex.speedshare.MainActivity
 import com.alex.speedshare.migration.MigrationAppSelectionRegistry
 import com.alex.speedshare.migration.MigrationConnectionHelpActivity
 import com.alex.speedshare.migration.MigrationMediaSelectionRegistry
+import com.alex.speedshare.migration.MigrationPermissionPreparationActivity
 import com.alex.speedshare.migration.MigrationResultDetailsActivity
 import com.alex.speedshare.migration.MigrationRole
 import com.alex.speedshare.migration.MigrationStage
@@ -109,7 +110,7 @@ fun SpeedShareTheme(
                         .align(Alignment.BottomEnd)
                         .padding(end = 16.dp, bottom = 18.dp)
                         .clickable {
-                            context.startActivity(Intent(context, ResilientMigrationActivity::class.java))
+                            context.startActivity(Intent(context, MigrationPermissionPreparationActivity::class.java))
                         },
                     shape = RoundedCornerShape(18.dp),
                     color = MaterialTheme.colorScheme.primary,
