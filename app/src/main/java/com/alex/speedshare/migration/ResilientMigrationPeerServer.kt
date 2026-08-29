@@ -11,11 +11,13 @@ import java.io.File
 import java.io.RandomAccessFile
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.Base64
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import javax.crypto.SecretKey
 import kotlin.math.max
 import kotlin.math.min
 
@@ -95,6 +97,7 @@ internal class ResilientMigrationPeerServer(
     }
 
     fun clearSessions() {
+        acceptedTokens.forEach(MigrationCryptoSessionRegistry::remove)
         acceptedTokens.clear()
         duplicatePolicies.clear()
     }
@@ -106,6 +109,7 @@ internal class ResilientMigrationPeerServer(
         serverSocket = null
         pendingPairs.values.forEach { it.decision.complete(false) }
         pendingPairs.clear()
+        acceptedTokens.forEach(MigrationCryptoSessionRegistry::remove)
         acceptedTokens.clear()
         duplicatePolicies.clear()
         executor.shutdownNow()
@@ -186,15 +190,57 @@ internal class ResilientMigrationPeerServer(
             output.flush()
             return
         }
+
+        val requestedCrypto = request.optInt("cryptoVersion", 0) == CRYPTO_VERSION
+        val peerPublicEncoded = if (requestedCrypto) {
+            runCatching { Base64.getDecoder().decode(request.getString("cryptoPublicKey")) }.getOrNull()
+        } else {
+            null
+        }
+        if (requestedCrypto && peerPublicEncoded == null) {
+            MigrationProtocol.writeJson(
+                output,
+                JSONObject().put("accepted", false).put("error", "invalid_crypto_public_key")
+            )
+            output.flush()
+            return
+        }
+
         val pending = PendingPair(CompletableFuture(), peer, sharedToken)
         pendingPairs[requestId] = pending
         onPairRequest(IncomingPairRequest(requestId, peer))
         val accepted = runCatching { pending.decision.get(60, TimeUnit.SECONDS) }.getOrDefault(false)
         pendingPairs.remove(requestId)
+
+        var responsePublicKey = ""
+        var securityCode = ""
         if (accepted) {
             acceptedTokens.add(sharedToken)
+            if (peerPublicEncoded != null) {
+                val serverKeyPair = MigrationCrypto.generateEphemeralKeyPair()
+                val serverPublicEncoded = MigrationCrypto.encodePublicKey(serverKeyPair.public)
+                val cryptoKey = runCatching {
+                    val transcript = MigrationCrypto.transcript(
+                        localDeviceId,
+                        peer.deviceId,
+                        serverPublicEncoded,
+                        peerPublicEncoded
+                    )
+                    MigrationCrypto.deriveSessionKey(
+                        serverKeyPair.private,
+                        MigrationCrypto.decodePublicKey(peerPublicEncoded),
+                        transcript
+                    )
+                }.getOrNull()
+                if (cryptoKey != null) {
+                    val info = MigrationCryptoSessionRegistry.register(sharedToken, peer.deviceId, cryptoKey)
+                    responsePublicKey = Base64.getEncoder().encodeToString(serverPublicEncoded)
+                    securityCode = info.securityCode
+                }
+            }
             onPeerConnected(peer, sharedToken)
         }
+
         MigrationProtocol.writeJson(
             output,
             JSONObject()
@@ -207,6 +253,9 @@ internal class ResilientMigrationPeerServer(
                 .put("servicePort", port)
                 .put("sdk", Build.VERSION.SDK_INT)
                 .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
+                .put("cryptoVersion", if (securityCode.isNotBlank()) CRYPTO_VERSION else 0)
+                .put("cryptoPublicKey", responsePublicKey)
+                .put("securityCode", securityCode)
         )
         output.flush()
     }
@@ -319,6 +368,7 @@ internal class ResilientMigrationPeerServer(
         val modifiedAt = request.optLong("modifiedAt", 0L)
         val sourceHash = request.optString("sha256")
         val kind = request.optString("kind", "file")
+        val cryptoKey = encryptedSessionKey(request, output) ?: if (request.optBoolean("encrypted", false)) return else null
         if (size < 0L || !sourceHash.matches(SHA256_REGEX)) {
             return sendFileFailure(output, "invalid_file")
         }
@@ -365,12 +415,28 @@ internal class ResilientMigrationPeerServer(
         RandomAccessFile(part, "rw").use { destination ->
             destination.seek(offset)
             var remaining = size - offset
+            var absoluteOffset = offset
             val buffer = ByteArray(IO_BLOCK_BYTES)
             while (remaining > 0) {
-                val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
-                if (read < 0) error("transfer_ended")
-                destination.write(buffer, 0, read)
-                remaining -= read
+                if (cryptoKey != null) {
+                    val plaintext = MigrationEncryptedTransport.readFrame(
+                        input,
+                        cryptoKey,
+                        migrationId,
+                        relativePath,
+                        absoluteOffset,
+                        min(MigrationEncryptedTransport.FRAME_PLAINTEXT_BYTES.toLong(), remaining).toInt()
+                    )
+                    destination.write(plaintext)
+                    remaining -= plaintext.size
+                    absoluteOffset += plaintext.size
+                } else {
+                    val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
+                    if (read < 0) error("transfer_ended")
+                    destination.write(buffer, 0, read)
+                    remaining -= read
+                    absoluteOffset += read
+                }
             }
             destination.fd.sync()
         }
@@ -418,6 +484,11 @@ internal class ResilientMigrationPeerServer(
         request: JSONObject
     ) {
         if (!hasStorageAccess()) return sendFileFailure(output, "receiver_storage_permission_required")
+        val migrationId = normalizeId(request.optString("migrationId"))
+            ?: return sendFileFailure(output, "invalid_migration_id")
+        val relativePath = normalizeRelativePath(request.optString("path"))
+            ?: return sendFileFailure(output, "invalid_path")
+        val cryptoKey = encryptedSessionKey(request, output) ?: if (request.optBoolean("encrypted", false)) return else null
         applyDuplicatePolicy(request)
         val plan = runCatching { ChunkedFileReceiver.prepareChunk(request) }
             .getOrElse { return sendFileFailure(output, it.message ?: "chunk_prepare_failed") }
@@ -430,12 +501,28 @@ internal class ResilientMigrationPeerServer(
         runCatching {
             ChunkedFileReceiver.writeChunk(plan) { destination ->
                 var remaining = plan.length
+                var absoluteOffset = plan.offset
                 val buffer = ByteArray(IO_BLOCK_BYTES)
                 while (remaining > 0L) {
-                    val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
-                    if (read < 0) error("chunk_ended_early")
-                    destination.write(buffer, 0, read)
-                    remaining -= read
+                    if (cryptoKey != null) {
+                        val plaintext = MigrationEncryptedTransport.readFrame(
+                            input,
+                            cryptoKey,
+                            migrationId,
+                            relativePath,
+                            absoluteOffset,
+                            min(MigrationEncryptedTransport.FRAME_PLAINTEXT_BYTES.toLong(), remaining).toInt()
+                        )
+                        destination.write(plaintext)
+                        remaining -= plaintext.size
+                        absoluteOffset += plaintext.size
+                    } else {
+                        val read = input.read(buffer, 0, min(buffer.size.toLong(), remaining).toInt())
+                        if (read < 0) error("chunk_ended_early")
+                        destination.write(buffer, 0, read)
+                        remaining -= read
+                        absoluteOffset += read
+                    }
                 }
             }
         }.onSuccess {
@@ -462,6 +549,14 @@ internal class ResilientMigrationPeerServer(
         val removed = MigrationStorageLayout.cleanupTemporary(migrationId)
         duplicatePolicies.remove(migrationId)
         sendOk(output, JSONObject().put("removed", removed))
+    }
+
+    private fun encryptedSessionKey(request: JSONObject, output: BufferedOutputStream): SecretKey? {
+        if (!request.optBoolean("encrypted", false)) return null
+        val token = request.optString("sessionToken")
+        val key = MigrationCryptoSessionRegistry.key(token)
+        if (key == null) sendFileFailure(output, "encrypted_session_required")
+        return key
     }
 
     private fun applyDuplicatePolicy(request: JSONObject) {
@@ -521,6 +616,7 @@ internal class ResilientMigrationPeerServer(
         private val PUBLIC_COMMANDS = setOf(ResilientCommands.HELLO, ResilientCommands.PAIR)
         private val SHA256_REGEX = Regex("^[0-9a-fA-F]{64}$")
         private val PACKAGE_NAME_REGEX = Regex("^[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+$")
+        private const val CRYPTO_VERSION = 1
         private const val NETWORK_BUFFER_BYTES = 2 * 1024 * 1024
         private const val IO_BLOCK_BYTES = 1024 * 1024
         private const val MAX_SPEED_TEST_BYTES = 96L * 1024L * 1024L
