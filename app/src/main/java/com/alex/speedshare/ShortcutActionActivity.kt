@@ -3,7 +3,7 @@ package com.alex.speedshare
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import com.alex.speedshare.migration.MigrationActivity
+import com.alex.speedshare.migration.MigrationPermissionPreparationActivity
 
 class ShortcutActionActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,7 +63,7 @@ class ShortcutActionActivity : Activity() {
 
             AppActions.OPEN_MIGRATION -> {
                 startActivity(
-                    Intent(this, MigrationActivity::class.java).apply {
+                    Intent(this, MigrationPermissionPreparationActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
                     }
                 )
