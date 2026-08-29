@@ -2,19 +2,27 @@ package com.alex.speedshare.migration
 
 import android.content.Context
 import android.os.PowerManager
+import com.alex.speedshare.MigrationPerformanceConfig
+import com.alex.speedshare.MigrationThermalPolicy
+import com.alex.speedshare.TransferPerformanceSettingsStore
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.min
 
 /**
  * Keeps high-speed migration aggressive at normal temperatures while gently reducing load
- * when Android or the battery reports sustained heat. It never blocks or cancels migration.
+ * when Android or the battery reports sustained heat. User settings define ceilings only;
+ * thermal protection never force-stops a migration and can always scale the active load down.
  */
-internal class MigrationAdaptiveThermalLimiter(context: Context) {
+internal class MigrationAdaptiveThermalLimiter(
+    context: Context,
+    private val performance: MigrationPerformanceConfig =
+        TransferPerformanceSettingsStore.load(context).resolved(context).migration
+) {
     private val appContext = context.applicationContext
     private val bytesSinceThrottle = AtomicLong(0L)
     @Volatile private var nextRefreshAt = 0L
-    @Volatile private var concurrencyCap = 8
-    @Volatile private var chunkStreamCap = 6
+    @Volatile private var concurrencyCap = performance.maxFileConcurrency.coerceIn(1, 8)
+    @Volatile private var chunkStreamCap = performance.maxChunkStreams.coerceIn(1, 8)
     @Volatile private var delayPerMegabyteMs = 0L
 
     fun initialConcurrency(requested: Int): Int {
@@ -52,29 +60,44 @@ internal class MigrationAdaptiveThermalLimiter(context: Context) {
         val temp = health.batteryTemperatureC ?: 0f
         val thermal = health.thermalStatus
 
+        val thresholds = when (performance.thermalPolicy) {
+            MigrationThermalPolicy.CONSERVATIVE -> Thresholds(40.5f, 42.5f, 44.5f)
+            MigrationThermalPolicy.BALANCED -> Thresholds(42f, 44f, 46f)
+            MigrationThermalPolicy.PERFORMANCE -> Thresholds(43.5f, 46f, 48f)
+        }
+
+        val maxConcurrency = performance.maxFileConcurrency.coerceIn(1, 8)
+        val maxChunkStreams = performance.maxChunkStreams.coerceIn(1, 8)
+
         when {
-            temp >= 46f || thermal >= PowerManager.THERMAL_STATUS_CRITICAL -> {
-                concurrencyCap = 2
+            temp >= thresholds.critical || thermal >= PowerManager.THERMAL_STATUS_CRITICAL -> {
+                concurrencyCap = min(maxConcurrency, 2).coerceAtLeast(1)
                 chunkStreamCap = 1
                 delayPerMegabyteMs = 15L
             }
-            temp >= 44f || thermal >= PowerManager.THERMAL_STATUS_SEVERE -> {
-                concurrencyCap = 4
-                chunkStreamCap = 2
+            temp >= thresholds.severe || thermal >= PowerManager.THERMAL_STATUS_SEVERE -> {
+                concurrencyCap = min(maxConcurrency, 4).coerceAtLeast(1)
+                chunkStreamCap = min(maxChunkStreams, 2).coerceAtLeast(1)
                 delayPerMegabyteMs = 5L
             }
-            temp >= 42f || thermal >= PowerManager.THERMAL_STATUS_MODERATE -> {
-                concurrencyCap = 6
-                chunkStreamCap = 4
+            temp >= thresholds.moderate || thermal >= PowerManager.THERMAL_STATUS_MODERATE -> {
+                concurrencyCap = min(maxConcurrency, 6).coerceAtLeast(1)
+                chunkStreamCap = min(maxChunkStreams, 4).coerceAtLeast(1)
                 delayPerMegabyteMs = 1L
             }
             else -> {
-                concurrencyCap = 8
-                chunkStreamCap = 6
+                concurrencyCap = maxConcurrency
+                chunkStreamCap = maxChunkStreams
                 delayPerMegabyteMs = 0L
             }
         }
     }
+
+    private data class Thresholds(
+        val moderate: Float,
+        val severe: Float,
+        val critical: Float
+    )
 
     companion object {
         private const val ONE_MIB = 1024L * 1024L
