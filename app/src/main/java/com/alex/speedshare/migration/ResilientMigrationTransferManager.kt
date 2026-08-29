@@ -40,12 +40,14 @@ internal class ResilientMigrationTransferManager(
         val omittedItems = Collections.synchronizedList(mutableListOf<MigrationFileItem>())
         val activeNames = ConcurrentHashMap.newKeySet<String>()
         val started = System.currentTimeMillis()
+        val thermalLimiter = MigrationAdaptiveThermalLimiter(store.appContext)
+        val effectiveConcurrency = thermalLimiter.initialConcurrency(concurrency)
 
         val lastUiPublishAt = AtomicLong(0L)
         val lastSpeedSampleAt = AtomicLong(System.nanoTime())
         val lastSampleBytes = AtomicLong(0L)
         val smoothedSpeed = AtomicLong(0L)
-        val pool = Executors.newFixedThreadPool(concurrency.coerceIn(1, MAX_FILE_CONCURRENCY))
+        val pool = Executors.newFixedThreadPool(effectiveConcurrency.coerceIn(1, MAX_FILE_CONCURRENCY))
 
         fun publish(force: Boolean = false) {
             val now = System.nanoTime()
@@ -94,15 +96,16 @@ internal class ResilientMigrationTransferManager(
                     MigrationSourceValidator.problem(item)?.let { problem -> error(problem) }
                     val hash = MigrationHashCache.sha256(item.file)
                     control.awaitReady()
-                    val chunkStreams = if (
+                    val desiredChunkStreams = if (
                         item.size >= LARGE_FILE_THRESHOLD &&
                         items.size <= 2 &&
-                        concurrency >= 2
+                        effectiveConcurrency >= 2
                     ) {
-                        min(MAX_CHUNK_STREAMS, concurrency)
+                        min(MAX_CHUNK_STREAMS, effectiveConcurrency)
                     } else {
                         1
                     }
+                    val chunkStreams = thermalLimiter.chunkStreams(desiredChunkStreams)
                     val result = ResilientMigrationClient.sendFile(
                         session = session,
                         migrationId = migrationId,
@@ -112,6 +115,7 @@ internal class ResilientMigrationTransferManager(
                         onBytes = { delta ->
                             wireBytes.addAndGet(delta)
                             logicalBytes.addAndGet(delta)
+                            thermalLimiter.onBytesTransferred(delta)
                             publish()
                         },
                         parallelStreams = chunkStreams
