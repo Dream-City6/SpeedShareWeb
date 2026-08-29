@@ -32,6 +32,12 @@ internal object MigrationCryptoSessionRegistry {
 
     fun info(token: String): MigrationCryptoSessionInfo? = sessions[token]?.info
 
+    fun infoForPeer(peerDeviceId: String): MigrationCryptoSessionInfo? =
+        sessions.values.asSequence()
+            .map { it.info }
+            .filter { it.peerDeviceId == peerDeviceId }
+            .maxByOrNull { it.establishedAt }
+
     fun isEncrypted(token: String): Boolean = sessions.containsKey(token)
 
     fun remove(token: String) {
