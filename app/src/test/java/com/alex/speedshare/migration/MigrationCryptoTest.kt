@@ -6,6 +6,8 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.security.SecureRandom
 
 class MigrationCryptoTest {
@@ -69,6 +71,39 @@ class MigrationCryptoTest {
             fail("frame unexpectedly decrypted for another index")
         } catch (_: Throwable) {
         }
+    }
+
+    @Test
+    fun encryptedTransportStreamsOneMegabyteFrameWithoutChangingPlaintext() {
+        val a = MigrationCrypto.generateEphemeralKeyPair()
+        val b = MigrationCrypto.generateEphemeralKeyPair()
+        val aPublic = MigrationCrypto.encodePublicKey(a.public)
+        val bPublic = MigrationCrypto.encodePublicKey(b.public)
+        val transcript = MigrationCrypto.transcript("sender", "receiver", aPublic, bPublic)
+        val key = MigrationCrypto.deriveSessionKey(a.private, MigrationCrypto.decodePublicKey(bPublic), transcript)
+        val plaintext = ByteArray(MigrationEncryptedTransport.FRAME_PLAINTEXT_BYTES).also(SecureRandom()::nextBytes)
+        val wire = ByteArrayOutputStream()
+
+        MigrationEncryptedTransport.writeFrame(
+            output = wire,
+            key = key,
+            migrationId = "migration-stream-test",
+            relativePath = "Movies/test.mp4",
+            absoluteOffset = 64L * 1024L * 1024L,
+            buffer = plaintext,
+            length = plaintext.size
+        )
+
+        val restored = MigrationEncryptedTransport.readFrame(
+            input = ByteArrayInputStream(wire.toByteArray()),
+            key = key,
+            migrationId = "migration-stream-test",
+            relativePath = "Movies/test.mp4",
+            absoluteOffset = 64L * 1024L * 1024L,
+            maxPlaintextBytes = plaintext.size
+        )
+        assertArrayEquals(plaintext, restored)
+        assertEquals(plaintext.size + 4 + 12 + 16, wire.size())
     }
 
     private infix fun Byte.xor(other: Int): Byte = (toInt() xor other).toByte()
