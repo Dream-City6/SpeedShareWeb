@@ -41,3 +41,24 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7
           if-no-files-found: error
+
+      - name: Collect official APK signing tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS_DIR="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          test -n "$BUILD_TOOLS_DIR"
+          mkdir -p app-signing-tools/lib
+          cp "$BUILD_TOOLS_DIR/apksigner" app-signing-tools/apksigner
+          cp "$BUILD_TOOLS_DIR/zipalign" app-signing-tools/zipalign
+          cp "$BUILD_TOOLS_DIR/lib/apksigner.jar" app-signing-tools/lib/apksigner.jar
+          chmod +x app-signing-tools/apksigner app-signing-tools/zipalign
+          "$BUILD_TOOLS_DIR/apksigner" version
+
+      - name: Upload official APK signing tools
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk-signing-tools
+          path: app-signing-tools
+          retention-days: 7
+          if-no-files-found: error
