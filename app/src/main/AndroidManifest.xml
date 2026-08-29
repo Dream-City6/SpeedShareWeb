@@ -12,6 +12,15 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Shared-storage/media permissions are prepared before migration scanning. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+
     <!-- Device-to-device migration must enumerate installed user apps to preserve APK/split APK sets. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -50,6 +59,13 @@
 
         <activity
             android:name=".migration.MigrationCenterActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationPermissionPreparationActivity"
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.SpeedShare"
