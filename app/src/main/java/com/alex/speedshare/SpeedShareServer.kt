@@ -53,6 +53,9 @@ class SpeedShareServer(
     private var acceptThread: Thread? = null
     private val clients = ConcurrentHashMap.newKeySet<SocketChannel>()
     private val translator = Localization.translator(language)
+    private val performance = TransferPerformanceSettingsStore.load(context)
+        .resolved(context)
+        .speedShare
     private val thumbnailManager = ThumbnailManager(context)
     private val contentRevision = AtomicLong(1L)
     private val reservedUploadBytes = AtomicLong(0L)
@@ -74,8 +77,8 @@ class SpeedShareServer(
     private val selectedZipSelections = ConcurrentHashMap<String, SelectedZipSelection>()
     private val eventStreamSlots = Semaphore(MAX_EVENT_STREAMS, true)
     private val clientExecutor = ThreadPoolExecutor(
-        4,
-        MAX_CLIENTS,
+        min(4, performance.maxClients),
+        performance.maxClients,
         30L,
         TimeUnit.SECONDS,
         SynchronousQueue(),
@@ -183,8 +186,9 @@ class SpeedShareServer(
             try {
                 socket.configureBlocking(true)
                 try {
-                    socket.socket().sendBufferSize = 1024 * 1024
-                    socket.socket().receiveBufferSize = 1024 * 1024
+                    val socketBufferBytes = performance.socketBufferMb * 1024 * 1024
+                    socket.socket().sendBufferSize = socketBufferBytes
+                    socket.socket().receiveBufferSize = socketBufferBytes
                     socket.socket().tcpNoDelay = true
                     socket.socket().soTimeout = HEADER_READ_TIMEOUT_MS
                 } catch (_: Exception) {
