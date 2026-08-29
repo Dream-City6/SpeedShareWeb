@@ -618,11 +618,11 @@ internal object ResilientMigrationClient {
 
     private const val CRYPTO_VERSION = 1
     private const val MAX_APP_VERSION_QUERY = 1000
-    private const val SPEED_TEST_STREAMS = 4
-    private const val MAX_CHUNK_STREAMS = 4
-    private const val NETWORK_BUFFER_BYTES = 2 * 1024 * 1024
+    private const val SPEED_TEST_STREAMS = 6
+    private const val MAX_CHUNK_STREAMS = 6
+    private const val NETWORK_BUFFER_BYTES = 4 * 1024 * 1024
     private const val IO_BLOCK_BYTES = 1024 * 1024
     private const val SPEED_SAMPLE_NANOS = 500_000_000L
-    private const val LARGE_FILE_THRESHOLD = 512L * 1024L * 1024L
+    private const val LARGE_FILE_THRESHOLD = 128L * 1024L * 1024L
     private const val LARGE_FILE_CHUNK_BYTES = 64L * 1024L * 1024L
 }
