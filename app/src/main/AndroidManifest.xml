@@ -4,11 +4,29 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- Shared-storage/media permissions are prepared before migration scanning. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" />
+
+    <!-- Device-to-device migration must enumerate installed user apps to preserve APK/split APK sets. -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <!-- Xiaomi/HyperOS adds a runtime gate on top of Android package visibility. -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
 
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
@@ -33,17 +51,96 @@
             android:theme="@style/Theme.SpeedShare.Transparent" />
 
         <activity
+            android:name=".migration.MigrationActivity"
+            android:exported="false"
+            android:label="@string/migration_shortcut_short"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationCenterActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationPermissionPreparationActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.ResilientMigrationActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationConnectionHelpActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationAppSelectionActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationMediaSelectionActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationFileSelectionActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationContactsSelectionActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationPreflightActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationHistoryActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".migration.MigrationResultDetailsActivity"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.SpeedShare"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTask"
             android:theme="@style/Theme.SpeedShare.Starting"
             android:windowSoftInputMode="adjustResize">
-
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
 
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -56,11 +153,26 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+        </activity>
 
+        <activity-alias
+            android:name=".MainLauncher"
+            android:enabled="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
-        </activity>
+        </activity-alias>
+
+        <receiver
+            android:name=".migration.MigrationInstallReceiver"
+            android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -74,6 +186,12 @@
 
         <service
             android:name=".SpeedShareService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
+
+        <service
+            android:name=".migration.MigrationForegroundService"
             android:exported="false"
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />

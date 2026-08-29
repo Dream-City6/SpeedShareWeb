@@ -1,0 +1,4 @@
+<resources>
+    <string name="migration_shortcut_short">一键换机</string>
+    <string name="migration_shortcut_long">迁移到新手机</string>
+</resources>

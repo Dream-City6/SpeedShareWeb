@@ -15,13 +15,16 @@ android {
         applicationId = "com.alex.speedshare"
         minSdk = 26
         targetSdk = 36
-        versionCode = 22
-        versionName = "1.4.2"
+        versionCode = 30
+        versionName = "1.5.0-beta8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        debug {
+            applicationIdSuffix = ".migration"
+        }
         release {
             optimization {
                 enable = false

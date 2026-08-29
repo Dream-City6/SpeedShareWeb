@@ -2,10 +2,11 @@
 
 ## APK 构建边界
 
-- 除非用户在当前任务中明确要求，否则不要生成任何 APK，包括签名 APK 和未签名 APK。
-- 默认不要运行 `assembleDebug`、`assembleRelease`、`packageDebug`、`packageRelease` 或其他 APK、App Bundle 打包任务。
-- 不要安装 APK、连接设备部署，也不要代替用户处理 APK 签名。
-- 完成代码修改后，默认只运行适用的单元测试、Lint 和必要的编译检查；最终 APK 由用户在 Android Studio 中自行构建、签名和真机测试。
+- 当用户在当前任务中明确要求测试或生成 APK 时，可以运行 `assembleDebug`、`packageDebug` 或其他必要的 Debug 构建任务，并可生成未签名或 Debug 签名 APK 供用户测试。
+- Release APK、App Bundle、正式签名与发布仍需用户明确要求后才能执行。
+- 除非用户明确要求，不要连接真实设备、自动安装 APK 或代替用户处理正式发布签名。
+- 完成代码修改后应优先运行适用的单元测试、Lint 和必要的编译检查；若用户已明确要求 APK，则可在检查通过后继续生成 Debug APK。
+- 生成的测试 APK 应明确标注为测试构建，不应被描述为正式发布版本。
 
 ## Windows 下载命令
 
