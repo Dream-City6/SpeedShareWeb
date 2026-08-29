@@ -28,12 +28,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppSettings
 import com.alex.speedshare.ui.theme.SpeedShareTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.text.DateFormat
@@ -80,9 +84,12 @@ class MigrationHistoryActivity : ComponentActivity() {
 @Composable
 private fun MigrationHistoryScreen(onClose: () -> Unit, onOpenFolder: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     val history = remember { MigrationHistoryReader.read(context) }
     var temporaryBytes by remember { mutableStateOf(MigrationStorageLayout.temporaryBytes()) }
     var showCleanupConfirm by remember { mutableStateOf(false) }
+    var diagnosticMessage by remember { mutableStateOf<String?>(null) }
+    var exportingDiagnostics by remember { mutableStateOf(false) }
 
     if (showCleanupConfirm) {
         AlertDialog(
@@ -119,6 +126,32 @@ private fun MigrationHistoryScreen(onClose: () -> Unit, onOpenFolder: () -> Unit
             OutlinedButton(onClick = onOpenFolder, modifier = Modifier.fillMaxWidth()) {
                 Text("打开 Download/SpeedShareWeb")
             }
+            OutlinedButton(
+                enabled = !exportingDiagnostics,
+                onClick = {
+                    exportingDiagnostics = true
+                    diagnosticMessage = null
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) { MigrationDiagnosticsExporter.export(context.applicationContext) }
+                        exportingDiagnostics = false
+                        diagnosticMessage = result.fold(
+                            onSuccess = { "诊断日志已保存：Download/SpeedShareWeb/Diagnostics/${it.name}" },
+                            onFailure = { "导出失败：${it.message.orEmpty()}" }
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(if (exportingDiagnostics) "正在生成诊断日志…" else "导出诊断日志")
+            }
+            diagnosticMessage?.let {
+                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(
+                "诊断日志只记录设备/版本/权限、任务数量、容量和失败原因摘要，不写入文件内容、完整文件名、联系人内容或对方设备名称。",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
             Text(
                 "Apps、Contacts 和 Temporary 都集中在这里。Temporary 是断点工作区，异常残留时你也可以手动删除。",
                 style = MaterialTheme.typography.bodySmall,

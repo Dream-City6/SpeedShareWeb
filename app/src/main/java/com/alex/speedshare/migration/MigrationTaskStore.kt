@@ -26,7 +26,8 @@ data class PendingMigrationTask(
 }
 
 internal class MigrationTaskStore(context: Context) {
-    private val root = File(context.filesDir, "migration_tasks").apply { mkdirs() }
+    internal val appContext: Context = context.applicationContext
+    private val root = File(appContext.filesDir, "migration_tasks").apply { mkdirs() }
 
     @Synchronized
     fun create(

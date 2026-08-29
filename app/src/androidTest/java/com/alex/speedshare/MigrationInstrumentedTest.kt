@@ -3,6 +3,7 @@ package com.alex.speedshare
 import android.Manifest
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.alex.speedshare.migration.MigrationCryptoSessionRegistry
 import com.alex.speedshare.migration.MigrationPeer
 import com.alex.speedshare.migration.MigrationProgress
 import com.alex.speedshare.migration.MigrationReport
@@ -12,6 +13,7 @@ import com.alex.speedshare.migration.ResilientMigrationClient
 import com.alex.speedshare.migration.ResilientMigrationPeerServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -25,6 +27,7 @@ class MigrationInstrumentedTest {
     fun tearDown() {
         server?.stop()
         server = null
+        MigrationCryptoSessionRegistry.clear()
     }
 
     @Test
@@ -57,7 +60,7 @@ class MigrationInstrumentedTest {
     }
 
     @Test
-    fun loopbackPair_appVersionQuery_andInvalidTokenRejection() {
+    fun loopbackPair_establishesEncryptedSession_appVersionQuery_andRejectsInvalidToken() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         lateinit var localServer: ResilientMigrationPeerServer
         localServer = ResilientMigrationPeerServer(
@@ -92,6 +95,10 @@ class MigrationInstrumentedTest {
         val pair = ResilientMigrationClient.requestPair(sender, receiver, token)
         assertTrue(pair.accepted)
         assertEquals(token, pair.outboundToken)
+        assertTrue(MigrationCryptoSessionRegistry.isEncrypted(token))
+        val cryptoInfo = MigrationCryptoSessionRegistry.info(token)
+        assertNotNull(cryptoInfo)
+        assertTrue(cryptoInfo!!.securityCode.matches(Regex("\\d{6}")))
 
         val session = MigrationSession(pair.peer, pair.outboundToken, pair.outboundToken)
         val versions = ResilientMigrationClient.appVersions(session, listOf(context.packageName))
