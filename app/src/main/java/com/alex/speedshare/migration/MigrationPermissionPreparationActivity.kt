@@ -49,6 +49,10 @@ import com.alex.speedshare.ui.theme.SpeedShareTheme
 class MigrationPermissionPreparationActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val controller = ResilientMigrationController.get(this)
+        if (controller.state.value.stage !in setOf(MigrationStage.TRANSFERRING, MigrationStage.VERIFYING)) {
+            controller.reset()
+        }
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getBoolean(KEY_INTRO_SEEN, false) && MigrationPermissionRequirements.snapshot(this).coreReady) {
             openMigration()
