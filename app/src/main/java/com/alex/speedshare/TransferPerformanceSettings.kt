@@ -79,7 +79,7 @@ data class TransferPerformanceSettings(
             TransferPerformancePreset.EXTREME -> ResolvedTransferPerformance(
                 preset,
                 SpeedSharePerformanceConfig(maxClients = 32, socketBufferMb = 8),
-                MigrationPerformanceConfig(8, 8, 64, MigrationThermalPolicy.PERFORMANCE)
+                MigrationPerformanceConfig(8, 6, 128, MigrationThermalPolicy.PERFORMANCE)
             )
             TransferPerformancePreset.CUSTOM -> ResolvedTransferPerformance(
                 preset,
@@ -89,9 +89,9 @@ data class TransferPerformanceSettings(
                 ),
                 MigrationPerformanceConfig(
                     maxFileConcurrency = customMigrationMaxFileConcurrency.coerceIn(1, 8),
-                    maxChunkStreams = customMigrationMaxChunkStreams.coerceIn(1, 8),
+                    maxChunkStreams = customMigrationMaxChunkStreams.coerceIn(1, 6),
                     largeFileThresholdMb = customMigrationLargeFileThresholdMb
-                        .takeIf { it in setOf(64, 128, 256, 512) } ?: 128,
+                        .takeIf { it in setOf(128, 256, 512) } ?: 128,
                     thermalPolicy = customMigrationThermalPolicy
                 )
             )
@@ -119,9 +119,9 @@ object TransferPerformanceSettingsStore {
             customSpeedShareMaxClients = prefs.getInt(KEY_SS_CLIENTS, 24).coerceIn(4, 32),
             customSpeedShareSocketBufferMb = prefs.getInt(KEY_SS_BUFFER, 4).coerceIn(1, 8),
             customMigrationMaxFileConcurrency = prefs.getInt(KEY_MIGRATION_FILES, 6).coerceIn(1, 8),
-            customMigrationMaxChunkStreams = prefs.getInt(KEY_MIGRATION_STREAMS, 6).coerceIn(1, 8),
+            customMigrationMaxChunkStreams = prefs.getInt(KEY_MIGRATION_STREAMS, 6).coerceIn(1, 6),
             customMigrationLargeFileThresholdMb = prefs.getInt(KEY_MIGRATION_THRESHOLD, 128)
-                .takeIf { it in setOf(64, 128, 256, 512) } ?: 128,
+                .takeIf { it in setOf(128, 256, 512) } ?: 128,
             customMigrationThermalPolicy = enumValueOrDefault(
                 prefs.getString(KEY_MIGRATION_THERMAL, null),
                 MigrationThermalPolicy.BALANCED
@@ -136,8 +136,11 @@ object TransferPerformanceSettingsStore {
             .putInt(KEY_SS_CLIENTS, settings.customSpeedShareMaxClients.coerceIn(4, 32))
             .putInt(KEY_SS_BUFFER, settings.customSpeedShareSocketBufferMb.coerceIn(1, 8))
             .putInt(KEY_MIGRATION_FILES, settings.customMigrationMaxFileConcurrency.coerceIn(1, 8))
-            .putInt(KEY_MIGRATION_STREAMS, settings.customMigrationMaxChunkStreams.coerceIn(1, 8))
-            .putInt(KEY_MIGRATION_THRESHOLD, settings.customMigrationLargeFileThresholdMb)
+            .putInt(KEY_MIGRATION_STREAMS, settings.customMigrationMaxChunkStreams.coerceIn(1, 6))
+            .putInt(
+                KEY_MIGRATION_THRESHOLD,
+                settings.customMigrationLargeFileThresholdMb.takeIf { it in setOf(128, 256, 512) } ?: 128
+            )
             .putString(KEY_MIGRATION_THERMAL, settings.customMigrationThermalPolicy.name)
             .apply()
     }
