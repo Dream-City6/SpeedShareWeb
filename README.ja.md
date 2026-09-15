@@ -8,13 +8,13 @@ Androidスマートフォンを高速なローカルネットワーク用ファ�
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.5.0-ui-test6/SpeedShareWeb-v1.5.0-ui-test6.apk">
-  <img src="https://img.shields.io/badge/ダウンロード-SpeedShareWeb%20v1.5.0--ui--test6%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="SpeedShareWeb v1.5.0-ui-test6 APKをダウンロード">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.5.0/SpeedShareWeb-v1.5.0.apk">
+  <img src="https://img.shields.io/badge/ダウンロード-SpeedShareWeb%20v1.5.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="SpeedShareWeb v1.5.0 APKをダウンロード">
 </a>
 
 <br><br>
 
-v1.5.0-ui-test6 では、Wi-Fi Direct による端末移行、QR コードを使ったペアリング、分かりやすい接続ガイド、刷新された移行フローを追加しました。新しい移行機能を検証するための署名済みプレビュー版です。
+v1.5.0 では、Wi-Fi Direct による端末移行、QR コードを使ったペアリング、分かりやすい接続ガイド、刷新された移行フローを追加しました。
 その他のバージョンや更新内容については、[GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)をご確認ください。
 
 </div>
@@ -130,7 +130,7 @@ SpeedShareWebは、アクセスおよび管理する権限のあるファイル�
 
 ## 更新履歴
 
-- v1.5.0-ui-test6：Wi-Fi Direct による端末移行、QR ペアリング、復旧可能な転送セッション、接続復旧ガイド、新しい移行選択画面を追加しました。
+- v1.5.0：Wi-Fi Direct による端末移行、QR ペアリング、復旧可能な転送セッション、接続復旧ガイド、新しい移行選択画面を追加しました。
 - v1.4.2：認証と HTTP 検証を強化し、アップロードとファイル置換をトランザクション化し、ごみ箱の復元とリソース制限を改善して、自動品質チェックを追加しました。
 - v1.4.1：ホーム画面と設定操作、中国語・日本語・英語のレイアウト、繰り返し画面切り替えを改善し、ライト/ダーク表示の可読性を修正して、プロジェクト画像とWebサイト表示を更新しました。
 - v1.4.0：新しいブランドアイコンと起動画面、レスポンシブなオーロラUI、端末全体のワンタップ共有、リアルタイム転送操作、ライト/ダーク表示、コンパクト設定、開ける転送履歴、新しいブラウザファイルマネージャーを追加しました。

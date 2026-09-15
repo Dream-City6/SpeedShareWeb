@@ -4,7 +4,7 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
-## [1.5.0-ui-test6] - 2026-09-15
+## [1.5.0] - 2026-09-15
 
 ### Added
 

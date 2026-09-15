@@ -8,13 +8,13 @@
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.5.0-ui-test6/SpeedShareWeb-v1.5.0-ui-test6.apk">
-  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.5.0--ui--test6%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.5.0-ui-test6 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.5.0/SpeedShareWeb-v1.5.0.apk">
+  <img src="https://img.shields.io/badge/下载-SpeedShareWeb%20v1.5.0%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="下载 SpeedShareWeb v1.5.0 APK">
 </a>
 
 <br><br>
 
-v1.5.0-ui-test6 新增手机直连迁移、二维码辅助配对、更清晰的连接引导和重新设计的迁移流程。这是用于体验并验证新迁移功能的签名预览版。
+v1.5.0 新增手机直连迁移、二维码辅助配对、更清晰的连接引导和重新设计的迁移流程。
 如需其他版本或查看更新说明，请前往 [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases)。
 
 </div>
@@ -123,7 +123,7 @@ SpeedShareWeb 主要在局域网内运行，不需要账号或云存储。
 
 ## 更新履历
 
-- v1.5.0-ui-test6：新增手机直连迁移、二维码辅助配对、可恢复传输会话、连接恢复引导和新版迁移选择界面。
+- v1.5.0：新增手机直连迁移、二维码辅助配对、可恢复传输会话、连接恢复引导和新版迁移选择界面。
 - v1.4.2：加强身份验证与 HTTP 校验，实现事务性上传和文件替换，改善回收站恢复与资源限制，并加入自动化质量检查。
 - v1.4.1：优化主页与设置操作，改善中日英三语排版和重复切换流畅度，修复浅色/深色可读性，并更新项目截图和网站展示。
 - v1.4.0：新增品牌图标与启动画面、响应式极光界面、一键分享整个手机、实时传输控制、浅色/深色外观、紧凑设置、可点击传输历史与新版网页文件管理器。
