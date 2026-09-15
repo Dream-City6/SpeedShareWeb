@@ -4,6 +4,46 @@ All notable changes to SpeedShareWeb will be documented in this file.
 
 The format is based on Keep a Changelog. Version numbers follow Semantic Versioning where practical.
 
+## [1.5.0-ui-test6] - 2026-09-15
+
+### Added
+
+- Add direct Wi-Fi phone migration with QR-assisted pairing and nearby-device discovery
+- Add guided connection recovery, permission preparation, and clearer sender/receiver setup
+- Add resilient migration sessions with reconnection, selection policies, and transfer-state reporting
+
+### Changed
+
+- Redesign migration connection, media selection, file selection, and transfer-progress screens
+- Keep the main SpeedShareWeb launcher while integrating migration as an optional workflow
+- Default migration selection to photos, videos, music, and apps instead of selecting every category
+
+### Fixed
+
+- Bind migration sockets to the selected direct Wi-Fi network
+- Reset stale migration state before new sessions and avoid scanning before permissions are ready
+- Improve peer discovery cleanup, hotspot lifecycle handling, and failure feedback
+
+## [1.5.0-beta8] - 2026-09-12
+
+### Changed
+
+- Consolidate the resilient migration controller and permission-gated discovery flow
+- Label the integrated migration build consistently for beta testing
+
+## [1.5.0-beta4] - 2026-09-10
+
+### Added
+
+- Add the first end-to-end migration selection and transfer workflow
+- Add migration-focused unit coverage for selection and protocol policies
+
+## [1.5.0-beta1] - 2026-09-09
+
+### Added
+
+- Introduce the initial experimental phone-migration build and isolated migration launcher
+
 ## [1.4.2] - 2026-07-18
 
 ### Added

@@ -8,13 +8,13 @@ Turn an Android phone into a fast local-network file server and access it direct
 
 <br>
 
-<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.4.2/SpeedShareWeb-v1.4.2.apk">
-  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.4.2%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.4.2 APK">
+<a href="https://github.com/Dream-City6/SpeedShareWeb/releases/download/v1.5.0-ui-test6/SpeedShareWeb-v1.5.0-ui-test6.apk">
+  <img src="https://img.shields.io/badge/Download-SpeedShareWeb%20v1.5.0--ui--test6%20APK-2ea44f?style=for-the-badge&logo=android&logoColor=white" alt="Download SpeedShareWeb v1.5.0-ui-test6 APK">
 </a>
 
 <br><br>
 
-v1.4.2 strengthens authentication, HTTP validation, transactional uploads, file operations and recycle-bin recovery for safer long-running use.
+v1.5.0-ui-test6 adds direct Wi-Fi phone migration, QR-assisted pairing, clearer connection guidance, and a redesigned migration workflow. This is a signed preview build for testing the new migration experience.
 For other versions and release notes, visit [GitHub Releases](https://github.com/Dream-City6/SpeedShareWeb/releases).
 
 </div>
@@ -130,6 +130,7 @@ Use SpeedShareWeb only with files and devices that you are authorized to access 
 
 ## Update History
 
+- v1.5.0-ui-test6: Added direct Wi-Fi phone migration, QR-assisted pairing, resilient transfer sessions, clearer connection recovery, and refreshed migration selection screens.
 - v1.4.2: Strengthened authentication and HTTP validation, made uploads and file replacement transactional, improved recycle-bin recovery and resource bounds, and added automated quality checks.
 - v1.4.1: Refined the home and settings experience, improved Chinese/Japanese/English layouts and repeated navigation, fixed light/dark readability, and refreshed the project screenshots and website showcase.
 - v1.4.0: Added the new brand icon and launch screen, responsive aurora UI, one-tap whole-phone sharing, live transfer controls, light/dark appearance modes, compact settings, clickable transfer history, and a refined browser file manager.
