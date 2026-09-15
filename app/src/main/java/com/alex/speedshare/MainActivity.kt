@@ -87,7 +87,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -113,8 +112,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.alex.speedshare.ui.theme.SpeedShareTheme
+import com.alex.speedshare.migration.MigrationPermissionPreparationActivity
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -235,7 +234,6 @@ private fun SpeedShareApp(
         Localization.translator(context, settings.language)
     }
     var showSettings by remember { mutableStateOf(false) }
-    var settingsPreloaded by remember { mutableStateOf(false) }
     var showTrashManager by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(settings.defaultMode) }
     var selectedFiles by remember { mutableStateOf<List<SharedFile>>(emptyList()) }
@@ -259,15 +257,6 @@ private fun SpeedShareApp(
     var showStopConfirmation by remember { mutableStateOf(false) }
     var pendingInstallHistoryItem by remember { mutableStateOf<TransferHistoryItem?>(null) }
 
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        delay(320)
-        settingsPreloaded = true
-    }
-
-    LaunchedEffect(showSettings) {
-        if (showSettings) settingsPreloaded = true
-    }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -576,6 +565,31 @@ private fun SpeedShareApp(
                 BrandHeader(
                     versionText = "${getAppVersion(context, tr)} · ${tr.text("app_subtitle")}"
                 )
+
+                CompactCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            context.startActivity(Intent(context, MigrationPermissionPreparationActivity::class.java))
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text("⇄", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                        Column(Modifier.weight(1f)) {
+                            Text(tr.text("migration_home_title"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+                            Text(
+                                tr.text("migration_home_subtitle"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text("›", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                    }
+                }
 
                 ServerStatusCard(
                     tr = tr,
@@ -1114,12 +1128,12 @@ private fun SpeedShareApp(
     }
     val settingsTranslationX = animateFloatAsState(
         targetValue = if (showSettings) 0f else hiddenSettingsOffsetPx,
-        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        animationSpec = tween(durationMillis = 160, easing = FastOutSlowInEasing),
         label = "settingsPageTranslation"
     )
 
-    if (settingsPreloaded || showSettings) {
-        // Preload after the home page has drawn; hidden content stays measured off-screen for smooth navigation.
+    if (showSettings) {
+        // Create settings only when requested, keeping the home screen lightweight.
         Box(
             modifier = Modifier
                 .fillMaxSize()

@@ -36,6 +36,7 @@ internal object MigrationProtocol {
 
     fun connect(host: String, port: Int, timeoutMs: Int = 8_000): Socket =
         Socket().apply {
+            MigrationDirectWifiConnector.bindSocket(this)
             tcpNoDelay = true
             keepAlive = true
             sendBufferSize = 4 * 1024 * 1024

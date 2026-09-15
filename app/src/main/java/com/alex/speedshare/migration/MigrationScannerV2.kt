@@ -21,7 +21,7 @@ internal object MigrationScannerV2 {
             val directory = stack.removeLast()
             val relativeDir = runCatching { directory.relativeTo(root).invariantSeparatorsPath }.getOrDefault("")
             if (shouldSkipDirectory(relativeDir)) continue
-            directory.listFiles()?.forEach { child ->
+            runCatching { directory.listFiles()?.toList().orEmpty() }.getOrDefault(emptyList()).forEach { child ->
                 if (child.isDirectory) {
                     stack.add(child)
                 } else if (child.isFile && child.canRead()) {
@@ -120,13 +120,13 @@ internal object MigrationScannerV2 {
         return when {
             top == "download" -> MigrationCategory.DOWNLOADS
             top == "documents" -> MigrationCategory.DOCUMENTS
-            top == "dcim" || top == "pictures" -> MigrationCategory.PHOTOS
             top == "movies" -> MigrationCategory.VIDEOS
             top == "music" || top == "recordings" || top == "alarms" || top == "notifications" || top == "ringtones" -> MigrationCategory.MUSIC
-            ext in IMAGE_EXTENSIONS -> MigrationCategory.PHOTOS
             ext in VIDEO_EXTENSIONS -> MigrationCategory.VIDEOS
+            ext in IMAGE_EXTENSIONS -> MigrationCategory.PHOTOS
             ext in AUDIO_EXTENSIONS -> MigrationCategory.MUSIC
             ext in DOCUMENT_EXTENSIONS -> MigrationCategory.DOCUMENTS
+            top == "dcim" || top == "pictures" -> MigrationCategory.PHOTOS
             else -> MigrationCategory.OTHER
         }
     }

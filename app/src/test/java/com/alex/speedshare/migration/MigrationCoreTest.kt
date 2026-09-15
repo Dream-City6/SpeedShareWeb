@@ -83,6 +83,13 @@ class MigrationCoreTest {
     }
 
     @Test
+    fun resilientScanner_classifiesMediaInsideCameraByExtension() {
+        assertEquals(MigrationCategory.VIDEOS, MigrationScannerV2.categoryFor("DCIM/Camera/clip.mp4", "clip.mp4"))
+        assertEquals(MigrationCategory.VIDEOS, MigrationScannerV2.categoryFor("DCIM/Camera/clip.MKV", "clip.MKV"))
+        assertEquals(MigrationCategory.PHOTOS, MigrationScannerV2.categoryFor("DCIM/Camera/photo.JPG", "photo.JPG"))
+    }
+
+    @Test
     fun resilientPairToken_isRandomAndStrongLength() {
         val first = ResilientMigrationClient.newInboundToken()
         val second = ResilientMigrationClient.newInboundToken()
@@ -111,28 +118,61 @@ class MigrationCoreTest {
         val recommended = MigrationSelectionCalculator.presetCategories(MigrationSelectionPreset.RECOMMENDED)
         assertTrue(MigrationCategory.PHOTOS in recommended)
         assertTrue(MigrationCategory.VIDEOS in recommended)
-        assertTrue(MigrationCategory.DOCUMENTS in recommended)
-        assertTrue(MigrationCategory.DOWNLOADS in recommended)
+        assertFalse(MigrationCategory.DOCUMENTS in recommended)
+        assertFalse(MigrationCategory.DOWNLOADS in recommended)
         assertTrue(MigrationCategory.APPS in recommended)
-        assertFalse(MigrationCategory.MUSIC in recommended)
+        assertTrue(MigrationCategory.MUSIC in recommended)
         assertFalse(MigrationCategory.OTHER in recommended)
         assertEquals(MigrationCategory.entries.toSet(), MigrationSelectionCalculator.presetCategories(MigrationSelectionPreset.ALL))
     }
 
     @Test
-    fun fileSelectionRegistry_canExcludeIndividualDocumentWithoutAffectingOtherCategories() {
+    fun fileSelectionRegistry_defaultsEmptyAndCanSelectIndividualPath() {
         val files = listOf(
             MigrationFileItem(File("keep.pdf"), "Documents/keep.pdf", 10, 0, MigrationCategory.DOCUMENTS),
             MigrationFileItem(File("drop.pdf"), "Documents/drop.pdf", 20, 0, MigrationCategory.DOCUMENTS),
             MigrationFileItem(File("photo.jpg"), "DCIM/photo.jpg", 30, 0, MigrationCategory.PHOTOS)
         )
         MigrationFileSelectionRegistry.sync(files)
-        MigrationFileSelectionRegistry.toggle("Documents/drop.pdf")
+        MigrationFileSelectionRegistry.selectNone()
+        MigrationFileSelectionRegistry.toggle("Documents/keep.pdf")
         val result = MigrationFileSelectionRegistry.filterTransferItems(files)
         assertTrue(result.any { it.relativePath == "Documents/keep.pdf" })
         assertFalse(result.any { it.relativePath == "Documents/drop.pdf" })
         assertTrue(result.any { it.relativePath == "DCIM/photo.jpg" })
-        MigrationFileSelectionRegistry.selectAll()
+        MigrationFileSelectionRegistry.selectNone()
+    }
+
+    @Test
+    fun recommendedSelection_doesNotIncludeUncheckedDownloadFiles() {
+        val files = listOf(
+            MigrationFileItem(File("photo.jpg"), "DCIM/Camera/photo.jpg", 10, 0, MigrationCategory.PHOTOS),
+            MigrationFileItem(File("private.zip"), "Download/private.zip", 20, 0, MigrationCategory.DOWNLOADS)
+        )
+        MigrationFileSelectionRegistry.sync(files)
+        MigrationFileSelectionRegistry.selectNone()
+        MigrationMediaSelectionRegistry.sync(files)
+
+        val result = MigrationSelectionCalculator.effectiveItems(
+            MigrationScanResult(files = files),
+            MigrationSelectionCalculator.presetCategories(MigrationSelectionPreset.RECOMMENDED)
+        )
+
+        assertTrue(result.items.any { it.relativePath == "DCIM/Camera/photo.jpg" })
+        assertFalse(result.items.any { it.relativePath == "Download/private.zip" })
+    }
+
+    @Test
+    fun explicitFolderSelection_canIncludeAFileOutsideCheckedCategories() {
+        val file = MigrationFileItem(File("manual.pdf"), "Documents/manual.pdf", 20, 0, MigrationCategory.DOCUMENTS)
+        MigrationFileSelectionRegistry.sync(listOf(file))
+        MigrationFileSelectionRegistry.selectNone()
+        MigrationFileSelectionRegistry.toggle(file.relativePath)
+
+        val result = MigrationSelectionCalculator.effectiveItems(MigrationScanResult(files = listOf(file)), emptySet())
+
+        assertEquals(listOf(file.relativePath), result.items.map { it.relativePath })
+        MigrationFileSelectionRegistry.selectNone()
     }
 
     @Test
@@ -148,6 +188,94 @@ class MigrationCoreTest {
         assertNull(parseMigrationEndpoint("192.168.1.23:0"))
         assertNull(parseMigrationEndpoint("192.168.1.23:70000"))
         assertNull(parseMigrationEndpoint("not-an-ip:47999"))
+    }
+
+    @Test
+    fun wifiQrPayload_escapesReservedCharacters() {
+        assertEquals(
+            "WIFI:T:WPA;S:Speed\\;Share;P:p\\:a\\,s\\\\s;;",
+            wifiQrPayload("Speed;Share", "p:a,s\\s")
+        )
+        assertEquals("WIFI:T:nopass;S:Open;P:;;", wifiQrPayload("Open", ""))
+    }
+
+    @Test
+    fun wifiQrPayload_roundTripsIntoConnectionCredentials() {
+        val parsed = parseWifiQrPayload(wifiQrPayload("Speed;Share", "p:a,s\\word"))
+
+        assertEquals("Speed;Share", parsed?.ssid)
+        assertEquals("p:a,s\\word", parsed?.password)
+        assertEquals("WPA", parsed?.security)
+
+        val wpa3 = parseWifiQrPayload(wifiQrPayload("SpeedShare-6G", "securepass", "WPA3"))
+        assertEquals("WPA3", wpa3?.security)
+        assertEquals("securepass", wpa3?.password)
+
+        val targeted = parseWifiQrPayload(
+            wifiQrPayload("SpeedShare", "securepass", "WPA", "device-123", 47999, "pair-token")
+        )
+        assertEquals("device-123", targeted?.targetDeviceId)
+        assertEquals(47999, targeted?.targetPort)
+        assertEquals("pair-token", targeted?.targetPairToken)
+    }
+
+    @Test
+    fun wifiQrPayload_rejectsNonWifiAndInvalidProtectedNetworks() {
+        assertNull(parseWifiQrPayload("https://example.com"))
+        assertNull(parseWifiQrPayload("WIFI:T:WEP;S:Legacy;P:12345678;;"))
+        assertNull(parseWifiQrPayload("WIFI:T:WPA;S:SpeedShare;P:short;;"))
+    }
+
+    @Test
+    fun hotspotLifecycle_onlyKeepsHotspotForAnActiveTransfer() {
+        assertTrue(shouldKeepHotspotForStage(MigrationStage.TRANSFERRING))
+        assertTrue(shouldKeepHotspotForStage(MigrationStage.VERIFYING))
+        assertFalse(shouldKeepHotspotForStage(MigrationStage.DISCOVERY))
+        assertFalse(shouldKeepHotspotForStage(MigrationStage.SELECTION))
+        assertFalse(shouldKeepHotspotForStage(MigrationStage.COMPLETE))
+    }
+
+    @Test
+    fun directHotspotAutoConnect_onlySelectsOneUnattemptedPeer() {
+        val peer = MigrationPeer("peer-1", "Phone", "192.168.43.2", 47999)
+        val ready = ResilientMigrationState(peers = listOf(peer))
+
+        assertEquals(peer, directHotspotAutoConnectPeer(true, ready, null))
+        assertNull(directHotspotAutoConnectPeer(false, ready, null))
+        assertNull(directHotspotAutoConnectPeer(true, ready, peer.deviceId))
+        assertNull(directHotspotAutoConnectPeer(true, ready.copy(pairing = true), null))
+        assertNull(directHotspotAutoConnectPeer(true, ready.copy(peers = listOf(peer, peer.copy(deviceId = "peer-2"))), null))
+    }
+
+    @Test
+    fun automaticPairing_directJoinerAlwaysInitiatesButSharedWifiUsesOneDeterministicSide() {
+        val peer = MigrationPeer("peer-z", "Phone", "192.168.43.1", 47999)
+        val lowerId = ResilientMigrationState(localDeviceId = "peer-a", peers = listOf(peer))
+        val higherId = lowerId.copy(localDeviceId = "peer-zz")
+
+        assertTrue(shouldAutomaticallyInitiatePair(false, true, false, higherId))
+        assertTrue(shouldAutomaticallyInitiatePair(false, false, false, lowerId))
+        assertFalse(shouldAutomaticallyInitiatePair(false, false, false, higherId))
+        assertFalse(shouldAutomaticallyInitiatePair(true, false, false, lowerId))
+        assertFalse(shouldAutomaticallyInitiatePair(false, false, true, lowerId))
+        assertFalse(shouldAutomaticallyInitiatePair(false, false, false, lowerId.copy(peers = listOf(peer, peer.copy(deviceId = "peer-y")))))
+    }
+
+    @Test
+    fun qrPairToken_bindsToTheFirstRequestingDevice() {
+        assertTrue(canClaimPairToken(true, "token", "", "token", "phone-a"))
+        assertTrue(canClaimPairToken(true, "token", "phone-a", "token", "phone-a"))
+        assertFalse(canClaimPairToken(true, "token", "phone-a", "token", "phone-b"))
+        assertFalse(canClaimPairToken(false, "token", "", "token", "phone-a"))
+        assertFalse(canClaimPairToken(true, "token", "", "wrong", "phone-a"))
+    }
+
+    @Test
+    fun roleChooser_isDeterministicAndUnique() {
+        assertTrue(isRoleChooser("device-a", "device-b"))
+        assertFalse(isRoleChooser("device-b", "device-a"))
+        assertFalse(isRoleChooser("", "device-a"))
+        assertFalse(isRoleChooser("device-a", "device-a"))
     }
 
     @Test

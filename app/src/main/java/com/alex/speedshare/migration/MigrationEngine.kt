@@ -569,7 +569,7 @@ internal object MigrationScanner {
             val directory = stack.removeLast()
             val relativeDir = runCatching { directory.relativeTo(root).invariantSeparatorsPath }.getOrDefault("")
             if (shouldSkipDirectory(relativeDir)) continue
-            directory.listFiles()?.forEach { child ->
+            runCatching { directory.listFiles()?.toList().orEmpty() }.getOrDefault(emptyList()).forEach { child ->
                 if (child.isDirectory) {
                     stack.add(child)
                 } else if (child.isFile && child.canRead()) {
@@ -579,7 +579,7 @@ internal object MigrationScanner {
                         relativePath = relative,
                         size = child.length(),
                         modifiedAt = child.lastModified(),
-                        category = categoryFor(relative, child.name)
+                        category = MigrationScannerV2.categoryFor(relative, child.name)
                     )
                 }
             }
@@ -641,23 +641,6 @@ internal object MigrationScanner {
             path.contains("/.speedshare-trash") || path.startsWith(".speedshare-trash")
     }
 
-    private fun categoryFor(relative: String, name: String): MigrationCategory {
-        val lowerPath = relative.lowercase()
-        val ext = name.substringAfterLast('.', "").lowercase()
-        return when {
-            lowerPath.startsWith("dcim/") || lowerPath.startsWith("pictures/") || ext in IMAGE_EXTENSIONS -> MigrationCategory.PHOTOS
-            lowerPath.startsWith("movies/") || ext in VIDEO_EXTENSIONS -> MigrationCategory.VIDEOS
-            lowerPath.startsWith("music/") || ext in AUDIO_EXTENSIONS -> MigrationCategory.MUSIC
-            lowerPath.startsWith("documents/") || ext in DOCUMENT_EXTENSIONS -> MigrationCategory.DOCUMENTS
-            lowerPath.startsWith("download/") -> MigrationCategory.DOWNLOADS
-            else -> MigrationCategory.OTHER
-        }
-    }
-
-    private val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "dng", "bmp")
-    private val VIDEO_EXTENSIONS = setOf("mp4", "mkv", "mov", "avi", "webm", "3gp", "m4v", "ts")
-    private val AUDIO_EXTENSIONS = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "wma")
-    private val DOCUMENT_EXTENSIONS = setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "csv", "md")
 }
 
 internal fun normalizeRelativePath(value: String): String? {

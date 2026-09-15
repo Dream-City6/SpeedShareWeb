@@ -193,7 +193,7 @@ object WebPageBuilder {
                 .connectionBanner.show{transform:translate(-50%,0);opacity:1}
                 .connectionBanner.error{background:#9f3030}.connectionBanner.ok{background:#087d58}
 
-                .toolbar{display:grid;grid-template-columns:minmax(170px,1fr) auto auto;gap:7px;margin:9px 0}
+                .toolbar{position:sticky;top:78px;z-index:60;display:grid;grid-template-columns:minmax(170px,1fr) auto auto;gap:7px;margin:9px 0;padding:7px 0;background:linear-gradient(180deg,var(--bg) 78%,transparent)}
                 .control{min-height:38px;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:10px;padding:0 11px;outline:none;box-shadow:0 4px 14px rgba(43,54,99,.04)}
                 .control:focus{border-color:var(--brand);box-shadow:0 0 0 3px rgba(37,99,235,.13)}
                 .searchBox{position:relative;min-width:0}.searchBox .control{width:100%;padding-right:38px}.clearSearch{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:27px;height:27px;border:0;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;font-size:16px}.clearSearch:hover{background:var(--panel2);color:var(--text)}
@@ -218,7 +218,8 @@ object WebPageBuilder {
                 .primary{background:linear-gradient(120deg,var(--brand),var(--brand2));color:#fff;box-shadow:0 7px 18px rgba(37,99,235,.18)}
                 .secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
                 .primary:active,.secondary:active,.actions a:active,.actions button:active{transform:scale(.97)}
-                .managementTop{display:flex;align-items:center;justify-content:space-between;gap:10px}
+                .managementTop{display:grid;grid-template-columns:minmax(0,1fr);gap:9px}.managementTop>div:first-child{min-width:0}.managementButtons{display:flex;gap:7px;flex-wrap:wrap}
+                .clipboardBox{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin:0;box-shadow:var(--shadow);overflow:hidden}.clipboardBox summary{cursor:pointer;list-style:none;padding:12px 13px;font-weight:800;display:flex;align-items:center;justify-content:space-between}.clipboardBox summary::-webkit-details-marker{display:none}.clipboardBox summary::after{content:'⌄';color:var(--muted);font-size:18px}.clipboardBox[open] summary{border-bottom:1px solid var(--line)}.clipboardBox[open] summary::after{transform:rotate(180deg)}.clipboardInner{padding:0 13px 13px}
                 .selectionBar{position:sticky;bottom:10px;z-index:80;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:rgba(21,26,45,.94);color:#fff;border-radius:14px;padding:9px 10px;margin-top:9px;box-shadow:0 16px 44px rgba(0,0,0,.27);backdrop-filter:blur(14px)}
                 .selectionBar.hidden{display:none}.selectionBar strong{margin-right:auto;font-size:12px}.selectionBar button{border:0;border-radius:9px;padding:7px 9px;background:rgba(255,255,255,.13);color:#fff;cursor:pointer;font-size:11px}.selectionBar .danger{background:#b83b3b}.selectionBar .dangerGhost{border:1px solid rgba(255,121,121,.55);color:#ffb2b2;background:transparent}
 
@@ -227,7 +228,7 @@ object WebPageBuilder {
                 .card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);min-width:0;transition:transform .17s ease,box-shadow .17s ease,border-color .17s ease;content-visibility:auto;contain-intrinsic-size:180px}
                 .card:hover{transform:translateY(-3px);box-shadow:var(--shadowHover);border-color:rgba(37,99,235,.28)}
                 .card:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
-                .card.selected{outline:2px solid var(--brand);outline-offset:-2px}
+                .card.selected{outline:2px solid var(--brand);outline-offset:-2px;background:linear-gradient(145deg,rgba(37,99,235,.24),rgba(67,212,231,.12));box-shadow:0 0 0 4px rgba(126,179,255,.10),var(--shadow)}
                 .selectBox{position:absolute;top:8px;left:8px;z-index:12;width:27px;height:27px;border-radius:9px;background:rgba(15,20,35,.58);display:grid;place-items:center;color:#fff;backdrop-filter:blur(8px);cursor:pointer;border:1px solid rgba(255,255,255,.22)}
                 .selectBox input{position:absolute;opacity:0}.selectBox span{opacity:.3;font-weight:900}.selectBox input:checked+span{opacity:1;color:#94f3ca}
                 .folder-card{text-decoration:none;display:flex;align-items:center;gap:10px;padding:12px;min-height:72px}
@@ -277,7 +278,8 @@ object WebPageBuilder {
                 .hidden{display:none!important}
 
                 @media(min-width:980px){.utilityGrid{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}.header{padding:13px 15px;border-radius:19px}.livePanel{gap:8px}.liveCard{padding:8px 10px}.uploadBox,.managementBox{border-radius:17px;padding:13px}}
-                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:11px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}.contextMenu{left:8px!important;right:8px;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom));width:auto;max-height:min(76vh,620px);overflow:auto;border-radius:19px;padding:8px;transform-origin:bottom center}.contextMenu.open{animation:contextSheetIn .18s ease-out}.contextMenu button{min-height:43px;font-size:13px}}
+                @media(max-width:760px){.wrap{padding:8px 8px 64px}.header{top:5px;padding:10px 11px;border-radius:15px}.badge{display:none}h1{font-size:20px}.livePanel{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.liveCard{padding:5px}.liveLabel{font-size:9px}.liveValue{font-size:11px}.toolbar{top:68px;grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.items.grid .folder-card{min-height:145px}.items.grid .folderIcon{height:76px}.managementTop{align-items:flex-start;flex-direction:column}.managementButtons{margin-top:0}.selectionBar{bottom:7px}.modal,.managerModal,.dialogModal{padding:0}.modalPanel,.managerPanel{width:100%;height:100%;max-height:none;border-radius:0}.dialogPanel{width:100%;max-height:100%;border-radius:0;margin-top:auto}.actions{gap:4px}.actions a,.actions button{padding:6px 3px}.liveTransfers{font-size:10.5px}.contextMenu{left:8px!important;right:8px;top:auto!important;bottom:max(8px,env(safe-area-inset-bottom));width:auto;max-height:min(76vh,620px);overflow:auto;border-radius:19px;padding:8px;transform-origin:bottom center}.contextMenu.open{animation:contextSheetIn .18s ease-out}.contextMenu button{min-height:43px;font-size:13px}}
+                @media(pointer:coarse) and (max-width:1100px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.items.grid .folder-card{min-height:156px}.items.grid .folderIcon{height:86px}.livePanel{grid-template-columns:repeat(3,minmax(0,1fr))}.liveCard{padding:7px}.toolbar{grid-template-columns:1fr auto}.toolbar select{grid-column:1/-1;grid-row:2}.actions a,.actions button{min-height:38px;padding:7px 8px}.selectBox{width:30px;height:30px}}
                 @keyframes contextSheetIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
                 @media(max-width:390px){.items.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.info{padding:8px}.name{font-size:12px}.sub{font-size:10px}.actions a,.actions button{font-size:10px}.folderIcon{font-size:26px}.settingsText{display:none}.settingsToggle{padding-inline:8px}}
                 @media(hover:none){.card:hover{transform:none;box-shadow:var(--shadow)}}
@@ -1964,8 +1966,9 @@ object WebPageBuilder {
 
     private fun buildClipboardPanel(tr: Translator): String {
         return """
-            <section class="managementBox">
-              <div class="managementTitle">${escapeHtml(tr.text("web_clipboard_sync"))}</div>
+            <details class="clipboardBox">
+              <summary>${escapeHtml(tr.text("web_clipboard_sync"))}</summary>
+              <div class="clipboardInner">
               <div class="uploadHint">${escapeHtml(tr.text("web_clipboard_hint"))}</div>
               <textarea id="clipboardInput" class="clipboardText" maxlength="65536" placeholder="${escapeHtml(tr.text("web_clipboard_placeholder"))}"></textarea>
               <div class="uploadActions">
@@ -1974,7 +1977,8 @@ object WebPageBuilder {
               </div>
               <div class="uploadHint" style="margin-top:10px">${escapeHtml(tr.text("web_clipboard_phone_text"))}</div>
               <div id="phoneClipboardText" class="clipboardOutput">${escapeHtml(tr.text("web_clipboard_empty"))}</div>
-            </section>
+              </div>
+            </details>
         """.trimIndent()
     }
 

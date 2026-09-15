@@ -15,15 +15,17 @@ android {
         applicationId = "com.alex.speedshare"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.5.0-beta8"
+        versionCode = 36
+        versionName = "1.5.0-ui-test6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        // Keep the debug package name identical to release so a later debug build,
+        // signed by the same local debug key, upgrades the installed test build.
+        // This also preserves Android-granted permissions and app data on update.
         debug {
-            applicationIdSuffix = ".migration"
         }
         release {
             optimization {
@@ -57,4 +59,5 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
     implementation("com.google.zxing:core:3.5.4")
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 }

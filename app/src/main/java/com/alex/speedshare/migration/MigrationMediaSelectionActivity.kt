@@ -5,10 +5,13 @@ import android.graphics.BitmapFactory
 import android.media.ThumbnailUtils
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
+import android.widget.Toast
 import android.provider.MediaStore
 import android.util.LruCache
 import android.util.Size
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -57,6 +60,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.alex.speedshare.AppSettings
+import com.alex.speedshare.guessMimeType
+import androidx.core.content.FileProvider
 import com.alex.speedshare.ui.theme.SpeedShareTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +98,9 @@ internal object MigrationMediaSelectionRegistry {
     fun selectPaths(paths: Set<String>, selected: Boolean) {
         _selectedPaths.value = if (selected) _selectedPaths.value + paths else _selectedPaths.value - paths
     }
+
+    fun selectFolder(items: List<MigrationFileItem>, selected: Boolean) =
+        selectPaths(items.mapTo(linkedSetOf()) { it.relativePath }, selected)
 
     fun selectCategory(items: List<MigrationFileItem>, category: MigrationCategory, selected: Boolean) {
         val paths = items.asSequence().filter { it.category == category }.map { it.relativePath }.toSet()
@@ -142,13 +150,15 @@ private fun MigrationMediaSelectionScreen(onClose: () -> Unit) {
     MigrationMediaSelectionRegistry.sync(media)
     val selected by MigrationMediaSelectionRegistry.selectedPaths.collectAsState()
     var category by remember { mutableStateOf(MigrationCategory.PHOTOS) }
+    var folder by remember { mutableStateOf<String?>(null) }
+    BackHandler(enabled = folder != null) { folder = null }
     var album by remember { mutableStateOf<String?>(null) }
     var month by remember { mutableStateOf<String?>(null) }
     var largeOnly by remember { mutableStateOf(false) }
     var albumMenu by remember { mutableStateOf(false) }
     var monthMenu by remember { mutableStateOf(false) }
 
-    val categoryMedia = remember(media, category) { media.filter { it.category == category } }
+    val categoryMedia = remember(media, category) { media.filter { it.category == category }.sortedByDescending { it.modifiedAt } }
     val albumOptions = remember(categoryMedia) { categoryMedia.map(::mediaAlbumName).distinct().sorted() }
     val monthOptions = remember(categoryMedia) { categoryMedia.map(::mediaMonthKey).distinct().sortedDescending() }
     LaunchedEffect(category, albumOptions, monthOptions) {
@@ -157,10 +167,11 @@ private fun MigrationMediaSelectionScreen(onClose: () -> Unit) {
         if (category != MigrationCategory.VIDEOS) largeOnly = false
     }
 
-    val visible = remember(categoryMedia, album, month, largeOnly) {
+    val visible = remember(categoryMedia, album, month, largeOnly, folder) {
         categoryMedia.filter { item ->
             (album == null || mediaAlbumName(item) == album) &&
                 (month == null || mediaMonthKey(item) == month) &&
+                (folder == null || mediaFolderPath(item) == folder) &&
                 (!largeOnly || item.size >= 500L * 1024L * 1024L)
         }
     }
@@ -195,6 +206,38 @@ private fun MigrationMediaSelectionScreen(onClose: () -> Unit) {
                     MediaTab("视频", category == MigrationCategory.VIDEOS, Modifier.weight(1f)) {
                         category = MigrationCategory.VIDEOS
                     }
+                }
+
+                val allVisibleSelected = visiblePaths.isNotEmpty() && visiblePaths.all { it in selected }
+                OutlinedButton(
+                    onClick = { MigrationMediaSelectionRegistry.selectPaths(visiblePaths, !allVisibleSelected) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (allVisibleSelected) "✓ 全部取消选择" else "□ 全选当前筛选结果") }
+
+                if (folder == null) {
+                    Text("先选择文件夹，再选择其中的单张媒体", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val folders = categoryMedia.groupBy(::mediaFolderPath)
+                            .toList()
+                            .sortedWith(compareByDescending<Pair<String, List<MigrationFileItem>>> { it.second.size }
+                                .thenByDescending { it.second.maxOfOrNull { item -> item.modifiedAt } ?: 0L })
+                        items(folders, key = { it.first }) { (path, items) ->
+                            MediaFolderCard(path, items, selected, onOpen = { folder = path }, onToggle = {
+                                MigrationMediaSelectionRegistry.selectFolder(items, it)
+                            })
+                        }
+                    }
+                    return@Column
+                }
+
+                val currentFolder = folder.orEmpty()
+                OutlinedButton(onClick = { folder = null }, modifier = Modifier.fillMaxWidth()) {
+                    Text("‹ 返回文件夹 · ${currentFolder.substringAfterLast('/').ifBlank { "主目录" }}")
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -268,7 +311,8 @@ private fun MigrationMediaSelectionScreen(onClose: () -> Unit) {
                             MediaTile(
                                 item = item,
                                 selected = item.relativePath in selected,
-                                onToggle = { MigrationMediaSelectionRegistry.toggle(item.relativePath) }
+                                onToggle = { MigrationMediaSelectionRegistry.toggle(item.relativePath) },
+                                onOpen = { openMediaPreview(context, item) }
                             )
                         }
                     }
@@ -297,7 +341,7 @@ private fun MediaTab(label: String, active: Boolean, modifier: Modifier, onClick
 }
 
 @Composable
-private fun MediaTile(item: MigrationFileItem, selected: Boolean, onToggle: () -> Unit) {
+private fun MediaTile(item: MigrationFileItem, selected: Boolean, onToggle: () -> Unit, onOpen: () -> Unit) {
     val bitmap by produceState<Bitmap?>(initialValue = null, key1 = item.file.absolutePath, key2 = item.modifiedAt) {
         value = withContext(Dispatchers.IO) { MediaThumbnailCache.load(item) }
     }
@@ -307,7 +351,7 @@ private fun MediaTile(item: MigrationFileItem, selected: Boolean, onToggle: () -
             .aspectRatio(1f)
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onToggle)
+            .clickable(onClick = onOpen)
     ) {
         if (bitmap != null) {
             Image(
@@ -324,7 +368,7 @@ private fun MediaTile(item: MigrationFileItem, selected: Boolean, onToggle: () -
             )
         }
         Surface(
-            modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
+            modifier = Modifier.align(Alignment.TopEnd).padding(5.dp).clickable(onClick = onToggle),
             shape = RoundedCornerShape(999.dp),
             color = if (selected) MaterialTheme.colorScheme.primary else Color.Black.copy(alpha = 0.45f),
             contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else Color.White
@@ -349,7 +393,7 @@ private fun MediaTile(item: MigrationFileItem, selected: Boolean, onToggle: () -
 }
 
 private object MediaThumbnailCache {
-    private val cache = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
+    private val cache = object : LruCache<String, Bitmap>((Runtime.getRuntime().maxMemory() / 1024L / 8L).coerceIn(8L * 1024L, 64L * 1024L).toInt()) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
     private val decodeSlots = Semaphore(3, true)
@@ -401,6 +445,42 @@ private fun mediaAlbumName(item: MigrationFileItem): String {
     return parent.substringAfterLast('/').ifBlank { "主目录" }
 }
 
+private fun mediaFolderPath(item: MigrationFileItem): String = item.relativePath.substringBeforeLast('/', "")
+
+@Composable
+private fun MediaFolderCard(
+    path: String,
+    items: List<MigrationFileItem>,
+    selected: Set<String>,
+    onOpen: () -> Unit,
+    onToggle: (Boolean) -> Unit
+) {
+    val cover = items.maxByOrNull { it.modifiedAt }
+    val bitmap by produceState<Bitmap?>(initialValue = null, key1 = cover?.file?.absolutePath, key2 = cover?.modifiedAt) {
+        value = cover?.let { withContext(Dispatchers.IO) { MediaThumbnailCache.load(it) } }
+    }
+    val selectedCount = items.count { it.relativePath in selected }
+    val checked = selectedCount == items.size
+    Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen)) {
+        Column {
+            Box(Modifier.fillMaxWidth().aspectRatio(1.4f).background(MaterialTheme.colorScheme.surfaceVariant)) {
+                if (bitmap != null) Image(bitmap!!.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                Text("📁", Modifier.align(Alignment.Center), style = MaterialTheme.typography.headlineMedium)
+            }
+            Row(
+                Modifier.fillMaxWidth().clickable { onToggle(!checked) }.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(if (checked) "✓" else "□", modifier = Modifier.padding(end = 8.dp), fontWeight = FontWeight.Black)
+                Column(Modifier.weight(1f)) {
+                    Text(path.substringAfterLast('/').ifBlank { "主目录" }, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("$selectedCount / ${items.size} 项 · ${formatMediaBytes(items.sumOf { it.size })}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
 private val mediaMonthFormatter = SimpleDateFormat("yyyy-MM", Locale.ROOT)
 
 private fun mediaMonthKey(item: MigrationFileItem): String = synchronized(mediaMonthFormatter) {
@@ -410,6 +490,21 @@ private fun mediaMonthKey(item: MigrationFileItem): String = synchronized(mediaM
 private fun formatMediaMonth(key: String): String {
     val parts = key.split('-')
     return if (parts.size == 2) "${parts[0]}年${parts[1].toIntOrNull() ?: parts[1]}月" else key
+}
+
+private fun formatMediaDate(value: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(value))
+
+private fun openMediaPreview(context: android.content.Context, item: MigrationFileItem) {
+    val uri = runCatching {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", item.file)
+    }.getOrNull() ?: return
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, if (item.category == MigrationCategory.VIDEOS) "video/*" else guessMimeType(item.file.name))
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    runCatching { context.startActivity(intent) }.onFailure {
+        Toast.makeText(context, "没有找到可打开此媒体的应用", Toast.LENGTH_SHORT).show()
+    }
 }
 
 private fun formatMediaBytes(bytes: Long): String = when {

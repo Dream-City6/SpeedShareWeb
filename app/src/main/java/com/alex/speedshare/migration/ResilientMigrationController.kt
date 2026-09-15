@@ -2,8 +2,10 @@ package com.alex.speedshare.migration
 
 import android.content.Context
 import android.os.Build
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +19,11 @@ class ResilientMigrationController private constructor(private val context: Cont
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs = context.getSharedPreferences("speedshare_migration_v2", Context.MODE_PRIVATE)
     private val taskStore = MigrationTaskStore(context)
+    private var networkRefreshJob: Job? = null
+    private val pairingLock = Any()
+    private var pairingJob: Job? = null
+    private var pairingGeneration = 0L
+    @Volatile private var migrationUiClosed = false
     private val deviceId = prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also {
         prefs.edit().putString("device_id", it).apply()
     }
@@ -27,6 +34,7 @@ class ResilientMigrationController private constructor(private val context: Cont
 
     private val _state = MutableStateFlow(
         ResilientMigrationState(
+            localDeviceId = deviceId,
             localDeviceName = deviceName,
             pendingTask = taskStore.loadLatestIncomplete(),
             status = "正在搜索同一 Wi‑Fi 下的 SpeedShare 设备…"
@@ -37,6 +45,12 @@ class ResilientMigrationController private constructor(private val context: Cont
     @Volatile private var session: MigrationSession? = null
     @Volatile private var transferControl: MigrationTransferControl? = null
     private val lastProgressSyncAt = AtomicLong(0L)
+
+    private sealed interface SessionAttempt {
+        data class Accepted(val session: MigrationSession) : SessionAttempt
+        data object Rejected : SessionAttempt
+        data object TransportFailure : SessionAttempt
+    }
 
     private val peerServer = ResilientMigrationPeerServer(
         context = context,
@@ -55,13 +69,19 @@ class ResilientMigrationController private constructor(private val context: Cont
         },
         onPeerConnected = { peer, sharedToken ->
             session = MigrationSession(peer, sharedToken, sharedToken)
+            val canSelectRole = isRoleChooser(deviceId, peer.deviceId)
             update {
                 it.copy(
                     connectedPeer = peer,
                     incomingPairRequest = null,
                     pairing = false,
-                    stage = MigrationStage.SPEED_TEST,
-                    status = "已连接 ${peer.name}，可快速测速或直接跳过"
+                    canSelectRole = canSelectRole,
+                    stage = MigrationStage.ROLE,
+                    status = if (canSelectRole) {
+                        "已连接 ${peer.name}，请选择这台手机的角色"
+                    } else {
+                        "已连接 ${peer.name}，等待对方选择旧手机或新手机"
+                    }
                 )
             }
         },
@@ -77,8 +97,14 @@ class ResilientMigrationController private constructor(private val context: Cont
                 it.copy(
                     speedTesting = false,
                     speedResult = result,
-                    stage = MigrationStage.SPEED_TEST,
-                    status = speedSummary(result)
+                    stage = if (it.stage == MigrationStage.SPEED_TEST) MigrationStage.ROLE else it.stage,
+                    status = if (it.role == MigrationRole.UNSET && it.canSelectRole) {
+                        "连接质量良好，请选择这台手机的角色"
+                    } else if (it.role == MigrationRole.UNSET) {
+                        "连接质量良好，等待对方选择旧手机或新手机"
+                    } else {
+                        it.status
+                    }
                 )
             }
         },
@@ -128,6 +154,7 @@ class ResilientMigrationController private constructor(private val context: Cont
                 )
             }
             MigrationForegroundService.stop(context)
+            finishConnectionAfterMigration()
         }
     )
 
@@ -148,37 +175,111 @@ class ResilientMigrationController private constructor(private val context: Cont
         discovery.start()
     }
 
-    fun connect(peer: MigrationPeer) {
-        if (_state.value.pairing) return
-        update {
-            it.copy(
-                pairing = true,
-                stage = MigrationStage.PAIRING,
-                error = null,
-                status = "正在连接 ${peer.name}…"
-            )
-        }
-        scope.launch {
-            val connected = establishSession(peer)
-            if (connected == null) {
-                update {
-                    it.copy(
-                        pairing = false,
-                        stage = MigrationStage.DISCOVERY,
-                        status = "连接失败或对方未接受"
-                    )
-                }
-                return@launch
-            }
+    fun connect(
+        peer: MigrationPeer,
+        retryTransportFailures: Boolean = false,
+        directPairToken: String = ""
+    ) {
+        synchronized(pairingLock) {
+            if (_state.value.pairing || pairingJob?.isActive == true || _state.value.connectedPeer != null) return
+            pairingGeneration += 1L
+            val generation = pairingGeneration
             update {
                 it.copy(
-                    connectedPeer = connected.peer,
-                    pairing = false,
-                    stage = MigrationStage.SPEED_TEST,
-                    status = "连接成功，可快速测速或直接跳过"
+                    pairing = true,
+                    stage = MigrationStage.PAIRING,
+                    error = null,
+                    status = "正在连接 ${peer.name}…"
                 )
             }
+            pairingJob = scope.launch {
+                try {
+                    connectInternal(peer, retryTransportFailures, directPairToken)
+                } finally {
+                    synchronized(pairingLock) {
+                        if (pairingGeneration == generation) pairingJob = null
+                    }
+                }
+            }
         }
+    }
+
+    private suspend fun connectInternal(
+        peer: MigrationPeer,
+        retryTransportFailures: Boolean,
+        directPairToken: String
+    ) {
+        var connected: MigrationSession? = null
+        var rejected = false
+        val attempts = if (retryTransportFailures) 3 else 1
+        for (attempt in 0 until attempts) {
+            when (val outcome = establishSessionOutcome(peer, directPairToken)) {
+                is SessionAttempt.Accepted -> {
+                    connected = outcome.session
+                    break
+                }
+                SessionAttempt.Rejected -> {
+                    rejected = true
+                    break
+                }
+                SessionAttempt.TransportFailure -> {
+                    if (attempt + 1 < attempts) {
+                        update { it.copy(status = "连接暂时失败，正在自动重试 ${attempt + 2}/$attempts…") }
+                        delay(1_500L * (attempt + 1))
+                    }
+                }
+            }
+        }
+        val readySession = connected
+        if (readySession == null) {
+            update {
+                it.copy(
+                    pairing = false,
+                    stage = MigrationStage.DISCOVERY,
+                    status = if (rejected) "对方未允许连接" else "连接失败，请点设备重新连接"
+                )
+            }
+            return
+        }
+        update {
+            val canSelectRole = isRoleChooser(deviceId, readySession.peer.deviceId)
+            it.copy(
+                connectedPeer = readySession.peer,
+                pairing = false,
+                canSelectRole = canSelectRole,
+                stage = MigrationStage.ROLE,
+                speedTesting = true,
+                status = if (canSelectRole) {
+                    "连接成功，请选择这台手机的角色"
+                } else {
+                    "连接成功，等待对方选择旧手机或新手机"
+                }
+            )
+        }
+        runSpeedTestInBackground(readySession)
+    }
+
+    private suspend fun runSpeedTestInBackground(currentSession: MigrationSession) {
+        runCatching { ResilientMigrationClient.testSpeed(currentSession) }
+            .onSuccess { result ->
+                update { current ->
+                    current.copy(
+                        speedTesting = false,
+                        speedResult = result,
+                        status = if (current.role == MigrationRole.UNSET && current.canSelectRole) {
+                            "连接成功，请选择这台手机的角色"
+                        } else if (current.role == MigrationRole.UNSET) {
+                            "连接成功，等待对方选择旧手机或新手机"
+                        } else {
+                            current.status
+                        }
+                    )
+                }
+                runCatching { ResilientMigrationClient.sendSpeedResult(currentSession, result) }
+            }
+            .onFailure {
+                update { current -> current.copy(speedTesting = false) }
+            }
     }
 
     fun acceptPair() {
@@ -258,6 +359,7 @@ class ResilientMigrationController private constructor(private val context: Cont
 
     fun setRole(role: MigrationRole) {
         if (role == MigrationRole.UNSET) return
+        if (!_state.value.canSelectRole) return
         val currentSession = session ?: return
         val remoteRole = if (role == MigrationRole.OLD_PHONE) {
             MigrationRole.NEW_PHONE
@@ -348,6 +450,62 @@ class ResilientMigrationController private constructor(private val context: Cont
         scope.launch {
             runCatching { ResilientMigrationClient.storageInfo(currentSession) }
                 .onSuccess { storage -> update { it.copy(receiverStorage = storage) } }
+        }
+    }
+
+    fun refreshNetworkState() {
+        if (_state.value.stage == MigrationStage.COMPLETE) return
+        if (migrationUiClosed && !shouldKeepHotspotForStage(_state.value.stage)) return
+        MigrationDirectHotspot.notifyNetworkChanged()
+        networkRefreshJob?.cancel()
+        networkRefreshJob = scope.launch {
+            delay(350L)
+            var networkBound = MigrationDirectWifiConnector.bindAvailableWifi(context)
+            discovery.stop()
+            delay(250L)
+            discovery.start()
+            if (!networkBound && !MigrationDirectHotspot.state.value.active) {
+                repeat(7) {
+                    delay(750L)
+                    networkBound = MigrationDirectWifiConnector.bindAvailableWifi(context)
+                    if (networkBound) {
+                        discovery.stop()
+                        delay(250L)
+                        discovery.start()
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
+
+    fun onMigrationUiOpened() {
+        migrationUiClosed = false
+        if (_state.value.stage == MigrationStage.DISCOVERY && _state.value.connectedPeer == null) {
+            update { it.copy(status = "正在搜索同一 Wi‑Fi 下的 SpeedShare 设备…") }
+        }
+        refreshNetworkState()
+    }
+
+    fun onMigrationUiClosed() {
+        migrationUiClosed = true
+        if (shouldKeepHotspotForStage(_state.value.stage)) return
+        cancelPairingJob()
+        networkRefreshJob?.cancel()
+        networkRefreshJob = null
+        MigrationDirectHotspot.stop()
+        MigrationDirectWifiConnector.stop(context)
+        session = null
+        peerServer.clearSessions()
+        transferControl = null
+        discovery.stop()
+        update {
+            ResilientMigrationState(
+                localDeviceId = deviceId,
+                localDeviceName = deviceName,
+                pendingTask = taskStore.loadLatestIncomplete(),
+                status = "已退出换机"
+            )
         }
     }
 
@@ -463,6 +621,10 @@ class ResilientMigrationController private constructor(private val context: Cont
     }
 
     fun reset() {
+        migrationUiClosed = false
+        cancelPairingJob()
+        MigrationDirectHotspot.stop()
+        MigrationDirectWifiConnector.stop(context)
         if (transferControl != null && _state.value.report == null) transferControl?.cancel()
         MigrationForegroundService.stop(context)
         session = null
@@ -470,12 +632,14 @@ class ResilientMigrationController private constructor(private val context: Cont
         transferControl = null
         update {
             ResilientMigrationState(
+                localDeviceId = deviceId,
                 localDeviceName = deviceName,
                 peers = it.peers,
                 pendingTask = taskStore.loadLatestIncomplete(),
                 status = "正在搜索同一 Wi‑Fi 下的 SpeedShare 设备…"
             )
         }
+        discovery.start()
     }
 
     private suspend fun runTask(task: PendingMigrationTask, initialSession: MigrationSession) {
@@ -491,6 +655,7 @@ class ResilientMigrationController private constructor(private val context: Cont
                     status = "换机已经完成"
                 )
             }
+            finishConnectionAfterMigration()
             return
         }
 
@@ -654,6 +819,7 @@ class ResilientMigrationController private constructor(private val context: Cont
             }
             MigrationForegroundService.stop(context)
             runCatching { ResilientMigrationClient.sendReport(activeSession, report) }
+            finishConnectionAfterMigration()
             return
         }
 
@@ -695,6 +861,19 @@ class ResilientMigrationController private constructor(private val context: Cont
         }
         MigrationForegroundService.stop(context)
         runCatching { ResilientMigrationClient.sendReport(activeSession, report) }
+        finishConnectionAfterMigration()
+    }
+
+    private fun finishConnectionAfterMigration() {
+        cancelPairingJob()
+        networkRefreshJob?.cancel()
+        networkRefreshJob = null
+        MigrationDirectHotspot.stop()
+        MigrationDirectWifiConnector.stop(context)
+        session = null
+        peerServer.clearSessions()
+        transferControl = null
+        discovery.stop()
     }
 
     private fun onSenderProgress(activeSession: MigrationSession, progress: MigrationProgress) {
@@ -741,14 +920,29 @@ class ResilientMigrationController private constructor(private val context: Cont
     }
 
     private fun establishSession(peer: MigrationPeer): MigrationSession? {
+        return (establishSessionOutcome(peer) as? SessionAttempt.Accepted)?.session
+    }
+
+    private fun establishSessionOutcome(peer: MigrationPeer, directPairToken: String = ""): SessionAttempt {
         val sharedToken = ResilientMigrationClient.newInboundToken()
         return try {
-            val result = ResilientMigrationClient.requestPair(localPeer(), peer, sharedToken)
-            if (!result.accepted) return null
+            val result = ResilientMigrationClient.requestPair(localPeer(), peer, sharedToken, directPairToken)
+            if (!result.accepted) return SessionAttempt.Rejected
             peerServer.acceptInboundToken(sharedToken)
-            MigrationSession(result.peer, sharedToken, sharedToken).also { session = it }
+            val connected = MigrationSession(result.peer, sharedToken, sharedToken).also { session = it }
+            SessionAttempt.Accepted(connected)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Throwable) {
-            null
+            SessionAttempt.TransportFailure
+        }
+    }
+
+    private fun cancelPairingJob() {
+        synchronized(pairingLock) {
+            pairingGeneration += 1L
+            pairingJob?.cancel()
+            pairingJob = null
         }
     }
 
@@ -821,6 +1015,9 @@ class ResilientMigrationController private constructor(private val context: Cont
         fun release() {
             synchronized(this) {
                 instance?.let {
+                    MigrationDirectHotspot.stop()
+                    MigrationDirectWifiConnector.stop(it.context)
+                    it.networkRefreshJob?.cancel()
                     it.transferControl?.cancel()
                     it.discovery.stop()
                     it.peerServer.stop()
@@ -842,3 +1039,9 @@ class ResilientMigrationController private constructor(private val context: Cont
         }
     }
 }
+
+internal fun shouldKeepHotspotForStage(stage: MigrationStage): Boolean =
+    stage == MigrationStage.TRANSFERRING || stage == MigrationStage.VERIFYING
+
+internal fun isRoleChooser(localDeviceId: String, peerDeviceId: String): Boolean =
+    localDeviceId.isNotBlank() && peerDeviceId.isNotBlank() && localDeviceId < peerDeviceId

@@ -106,7 +106,7 @@ data class MigrationUiState(
     val role: MigrationRole = MigrationRole.UNSET,
     val scanning: Boolean = false,
     val scanResult: MigrationScanResult = MigrationScanResult(),
-    val selectedCategories: Set<MigrationCategory> = MigrationCategory.entries.toSet(),
+    val selectedCategories: Set<MigrationCategory> = setOf(MigrationCategory.PHOTOS, MigrationCategory.VIDEOS, MigrationCategory.MUSIC, MigrationCategory.APPS),
     val progress: MigrationProgress = MigrationProgress(),
     val report: MigrationReport? = null,
     val status: String = "",

@@ -34,12 +34,10 @@ internal object MigrationFileSelectionRegistry {
     fun sync(files: List<MigrationFileItem>) {
         if (lastSource === files) return
         lastSource = files
-        val selectable = files.asSequence()
-            .filter { it.category in FILE_CATEGORIES }
-            .mapTo(linkedSetOf()) { it.relativePath }
+        val selectable = files.asSequence().mapTo(linkedSetOf()) { it.relativePath }
         if (catalog != selectable) {
             catalog = selectable
-            _selectedPaths.value = selectable
+            _selectedPaths.value = _selectedPaths.value.intersect(selectable)
         }
     }
 
@@ -102,7 +100,11 @@ internal object MigrationSelectionCalculator {
             emptyList()
         }
         val contacts = listOfNotNull(MigrationContactsRegistry.preparedItem())
-        val items = fileFiltered + apps + contacts
+        val explicitlySelectedFiles = scanResult.files.filter {
+            it.relativePath in MigrationFileSelectionRegistry.selectedPaths.value
+        }
+        val items = (fileFiltered + explicitlySelectedFiles + apps + contacts)
+            .distinctBy { it.relativePath.replace('\\', '/').lowercase() }
         val selectedPackages = MigrationAppSelectionRegistry.selectedPackages.value
         val contactsCount = if (contacts.isEmpty()) 0 else MigrationContactsRegistry.count.value
         return MigrationSelectionSummary(
@@ -121,8 +123,7 @@ internal object MigrationSelectionCalculator {
         MigrationSelectionPreset.RECOMMENDED -> setOf(
             MigrationCategory.PHOTOS,
             MigrationCategory.VIDEOS,
-            MigrationCategory.DOCUMENTS,
-            MigrationCategory.DOWNLOADS,
+            MigrationCategory.MUSIC,
             MigrationCategory.APPS
         )
         MigrationSelectionPreset.CUSTOM -> emptySet()

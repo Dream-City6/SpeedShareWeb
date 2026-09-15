@@ -160,6 +160,7 @@ class PeerDiscoveryManager(
         fallbackRunning = true
         val socket = runCatching {
             DatagramSocket(null).apply {
+                MigrationDirectWifiConnector.bindSocket(this)
                 reuseAddress = true
                 broadcast = true
                 soTimeout = 1500
@@ -171,6 +172,21 @@ class PeerDiscoveryManager(
             return
         }
         fallbackSocket = socket
+
+        fun discoveryPayload(reply: Boolean): ByteArray = JSONObject()
+            .put("magic", UDP_MAGIC)
+            .put("deviceId", localDeviceId)
+            .put("name", localDeviceName)
+            .put("port", servicePort)
+            .put("version", appVersion)
+            .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
+            .put("sdk", Build.VERSION.SDK_INT)
+            .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
+            .put("reply", reply)
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+        val announcement = discoveryPayload(reply = false)
+        val response = discoveryPayload(reply = true)
 
         fallbackExecutor.execute {
             val buffer = ByteArray(4096)
@@ -196,6 +212,11 @@ class PeerDiscoveryManager(
                             supportedAbis = json.optString("abis").split(',').filter { it.isNotBlank() }
                         )
                     )
+                    if (!json.optBoolean("reply", false)) {
+                        runCatching {
+                            socket.send(DatagramPacket(response, response.size, packet.address, UDP_PORT))
+                        }
+                    }
                 } catch (_: SocketTimeoutException) {
                     removeStalePeers()
                 } catch (_: Throwable) {
@@ -205,20 +226,9 @@ class PeerDiscoveryManager(
         }
 
         fallbackExecutor.execute {
-            val payload = JSONObject()
-                .put("magic", UDP_MAGIC)
-                .put("deviceId", localDeviceId)
-                .put("name", localDeviceName)
-                .put("port", servicePort)
-                .put("version", appVersion)
-                .put("model", "${Build.MANUFACTURER} ${Build.MODEL}".trim())
-                .put("sdk", Build.VERSION.SDK_INT)
-                .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
-                .toString()
-                .toByteArray(Charsets.UTF_8)
             while (fallbackRunning) {
                 broadcastAddresses().forEach { address ->
-                    runCatching { socket.send(DatagramPacket(payload, payload.size, address, UDP_PORT)) }
+                    runCatching { socket.send(DatagramPacket(announcement, announcement.size, address, UDP_PORT)) }
                 }
                 removeStalePeers()
                 try {

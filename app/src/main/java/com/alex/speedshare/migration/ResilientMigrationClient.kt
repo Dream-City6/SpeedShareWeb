@@ -24,7 +24,12 @@ internal object ResilientMigrationClient {
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
-    fun requestPair(local: MigrationPeer, peer: MigrationPeer, inboundToken: String): PairSessionResult {
+    fun requestPair(
+        local: MigrationPeer,
+        peer: MigrationPeer,
+        inboundToken: String,
+        directPairToken: String = ""
+    ): PairSessionResult {
         MigrationProtocol.connect(peer.host, peer.port).use { socket ->
             val output = BufferedOutputStream(socket.getOutputStream())
             val input = BufferedInputStream(socket.getInputStream())
@@ -39,6 +44,7 @@ internal object ResilientMigrationClient {
                     .put("version", local.appVersion)
                     .put("servicePort", local.port)
                     .put("returnToken", inboundToken)
+                    .put("directPairToken", directPairToken)
                     .put("sdk", Build.VERSION.SDK_INT)
                     .put("abis", Build.SUPPORTED_ABIS.joinToString(","))
             )

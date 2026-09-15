@@ -2,10 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -51,20 +60,6 @@
             android:theme="@style/Theme.SpeedShare.Transparent" />
 
         <activity
-            android:name=".migration.MigrationActivity"
-            android:exported="false"
-            android:label="@string/migration_shortcut_short"
-            android:theme="@style/Theme.SpeedShare"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".migration.MigrationCenterActivity"
-            android:exported="false"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.SpeedShare"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
             android:name=".migration.MigrationPermissionPreparationActivity"
             android:exported="false"
             android:label="@string/app_name"
@@ -73,13 +68,6 @@
 
         <activity
             android:name=".migration.ResilientMigrationActivity"
-            android:exported="false"
-            android:label="@string/app_name"
-            android:theme="@style/Theme.SpeedShare"
-            android:windowSoftInputMode="adjustResize" />
-
-        <activity
-            android:name=".migration.MigrationConnectionHelpActivity"
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.SpeedShare"
@@ -143,6 +131,14 @@
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+
+            <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <action android:name="android.intent.action.SEND_MULTIPLE" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -154,21 +150,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
-
-        <activity-alias
-            android:name=".MainLauncher"
-            android:enabled="true"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:targetActivity=".MainActivity">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
-        </activity-alias>
 
         <receiver
             android:name=".migration.MigrationInstallReceiver"

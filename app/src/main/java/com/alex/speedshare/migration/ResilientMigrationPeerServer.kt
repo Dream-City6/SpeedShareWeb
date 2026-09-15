@@ -95,6 +95,8 @@ internal class ResilientMigrationPeerServer(
     }
 
     fun clearSessions() {
+        pendingPairs.values.forEach { it.decision.complete(false) }
+        pendingPairs.clear()
         acceptedTokens.clear()
         duplicatePolicies.clear()
     }
@@ -186,11 +188,16 @@ internal class ResilientMigrationPeerServer(
             output.flush()
             return
         }
-        val pending = PendingPair(CompletableFuture(), peer, sharedToken)
-        pendingPairs[requestId] = pending
-        onPairRequest(IncomingPairRequest(requestId, peer))
-        val accepted = runCatching { pending.decision.get(60, TimeUnit.SECONDS) }.getOrDefault(false)
-        pendingPairs.remove(requestId)
+        val accepted = if (MigrationDirectHotspot.claimPairToken(request.optString("directPairToken"), peer.deviceId)) {
+            true
+        } else {
+            val pending = PendingPair(CompletableFuture(), peer, sharedToken)
+            pendingPairs[requestId] = pending
+            onPairRequest(IncomingPairRequest(requestId, peer))
+            runCatching { pending.decision.get(60, TimeUnit.SECONDS) }.getOrDefault(false).also {
+                pendingPairs.remove(requestId)
+            }
+        }
         if (accepted) {
             acceptedTokens.add(sharedToken)
             onPeerConnected(peer, sharedToken)
